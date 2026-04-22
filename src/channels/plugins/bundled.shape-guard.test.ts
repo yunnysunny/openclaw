@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { importFreshModule } from "../../../test/helpers/import-fresh.ts";
-import { loadPluginManifestRegistry } from "../../plugins/manifest-registry.js";
+import { loadPluginManifestRegistrySync } from "../../plugins/manifest-registry.js";
 
 const bundledChannelEntrypointPaths = ["index.ts", "channel-entry.ts", "setup-entry.ts"] as const;
 
@@ -95,7 +95,7 @@ afterEach(() => {
 });
 
 describe("bundled channel entry shape guards", () => {
-  const bundledPluginRoots = loadPluginManifestRegistry({ cache: true, config: {} })
+  const bundledPluginRoots = loadPluginManifestRegistrySync({ cache: true, config: {} })
     .plugins.filter((plugin) => plugin.origin === "bundled")
     .map((plugin) => plugin.rootDir);
 

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const resolveBoundaryPathSyncMock = vi.hoisted(() => vi.fn());
 const resolveBoundaryPathMock = vi.hoisted(() => vi.fn());
 const openVerifiedFileSyncMock = vi.hoisted(() => vi.fn());
+const openVerifiedFileAsyncMock = vi.hoisted(() => vi.fn());
 
 vi.mock("./boundary-path.js", () => ({
   resolveBoundaryPathSync: (...args: unknown[]) => resolveBoundaryPathSyncMock(...args),
@@ -12,6 +13,10 @@ vi.mock("./boundary-path.js", () => ({
 
 vi.mock("./safe-open-sync.js", () => ({
   openVerifiedFileSync: (...args: unknown[]) => openVerifiedFileSyncMock(...args),
+}));
+
+vi.mock("./safe-open-async.js", () => ({
+  openVerifiedFileAsync: (...args: unknown[]) => openVerifiedFileAsyncMock(...args),
 }));
 
 let canUseBoundaryFileOpen: typeof import("./boundary-file-read.js").canUseBoundaryFileOpen;
@@ -31,6 +36,7 @@ describe("boundary-file-read", () => {
     resolveBoundaryPathSyncMock.mockReset();
     resolveBoundaryPathMock.mockReset();
     openVerifiedFileSyncMock.mockReset();
+    openVerifiedFileAsyncMock.mockReset();
   });
 
   it("recognizes the required sync fs surface", () => {
@@ -149,14 +155,13 @@ describe("boundary-file-read", () => {
   });
 
   it("awaits async boundary resolution before verifying the file", async () => {
-    const ioFs = { marker: "io" } as never;
     const absolutePath = path.resolve("notes.txt");
 
     resolveBoundaryPathMock.mockResolvedValue({
       canonicalPath: "/real/notes.txt",
       rootCanonicalPath: "/real/root",
     });
-    openVerifiedFileSyncMock.mockReturnValue({
+    openVerifiedFileAsyncMock.mockResolvedValue({
       ok: false,
       reason: "validation",
       error: new Error("blocked"),
@@ -167,7 +172,6 @@ describe("boundary-file-read", () => {
       rootPath: "/workspace",
       boundaryLabel: "workspace",
       aliasPolicy: { allowFinalSymlinkForUnlink: true },
-      ioFs,
     });
 
     expect(resolveBoundaryPathMock).toHaveBeenCalledWith({
@@ -178,13 +182,12 @@ describe("boundary-file-read", () => {
       policy: { allowFinalSymlinkForUnlink: true },
       skipLexicalRootCheck: undefined,
     });
-    expect(openVerifiedFileSyncMock).toHaveBeenCalledWith({
+    expect(openVerifiedFileAsyncMock).toHaveBeenCalledWith({
       filePath: absolutePath,
       resolvedPath: "/real/notes.txt",
       rejectHardlinks: true,
       maxBytes: undefined,
       allowedType: undefined,
-      ioFs,
     });
     expect(opened).toEqual({
       ok: false,
@@ -208,7 +211,7 @@ describe("boundary-file-read", () => {
       reason: "validation",
       error,
     });
-    expect(openVerifiedFileSyncMock).not.toHaveBeenCalled();
+    expect(openVerifiedFileAsyncMock).not.toHaveBeenCalled();
   });
 
   it("matches boundary file failures by reason with fallback support", () => {

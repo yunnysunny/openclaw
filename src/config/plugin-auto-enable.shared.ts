@@ -6,7 +6,7 @@ import {
 } from "../channels/config-presence.js";
 import { getChatChannelMeta, normalizeChatChannelId } from "../channels/registry.js";
 import {
-  loadPluginManifestRegistry,
+  loadPluginManifestRegistrySync,
   resolveManifestContractOwnerPluginId,
   type PluginManifestRecord,
   type PluginManifestRegistry,
@@ -711,7 +711,7 @@ export function resolvePluginAutoEnableManifestRegistry(params: {
   return (
     params.manifestRegistry ??
     (configMayNeedPluginManifestRegistry(params.config, params.env)
-      ? loadPluginManifestRegistry({ config: params.config, env: params.env })
+      ? loadPluginManifestRegistrySync({ config: params.config, env: params.env })
       : EMPTY_PLUGIN_MANIFEST_REGISTRY)
   );
 }

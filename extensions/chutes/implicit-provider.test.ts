@@ -10,7 +10,7 @@ async function runChutesCatalog(params: { apiKey?: string; discoveryApiKey?: str
   const provider = await registerSingleProviderPlugin(plugin);
   const result = await provider.catalog?.run({
     config: {},
-    resolveProviderAuth: () => ({
+    resolveProviderAuth: async () => ({
       apiKey: params.apiKey ?? "",
       discoveryApiKey: params.discoveryApiKey,
     }),

@@ -3,7 +3,7 @@ import { coerceSecretRef, resolveSecretInputRef } from "../config/types.secrets.
 import { normalizeOptionalString } from "../shared/string-coerce.js";
 import { normalizeOptionalSecretInput } from "../utils/normalize-secret-input.js";
 import type { AuthProfileStore } from "./auth-profiles/types.js";
-import { resolveEnvApiKey } from "./model-auth-env.js";
+import { resolveEnvApiKey, resolveEnvApiKeyAsync } from "./model-auth-env.js";
 import {
   isNonSecretApiKeyMarker,
   resolveEnvSecretRefHeaderValueMarker,
@@ -28,21 +28,21 @@ export type ProfileApiKeyResolution = {
   discoveryApiKey?: string;
 };
 
-export type ProviderApiKeyResolver = (provider: string) => {
+export type ProviderApiKeyResolver = (provider: string) => Promise<{
   apiKey: string | undefined;
   discoveryApiKey?: string;
-};
+}>;
 
 export type ProviderAuthResolver = (
   provider: string,
   options?: { oauthMarker?: string },
-) => {
+) => Promise<{
   apiKey: string | undefined;
   discoveryApiKey?: string;
   mode: "api_key" | "oauth" | "token" | "none";
   source: "env" | "profile" | "none";
   profileId?: string;
-};
+}>;
 
 const ENV_VAR_NAME_RE = /^[A-Z_][A-Z0-9_]*$/;
 
@@ -65,6 +65,18 @@ export function resolveEnvApiKeyVarName(
   env: NodeJS.ProcessEnv = process.env,
 ): string | undefined {
   const resolved = resolveEnvApiKey(provider, env);
+  if (!resolved) {
+    return undefined;
+  }
+  const match = /^(?:env: |shell env: )([A-Z0-9_]+)$/.exec(resolved.source);
+  return match ? match[1] : undefined;
+}
+
+export async function resolveEnvApiKeyVarNameAsync(
+  provider: string,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<string | undefined> {
+  const resolved = await resolveEnvApiKeyAsync(provider, env);
   if (!resolved) {
     return undefined;
   }
@@ -168,6 +180,13 @@ export function resolveApiKeyFromCredential(
   return undefined;
 }
 
+export async function resolveApiKeyFromCredentialAsync(
+  cred: AuthProfileStore["profiles"][string] | undefined,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<ProfileApiKeyResolution | undefined> {
+  return resolveApiKeyFromCredential(cred, env);
+}
+
 export function listAuthProfilesForProvider(store: AuthProfileStore, provider: string): string[] {
   const providerKey = resolveProviderIdForAuth(provider);
   return Object.entries(store.profiles)
@@ -183,6 +202,21 @@ export function resolveApiKeyFromProfiles(params: {
   const ids = listAuthProfilesForProvider(params.store, params.provider);
   for (const id of ids) {
     const resolved = resolveApiKeyFromCredential(params.store.profiles[id], params.env);
+    if (resolved) {
+      return resolved;
+    }
+  }
+  return undefined;
+}
+
+export async function resolveApiKeyFromProfilesAsync(params: {
+  provider: string;
+  store: AuthProfileStore;
+  env?: NodeJS.ProcessEnv;
+}): Promise<ProfileApiKeyResolution | undefined> {
+  const ids = listAuthProfilesForProvider(params.store, params.provider);
+  for (const id of ids) {
+    const resolved = await resolveApiKeyFromCredentialAsync(params.store.profiles[id], params.env);
     if (resolved) {
       return resolved;
     }

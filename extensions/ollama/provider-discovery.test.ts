@@ -53,10 +53,10 @@ describe("Ollama provider", () => {
       config: params.config ?? {},
       agentDir: createAgentDir(),
       env,
-      resolveProviderApiKey: () => ({
+      resolveProviderApiKey: async () => ({
         apiKey: env.OLLAMA_API_KEY?.trim() ? env.OLLAMA_API_KEY : undefined,
       }),
-      resolveProviderAuth: () => ({
+      resolveProviderAuth: async () => ({
         apiKey: env.OLLAMA_API_KEY?.trim() ? env.OLLAMA_API_KEY : undefined,
         mode: env.OLLAMA_API_KEY?.trim() ? "api_key" : "none",
         source: env.OLLAMA_API_KEY?.trim() ? "env" : "none",

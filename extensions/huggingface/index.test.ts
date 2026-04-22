@@ -59,7 +59,7 @@ describe("huggingface plugin", () => {
           },
         },
       },
-      resolveProviderApiKey: () => ({
+      resolveProviderApiKey: async () => ({
         apiKey: "hf_test_token",
         discoveryApiKey: "hf_test_token",
       }),

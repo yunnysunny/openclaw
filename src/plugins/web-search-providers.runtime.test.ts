@@ -20,7 +20,7 @@ const BUNDLED_WEB_SEARCH_PROVIDERS = [
 ] as const;
 
 let createEmptyPluginRegistry: RegistryModule["createEmptyPluginRegistry"];
-let loadPluginManifestRegistryMock: ReturnType<typeof vi.fn>;
+let loadPluginManifestRegistrySyncMock: ReturnType<typeof vi.fn>;
 let setActivePluginRegistry: RuntimeModule["setActivePluginRegistry"];
 let resolvePluginWebSearchProviders: WebSearchProvidersRuntimeModule["resolvePluginWebSearchProviders"];
 let resolveRuntimeWebSearchProviders: WebSearchProvidersRuntimeModule["resolveRuntimeWebSearchProviders"];
@@ -173,7 +173,7 @@ function expectLoaderCallCount(count: number) {
 }
 
 function expectScopedWebSearchCandidates(pluginIds: readonly string[]) {
-  expect(loadPluginManifestRegistryMock).toHaveBeenCalled();
+  expect(loadPluginManifestRegistrySyncMock).toHaveBeenCalled();
   expect(loadOpenClawPluginsMock).toHaveBeenCalledWith(
     expect.objectContaining({
       onlyPluginIds: [...pluginIds],
@@ -358,10 +358,10 @@ describe("resolvePluginWebSearchProviders", () => {
             autoEnabledReasons: {},
           }) as ReturnType<PluginAutoEnableModule["applyPluginAutoEnable"]>,
       );
-    loadPluginManifestRegistryMock = vi
-      .spyOn(manifestRegistryModule, "loadPluginManifestRegistry")
+    loadPluginManifestRegistrySyncMock = vi
+      .spyOn(manifestRegistryModule, "loadPluginManifestRegistrySync")
       .mockReturnValue(
-        createManifestRegistryFixture() as ManifestRegistryModule["loadPluginManifestRegistry"] extends (
+        createManifestRegistryFixture() as ManifestRegistryModule["loadPluginManifestRegistrySync"] extends (
           ...args: unknown[]
         ) => infer R
           ? R
@@ -448,7 +448,7 @@ describe("resolvePluginWebSearchProviders", () => {
       env,
     });
 
-    expect(loadPluginManifestRegistryMock).toHaveBeenCalledWith(
+    expect(loadPluginManifestRegistrySyncMock).toHaveBeenCalledWith(
       expect.objectContaining({
         workspaceDir: "/tmp/runtime-workspace",
       }),

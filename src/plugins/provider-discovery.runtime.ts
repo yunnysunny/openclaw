@@ -1,5 +1,5 @@
 import type { OpenClawConfig } from "../config/types.openclaw.js";
-import { loadPluginManifestRegistry } from "./manifest-registry.js";
+import { loadPluginManifestRegistrySync } from "./manifest-registry.js";
 import { resolveDiscoveredProviderPluginIds } from "./providers.js";
 import { resolvePluginProviders } from "./providers.runtime.js";
 import { createPluginSourceLoader } from "./source-loader.js";
@@ -45,7 +45,7 @@ function resolveProviderDiscoveryEntryPlugins(params: {
 }): ProviderPlugin[] {
   const pluginIds = resolveDiscoveredProviderPluginIds(params);
   const pluginIdSet = new Set(pluginIds);
-  const records = loadPluginManifestRegistry(params).plugins.filter(
+  const records = loadPluginManifestRegistrySync(params).plugins.filter(
     (plugin) => plugin.providerDiscoverySource && pluginIdSet.has(plugin.id),
   );
   if (records.length === 0) {

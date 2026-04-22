@@ -712,7 +712,7 @@ export async function discoverLmstudioProvider(ctx: ProviderCatalogContext): Pro
     explicitWithoutHeaders = rest;
   }
   const hasExplicitModels = Array.isArray(explicit?.models) && explicit.models.length > 0;
-  const { apiKey, discoveryApiKey } = ctx.resolveProviderApiKey(PROVIDER_ID);
+  const { apiKey, discoveryApiKey } = await ctx.resolveProviderApiKey(PROVIDER_ID);
   let configuredDiscoveryApiKey: string | undefined;
   try {
     configuredDiscoveryApiKey = await resolveLmstudioConfiguredApiKey({

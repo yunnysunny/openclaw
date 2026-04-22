@@ -19,7 +19,7 @@ import {
   normalizePluginsConfigWithResolver,
   type NormalizedPluginsConfig as SharedNormalizedPluginsConfig,
 } from "./config-normalization-shared.js";
-import { loadPluginManifestRegistry } from "./manifest-registry.js";
+import { loadPluginManifestRegistrySync } from "./manifest-registry.js";
 import type { PluginOrigin } from "./plugin-origin.types.js";
 
 export type { PluginActivationSource };
@@ -40,7 +40,7 @@ function getBundledPluginAliasLookup(): ReadonlyMap<string, string> {
   }
 
   const lookup = new Map<string, string>();
-  for (const plugin of loadPluginManifestRegistry({ cache: true }).plugins) {
+  for (const plugin of loadPluginManifestRegistrySync({ cache: true }).plugins) {
     if (plugin.origin !== "bundled") {
       continue;
     }

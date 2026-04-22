@@ -1,7 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import JSON5 from "json5";
-import { matchBoundaryFileOpenFailure, openBoundaryFileSync } from "../infra/boundary-file-read.js";
+import {
+  matchBoundaryFileOpenFailure,
+  openBoundaryFile,
+  openBoundaryFileSync,
+} from "../infra/boundary-file-read.js";
 import {
   normalizeLowercaseStringOrEmpty,
   normalizeOptionalString,
@@ -65,6 +69,23 @@ export function mergeBundlePathLists(...groups: string[][]): string[] {
     }
   }
   return merged;
+}
+
+async function pathExistsAsync(candidatePath: string): Promise<boolean> {
+  try {
+    await fs.promises.access(candidatePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function bundlePathExists(rootDir: string, ...segments: string[]): Promise<boolean> {
+  return pathExistsAsync(path.join(rootDir, ...segments));
+}
+
+async function bundleChildExists(rootDir: string, relativePath: string): Promise<boolean> {
+  return pathExistsAsync(path.join(rootDir, relativePath));
 }
 
 function hasInlineCapabilityValue(value: unknown): boolean {
@@ -132,6 +153,52 @@ function loadBundleManifestFile(params: {
     };
   } finally {
     fs.closeSync(opened.fd);
+  }
+}
+
+async function loadBundleManifestFileAsync(params: {
+  rootDir: string;
+  manifestRelativePath: string;
+  rejectHardlinks: boolean;
+  allowMissing?: boolean;
+}): Promise<BundleManifestFileLoadResult> {
+  const manifestPath = path.join(params.rootDir, params.manifestRelativePath);
+  const opened = await openBoundaryFile({
+    absolutePath: manifestPath,
+    rootPath: params.rootDir,
+    boundaryLabel: "plugin root",
+    rejectHardlinks: params.rejectHardlinks,
+  });
+  if (!opened.ok) {
+    return matchBoundaryFileOpenFailure(opened, {
+      path: () => {
+        if (params.allowMissing) {
+          return { ok: true, raw: {}, manifestPath };
+        }
+        return { ok: false, error: `plugin manifest not found: ${manifestPath}`, manifestPath };
+      },
+      fallback: (failure) => ({
+        ok: false,
+        error: `unsafe plugin manifest path: ${manifestPath} (${failure.reason})`,
+        manifestPath,
+      }),
+    });
+  }
+  try {
+    const text = await fs.promises.readFile(opened.fd, "utf-8");
+    const raw = JSON5.parse(text) as unknown;
+    if (!isRecord(raw)) {
+      return { ok: false, error: "plugin manifest must be an object", manifestPath };
+    }
+    return { ok: true, raw, manifestPath };
+  } catch (err) {
+    return {
+      ok: false,
+      error: `failed to parse plugin manifest: ${String(err)}`,
+      manifestPath,
+    };
+  } finally {
+    await fs.promises.close(opened.fd);
   }
 }
 
@@ -325,28 +392,357 @@ function buildCursorCapabilities(raw: Record<string, unknown>, rootDir: string):
   return capabilities;
 }
 
-export function loadBundleManifest(params: {
-  rootDir: string;
-  bundleFormat: PluginBundleFormat;
-  rejectHardlinks?: boolean;
-}): BundleManifestLoadResult {
-  const rejectHardlinks = params.rejectHardlinks ?? true;
-  const manifestRelativePath =
-    params.bundleFormat === "codex"
-      ? CODEX_BUNDLE_MANIFEST_RELATIVE_PATH
-      : params.bundleFormat === "cursor"
-        ? CURSOR_BUNDLE_MANIFEST_RELATIVE_PATH
-        : CLAUDE_BUNDLE_MANIFEST_RELATIVE_PATH;
-  const loaded = loadBundleManifestFile({
-    rootDir: params.rootDir,
-    manifestRelativePath,
-    rejectHardlinks,
-    allowMissing: params.bundleFormat === "claude",
-  });
-  if (!loaded.ok) {
-    return loaded;
+async function resolveCodexSkillDirsAsync(
+  raw: Record<string, unknown>,
+  rootDir: string,
+): Promise<string[]> {
+  const declared = normalizeBundlePathList(raw.skills);
+  if (declared.length > 0) {
+    return declared;
+  }
+  return (await bundlePathExists(rootDir, "skills")) ? ["skills"] : [];
+}
+
+async function resolveCodexHookDirsAsync(
+  raw: Record<string, unknown>,
+  rootDir: string,
+): Promise<string[]> {
+  const declared = normalizeBundlePathList(raw.hooks);
+  if (declared.length > 0) {
+    return declared;
+  }
+  return (await bundlePathExists(rootDir, "hooks")) ? ["hooks"] : [];
+}
+
+async function resolveCursorSkillsRootDirsAsync(
+  raw: Record<string, unknown>,
+  rootDir: string,
+): Promise<string[]> {
+  const declared = normalizeBundlePathList(raw.skills);
+  const defaults = (await bundlePathExists(rootDir, "skills")) ? ["skills"] : [];
+  return mergeBundlePathLists(defaults, declared);
+}
+
+async function resolveCursorCommandRootDirsAsync(
+  raw: Record<string, unknown>,
+  rootDir: string,
+): Promise<string[]> {
+  const declared = normalizeBundlePathList(raw.commands);
+  const defaults = (await bundlePathExists(rootDir, ".cursor", "commands"))
+    ? [".cursor/commands"]
+    : [];
+  return mergeBundlePathLists(defaults, declared);
+}
+
+async function resolveCursorSkillDirsAsync(
+  raw: Record<string, unknown>,
+  rootDir: string,
+): Promise<string[]> {
+  return mergeBundlePathLists(
+    await resolveCursorSkillsRootDirsAsync(raw, rootDir),
+    await resolveCursorCommandRootDirsAsync(raw, rootDir),
+  );
+}
+
+async function resolveCursorAgentDirsAsync(
+  raw: Record<string, unknown>,
+  rootDir: string,
+): Promise<string[]> {
+  const declared = normalizeBundlePathList(raw.subagents ?? raw.agents);
+  const defaults = (await bundlePathExists(rootDir, ".cursor", "agents")) ? [".cursor/agents"] : [];
+  return mergeBundlePathLists(defaults, declared);
+}
+
+async function hasCursorHookCapabilityAsync(
+  raw: Record<string, unknown>,
+  rootDir: string,
+): Promise<boolean> {
+  return (
+    hasInlineCapabilityValue(raw.hooks) ||
+    (await bundlePathExists(rootDir, ".cursor", "hooks.json"))
+  );
+}
+
+async function hasCursorRulesCapabilityAsync(
+  raw: Record<string, unknown>,
+  rootDir: string,
+): Promise<boolean> {
+  return (
+    hasInlineCapabilityValue(raw.rules) || (await bundlePathExists(rootDir, ".cursor", "rules"))
+  );
+}
+
+async function hasCursorMcpCapabilityAsync(
+  raw: Record<string, unknown>,
+  rootDir: string,
+): Promise<boolean> {
+  return (
+    hasInlineCapabilityValue(raw.mcpServers) || (await bundlePathExists(rootDir, ".mcp.json"))
+  );
+}
+
+async function resolveClaudeComponentPathsAsync(
+  raw: Record<string, unknown>,
+  key: string,
+  rootDir: string,
+  defaults: string[],
+): Promise<string[]> {
+  const declared = normalizeBundlePathList(raw[key]);
+  const existingDefaults: string[] = [];
+  for (const candidate of defaults) {
+    if (await bundleChildExists(rootDir, candidate)) {
+      existingDefaults.push(candidate);
+    }
+  }
+  return mergeBundlePathLists(existingDefaults, declared);
+}
+
+async function resolveClaudeSkillsRootDirsAsync(
+  raw: Record<string, unknown>,
+  rootDir: string,
+): Promise<string[]> {
+  return resolveClaudeComponentPathsAsync(raw, "skills", rootDir, ["skills"]);
+}
+
+async function resolveClaudeCommandRootDirsAsync(
+  raw: Record<string, unknown>,
+  rootDir: string,
+): Promise<string[]> {
+  return resolveClaudeComponentPathsAsync(raw, "commands", rootDir, ["commands"]);
+}
+
+async function resolveClaudeAgentDirsAsync(
+  raw: Record<string, unknown>,
+  rootDir: string,
+): Promise<string[]> {
+  return resolveClaudeComponentPathsAsync(raw, "agents", rootDir, ["agents"]);
+}
+
+async function resolveClaudeHookPathsAsync(
+  raw: Record<string, unknown>,
+  rootDir: string,
+): Promise<string[]> {
+  return resolveClaudeComponentPathsAsync(raw, "hooks", rootDir, ["hooks/hooks.json"]);
+}
+
+async function resolveClaudeMcpPathsAsync(
+  raw: Record<string, unknown>,
+  rootDir: string,
+): Promise<string[]> {
+  return resolveClaudeComponentPathsAsync(raw, "mcpServers", rootDir, [".mcp.json"]);
+}
+
+async function resolveClaudeLspPathsAsync(
+  raw: Record<string, unknown>,
+  rootDir: string,
+): Promise<string[]> {
+  return resolveClaudeComponentPathsAsync(raw, "lspServers", rootDir, [".lsp.json"]);
+}
+
+async function resolveClaudeOutputStylePathsAsync(
+  raw: Record<string, unknown>,
+  rootDir: string,
+): Promise<string[]> {
+  return resolveClaudeComponentPathsAsync(raw, "outputStyles", rootDir, ["output-styles"]);
+}
+
+async function resolveClaudeSettingsFilesAsync(
+  _raw: Record<string, unknown>,
+  rootDir: string,
+): Promise<string[]> {
+  return (await bundlePathExists(rootDir, "settings.json")) ? ["settings.json"] : [];
+}
+
+async function resolveClaudeSkillDirsAsync(
+  raw: Record<string, unknown>,
+  rootDir: string,
+): Promise<string[]> {
+  return mergeBundlePathLists(
+    await resolveClaudeSkillsRootDirsAsync(raw, rootDir),
+    await resolveClaudeCommandRootDirsAsync(raw, rootDir),
+    await resolveClaudeAgentDirsAsync(raw, rootDir),
+    await resolveClaudeOutputStylePathsAsync(raw, rootDir),
+  );
+}
+
+async function hasClaudeHookCapabilityAsync(
+  raw: Record<string, unknown>,
+  rootDir: string,
+): Promise<boolean> {
+  return (
+    hasInlineCapabilityValue(raw.hooks) ||
+    (await resolveClaudeHookPathsAsync(raw, rootDir)).length > 0
+  );
+}
+
+async function buildCodexCapabilitiesAsync(
+  raw: Record<string, unknown>,
+  rootDir: string,
+): Promise<string[]> {
+  const capabilities: string[] = [];
+  if ((await resolveCodexSkillDirsAsync(raw, rootDir)).length > 0) {
+    capabilities.push("skills");
+  }
+  if ((await resolveCodexHookDirsAsync(raw, rootDir)).length > 0) {
+    capabilities.push("hooks");
+  }
+  if (
+    hasInlineCapabilityValue(raw.mcpServers) ||
+    (await bundlePathExists(rootDir, ".mcp.json"))
+  ) {
+    capabilities.push("mcpServers");
+  }
+  if (hasInlineCapabilityValue(raw.apps) || (await bundlePathExists(rootDir, ".app.json"))) {
+    capabilities.push("apps");
+  }
+  return capabilities;
+}
+
+async function buildClaudeCapabilitiesAsync(
+  raw: Record<string, unknown>,
+  rootDir: string,
+): Promise<string[]> {
+  const capabilities: string[] = [];
+  if ((await resolveClaudeSkillDirsAsync(raw, rootDir)).length > 0) {
+    capabilities.push("skills");
+  }
+  if ((await resolveClaudeCommandRootDirsAsync(raw, rootDir)).length > 0) {
+    capabilities.push("commands");
+  }
+  if ((await resolveClaudeAgentDirsAsync(raw, rootDir)).length > 0) {
+    capabilities.push("agents");
+  }
+  if (await hasClaudeHookCapabilityAsync(raw, rootDir)) {
+    capabilities.push("hooks");
+  }
+  if (
+    hasInlineCapabilityValue(raw.mcpServers) ||
+    (await resolveClaudeMcpPathsAsync(raw, rootDir)).length > 0
+  ) {
+    capabilities.push("mcpServers");
+  }
+  if (
+    hasInlineCapabilityValue(raw.lspServers) ||
+    (await resolveClaudeLspPathsAsync(raw, rootDir)).length > 0
+  ) {
+    capabilities.push("lspServers");
+  }
+  if (
+    hasInlineCapabilityValue(raw.outputStyles) ||
+    (await resolveClaudeOutputStylePathsAsync(raw, rootDir)).length > 0
+  ) {
+    capabilities.push("outputStyles");
+  }
+  if ((await resolveClaudeSettingsFilesAsync(raw, rootDir)).length > 0) {
+    capabilities.push("settings");
+  }
+  return capabilities;
+}
+
+async function buildCursorCapabilitiesAsync(
+  raw: Record<string, unknown>,
+  rootDir: string,
+): Promise<string[]> {
+  const capabilities: string[] = [];
+  if ((await resolveCursorSkillDirsAsync(raw, rootDir)).length > 0) {
+    capabilities.push("skills");
+  }
+  if ((await resolveCursorCommandRootDirsAsync(raw, rootDir)).length > 0) {
+    capabilities.push("commands");
+  }
+  if ((await resolveCursorAgentDirsAsync(raw, rootDir)).length > 0) {
+    capabilities.push("agents");
+  }
+  if (await hasCursorHookCapabilityAsync(raw, rootDir)) {
+    capabilities.push("hooks");
+  }
+  if (await hasCursorRulesCapabilityAsync(raw, rootDir)) {
+    capabilities.push("rules");
+  }
+  if (await hasCursorMcpCapabilityAsync(raw, rootDir)) {
+    capabilities.push("mcpServers");
+  }
+  return capabilities;
+}
+
+async function normalizeLoadedBundleManifestAsync(
+  loaded: { manifestPath: string; raw: Record<string, unknown> },
+  params: {
+    rootDir: string;
+    bundleFormat: PluginBundleFormat;
+  },
+): Promise<BundleManifestLoadResult> {
+  const raw = loaded.raw;
+  const interfaceRecord = isRecord(raw.interface) ? raw.interface : undefined;
+  const name = normalizeOptionalString(raw.name);
+  const description =
+    normalizeOptionalString(raw.description) ??
+    normalizeOptionalString(raw.shortDescription) ??
+    normalizeOptionalString(interfaceRecord?.shortDescription);
+  const version = normalizeOptionalString(raw.version);
+
+  if (params.bundleFormat === "codex") {
+    const skills = await resolveCodexSkillDirsAsync(raw, params.rootDir);
+    const hooks = await resolveCodexHookDirsAsync(raw, params.rootDir);
+    return {
+      ok: true,
+      manifest: {
+        id: slugifyPluginId(name, params.rootDir),
+        name,
+        description,
+        version,
+        skills,
+        settingsFiles: [],
+        hooks,
+        bundleFormat: "codex",
+        capabilities: await buildCodexCapabilitiesAsync(raw, params.rootDir),
+      },
+      manifestPath: loaded.manifestPath,
+    };
   }
 
+  if (params.bundleFormat === "cursor") {
+    return {
+      ok: true,
+      manifest: {
+        id: slugifyPluginId(name, params.rootDir),
+        name,
+        description,
+        version,
+        skills: await resolveCursorSkillDirsAsync(raw, params.rootDir),
+        settingsFiles: [],
+        hooks: [],
+        bundleFormat: "cursor",
+        capabilities: await buildCursorCapabilitiesAsync(raw, params.rootDir),
+      },
+      manifestPath: loaded.manifestPath,
+    };
+  }
+
+  return {
+    ok: true,
+    manifest: {
+      id: slugifyPluginId(name, params.rootDir),
+      name,
+      description,
+      version,
+      skills: await resolveClaudeSkillDirsAsync(raw, params.rootDir),
+      settingsFiles: await resolveClaudeSettingsFilesAsync(raw, params.rootDir),
+      hooks: await resolveClaudeHookPathsAsync(raw, params.rootDir),
+      bundleFormat: "claude",
+      capabilities: await buildClaudeCapabilitiesAsync(raw, params.rootDir),
+    },
+    manifestPath: loaded.manifestPath,
+  };
+}
+
+function normalizeLoadedBundleManifest(
+  loaded: { manifestPath: string; raw: Record<string, unknown> },
+  params: {
+    rootDir: string;
+    bundleFormat: PluginBundleFormat;
+  },
+): BundleManifestLoadResult {
   const raw = loaded.raw;
   const interfaceRecord = isRecord(raw.interface) ? raw.interface : undefined;
   const name = normalizeOptionalString(raw.name);
@@ -409,6 +805,97 @@ export function loadBundleManifest(params: {
     },
     manifestPath: loaded.manifestPath,
   };
+}
+
+export function loadBundleManifest(params: {
+  rootDir: string;
+  bundleFormat: PluginBundleFormat;
+  rejectHardlinks?: boolean;
+}): BundleManifestLoadResult {
+  const rejectHardlinks = params.rejectHardlinks ?? true;
+  const manifestRelativePath =
+    params.bundleFormat === "codex"
+      ? CODEX_BUNDLE_MANIFEST_RELATIVE_PATH
+      : params.bundleFormat === "cursor"
+        ? CURSOR_BUNDLE_MANIFEST_RELATIVE_PATH
+        : CLAUDE_BUNDLE_MANIFEST_RELATIVE_PATH;
+  const loaded = loadBundleManifestFile({
+    rootDir: params.rootDir,
+    manifestRelativePath,
+    rejectHardlinks,
+    allowMissing: params.bundleFormat === "claude",
+  });
+  if (!loaded.ok) {
+    return loaded;
+  }
+
+  return normalizeLoadedBundleManifest(loaded, params);
+}
+
+export async function loadBundleManifestAsync(params: {
+  rootDir: string;
+  bundleFormat: PluginBundleFormat;
+  rejectHardlinks?: boolean;
+}): Promise<BundleManifestLoadResult> {
+  const rejectHardlinks = params.rejectHardlinks ?? true;
+  const manifestRelativePath =
+    params.bundleFormat === "codex"
+      ? CODEX_BUNDLE_MANIFEST_RELATIVE_PATH
+      : params.bundleFormat === "cursor"
+        ? CURSOR_BUNDLE_MANIFEST_RELATIVE_PATH
+        : CLAUDE_BUNDLE_MANIFEST_RELATIVE_PATH;
+  const loaded = await loadBundleManifestFileAsync({
+    rootDir: params.rootDir,
+    manifestRelativePath,
+    rejectHardlinks,
+    allowMissing: params.bundleFormat === "claude",
+  });
+  if (!loaded.ok) {
+    return loaded;
+  }
+
+  return normalizeLoadedBundleManifestAsync(loaded, params);
+}
+
+export async function detectBundleManifestFormatAsync(
+  rootDir: string,
+): Promise<PluginBundleFormat | null> {
+  if (await pathExistsAsync(path.join(rootDir, CODEX_BUNDLE_MANIFEST_RELATIVE_PATH))) {
+    return "codex";
+  }
+  if (await pathExistsAsync(path.join(rootDir, CURSOR_BUNDLE_MANIFEST_RELATIVE_PATH))) {
+    return "cursor";
+  }
+  if (await pathExistsAsync(path.join(rootDir, CLAUDE_BUNDLE_MANIFEST_RELATIVE_PATH))) {
+    return "claude";
+  }
+  if (await pathExistsAsync(path.join(rootDir, PLUGIN_MANIFEST_FILENAME))) {
+    return null;
+  }
+  const entryCandidates = await Promise.all(
+    DEFAULT_PLUGIN_ENTRY_CANDIDATES.map((candidate) =>
+      pathExistsAsync(path.join(rootDir, candidate)),
+    ),
+  );
+  if (entryCandidates.some(Boolean)) {
+    return null;
+  }
+  const manifestlessClaudeMarkers = [
+    path.join(rootDir, "skills"),
+    path.join(rootDir, "commands"),
+    path.join(rootDir, "agents"),
+    path.join(rootDir, "hooks", "hooks.json"),
+    path.join(rootDir, ".mcp.json"),
+    path.join(rootDir, ".lsp.json"),
+    path.join(rootDir, "settings.json"),
+  ];
+  const markerHits = await Promise.all(
+    manifestlessClaudeMarkers.map((candidate) => pathExistsAsync(candidate)),
+  );
+  if (markerHits.some(Boolean)) {
+    return "claude";
+  }
+  return null;
 }
 
 export function detectBundleManifestFormat(rootDir: string): PluginBundleFormat | null {

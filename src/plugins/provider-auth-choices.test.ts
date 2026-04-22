@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
-const loadPluginManifestRegistry = vi.hoisted(() => vi.fn());
+const loadPluginManifestRegistrySync = vi.hoisted(() => vi.fn());
 
 vi.mock("./manifest-registry.js", () => ({
-  loadPluginManifestRegistry,
+  loadPluginManifestRegistrySync,
 }));
 
 import {
@@ -26,7 +26,7 @@ function createProviderAuthChoice(overrides: Record<string, unknown>) {
 }
 
 function setManifestPlugins(plugins: Array<Record<string, unknown>>) {
-  loadPluginManifestRegistry.mockReturnValue({
+  loadPluginManifestRegistrySync.mockReturnValue({
     plugins,
   });
 }

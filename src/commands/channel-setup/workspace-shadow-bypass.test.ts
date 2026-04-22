@@ -15,7 +15,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const listChannelPluginCatalogEntries = vi.hoisted(() => vi.fn((_opts?: unknown): unknown[] => []));
 const listChatChannels = vi.hoisted(() => vi.fn((): unknown[] => []));
-const loadPluginManifestRegistry = vi.hoisted(() => vi.fn());
+const loadPluginManifestRegistrySync = vi.hoisted(() => vi.fn());
 const applyPluginAutoEnable = vi.hoisted(() =>
   vi.fn(({ config }: { config: unknown }) => ({
     config: config as never,
@@ -34,7 +34,7 @@ vi.mock("../../channels/registry.js", () => ({
   listChatChannels: () => listChatChannels(),
 }));
 vi.mock("../../plugins/manifest-registry.js", () => ({
-  loadPluginManifestRegistry: (...a: unknown[]) => loadPluginManifestRegistry(...a),
+  loadPluginManifestRegistrySync: (...a: unknown[]) => loadPluginManifestRegistrySync(...a),
 }));
 vi.mock("../../config/plugin-auto-enable.js", () => ({
   applyPluginAutoEnable: (a: unknown) => applyPluginAutoEnable(a as { config: unknown }),
@@ -51,7 +51,7 @@ import { resolveChannelSetupEntries } from "./discovery.js";
 
 beforeEach(() => {
   vi.clearAllMocks();
-  loadPluginManifestRegistry.mockReturnValue({ plugins: [], diagnostics: [] });
+  loadPluginManifestRegistrySync.mockReturnValue({ plugins: [], diagnostics: [] });
   listChatChannels.mockReturnValue([]);
 });
 
@@ -169,7 +169,7 @@ describe("resolveChannelSetupEntries workspace shadow exclusion (GHSA-2qrv-rc5x-
       install: { npmSpec: "trusted-telegram-shadow" },
     };
     listChannelPluginCatalogEntries.mockReturnValue([workspaceEntry]);
-    loadPluginManifestRegistry.mockReturnValue({
+    loadPluginManifestRegistrySync.mockReturnValue({
       plugins: [{ id: "trusted-telegram-shadow", channels: ["telegram"] }],
       diagnostics: [],
     });
@@ -219,7 +219,7 @@ describe("resolveChannelSetupEntries workspace shadow exclusion (GHSA-2qrv-rc5x-
         "trusted-telegram-shadow": ["channel configured"],
       },
     }));
-    loadPluginManifestRegistry.mockReturnValue({
+    loadPluginManifestRegistrySync.mockReturnValue({
       plugins: [{ id: "trusted-telegram-shadow", channels: ["telegram"] }],
       diagnostics: [],
     });
@@ -263,7 +263,7 @@ describe("resolveChannelSetupEntries workspace shadow exclusion (GHSA-2qrv-rc5x-
       changes: [] as string[],
       autoEnabledReasons: {},
     }));
-    loadPluginManifestRegistry.mockReturnValue({
+    loadPluginManifestRegistrySync.mockReturnValue({
       plugins: [{ id: "my-cool-plugin", channels: ["my-cool-plugin"] }],
       diagnostics: [],
     });

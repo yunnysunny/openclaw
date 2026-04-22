@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { loadConfig } from "../../config/config.js";
 import { getCachedPluginJitiLoader, type PluginJitiLoaderCache } from "../jiti-loader-cache.js";
-import { loadPluginManifestRegistry } from "../manifest-registry.js";
+import { loadPluginManifestRegistrySync } from "../manifest-registry.js";
 import { shouldPreferNativeJiti } from "../sdk-alias.js";
 
 type PluginRuntimeRecord = {
@@ -30,7 +30,7 @@ export function resolvePluginRuntimeRecord(
   pluginId: string,
   onMissing?: () => never,
 ): PluginRuntimeRecord | null {
-  const manifestRegistry = loadPluginManifestRegistry({
+  const manifestRegistry = loadPluginManifestRegistrySync({
     config: readPluginBoundaryConfigSafely(),
     cache: true,
   });
@@ -52,7 +52,7 @@ export function resolvePluginRuntimeRecordByEntryBaseNames(
   entryBaseNames: string[],
   onMissing?: () => never,
 ): PluginRuntimeRecord | null {
-  const manifestRegistry = loadPluginManifestRegistry({
+  const manifestRegistry = loadPluginManifestRegistrySync({
     config: readPluginBoundaryConfigSafely(),
     cache: true,
   });

@@ -56,7 +56,7 @@ import { discoverOpenClawPlugins } from "./discovery.js";
 import { initializeGlobalHookRunner } from "./hook-runner-global.js";
 import { clearPluginInteractiveHandlers } from "./interactive-registry.js";
 import { getCachedPluginJitiLoader, type PluginJitiLoaderCache } from "./jiti-loader-cache.js";
-import { loadPluginManifestRegistry } from "./manifest-registry.js";
+import { loadPluginManifestRegistrySync } from "./manifest-registry.js";
 import type { PluginBundleFormat, PluginDiagnostic, PluginFormat } from "./manifest-types.js";
 import type { PluginManifestContracts } from "./manifest.js";
 import {
@@ -1270,7 +1270,7 @@ function matchesExplicitInstallRule(params: {
 
 function resolveCandidateDuplicateRank(params: {
   candidate: ReturnType<typeof discoverOpenClawPlugins>["candidates"][number];
-  manifestByRoot: Map<string, ReturnType<typeof loadPluginManifestRegistry>["plugins"][number]>;
+  manifestByRoot: Map<string, ReturnType<typeof loadPluginManifestRegistrySync>["plugins"][number]>;
   provenance: PluginProvenanceIndex;
   env: NodeJS.ProcessEnv;
 }): number {
@@ -1305,7 +1305,7 @@ function resolveCandidateDuplicateRank(params: {
 function compareDuplicateCandidateOrder(params: {
   left: ReturnType<typeof discoverOpenClawPlugins>["candidates"][number];
   right: ReturnType<typeof discoverOpenClawPlugins>["candidates"][number];
-  manifestByRoot: Map<string, ReturnType<typeof loadPluginManifestRegistry>["plugins"][number]>;
+  manifestByRoot: Map<string, ReturnType<typeof loadPluginManifestRegistrySync>["plugins"][number]>;
   provenance: PluginProvenanceIndex;
   env: NodeJS.ProcessEnv;
 }): number {
@@ -1588,7 +1588,7 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
       cache: options.cache,
       env,
     });
-    const manifestRegistry = loadPluginManifestRegistry({
+    const manifestRegistry = loadPluginManifestRegistrySync({
       config: cfg,
       workspaceDir: options.workspaceDir,
       cache: options.cache,
@@ -2390,7 +2390,7 @@ export async function loadOpenClawPluginCliRegistry(
     cache: false,
     env,
   });
-  const manifestRegistry = loadPluginManifestRegistry({
+  const manifestRegistry = loadPluginManifestRegistrySync({
     config: cfg,
     workspaceDir: options.workspaceDir,
     cache: false,

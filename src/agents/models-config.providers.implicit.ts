@@ -205,9 +205,9 @@ async function resolvePluginImplicitProviders(
   const discovered: Record<string, ProviderConfig> = {};
   const catalogConfig = buildPluginCatalogConfig(ctx);
   for (const provider of byOrder[order]) {
-    const resolveCatalogProviderApiKey = (providerId?: string) => {
+    const resolveCatalogProviderApiKey = async (providerId?: string) => {
       const resolvedProviderId = providerId?.trim() || provider.id;
-      const resolved = ctx.resolveProviderApiKey(resolvedProviderId);
+      const resolved = await ctx.resolveProviderApiKey(resolvedProviderId);
       if (resolved.apiKey) {
         return resolved;
       }
@@ -250,7 +250,7 @@ async function resolvePluginImplicitProviders(
       workspaceDir: ctx.workspaceDir,
       env: ctx.env,
       resolveProviderApiKey: resolveCatalogProviderApiKey,
-      resolveProviderAuth: (providerId, options) =>
+      resolveProviderAuth: async (providerId, options) =>
         ctx.resolveProviderAuth(providerId?.trim() || provider.id, options),
       timeoutMs: resolveLiveProviderCatalogTimeoutMs(ctx.env),
     });

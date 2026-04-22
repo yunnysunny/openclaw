@@ -11,7 +11,7 @@ import { resolvePluginWebSearchConfig } from "../config/plugin-web-search-config
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import { resolveManifestContractPluginIds } from "../plugins/manifest-registry.js";
-import { normalizeProviderModelIdWithPlugin } from "../plugins/provider-runtime.js";
+import { normalizeProviderModelIdWithPluginAsync } from "../plugins/provider-runtime.js";
 import { normalizeOptionalString, resolvePrimaryStringValue } from "../shared/string-coerce.js";
 import {
   clearGatewayModelPricingCacheState,
@@ -260,7 +260,7 @@ function canonicalizeOpenRouterProvider(provider: string): string {
   return PROVIDER_ALIAS_TO_OPENROUTER[normalized] ?? normalized;
 }
 
-function canonicalizeOpenRouterLookupId(id: string): string {
+export async function canonicalizeOpenRouterLookupIdAsync(id: string): Promise<string> {
   const trimmed = id.trim();
   if (!trimmed) {
     return "";
@@ -280,17 +280,20 @@ function canonicalizeOpenRouterLookupId(id: string): string {
       .replace(/^claude-([a-z]+)-(\d+)\.(\d+)$/u, "claude-$1-$2-$3");
   }
   model =
-    normalizeProviderModelIdWithPlugin({
+    (await normalizeProviderModelIdWithPluginAsync({
       provider,
       context: {
         provider,
         modelId: model,
       },
-    }) ?? model;
+    })) ?? model;
   return `${provider}/${model}`;
 }
 
-function buildOpenRouterExactCandidates(ref: ModelRef, seen = new Set<string>()): string[] {
+async function buildOpenRouterExactCandidatesAsync(
+  ref: ModelRef,
+  seen = new Set<string>(),
+): Promise<string[]> {
   const refKey = modelKey(ref.provider, ref.model);
   if (seen.has(refKey)) {
     return [];
@@ -300,7 +303,9 @@ function buildOpenRouterExactCandidates(ref: ModelRef, seen = new Set<string>())
 
   const candidates = new Set<string>();
   const canonicalProvider = canonicalizeOpenRouterProvider(ref.provider);
-  const canonicalFullId = canonicalizeOpenRouterLookupId(modelKey(canonicalProvider, ref.model));
+  const canonicalFullId = await canonicalizeOpenRouterLookupIdAsync(
+    modelKey(canonicalProvider, ref.model),
+  );
   if (canonicalFullId) {
     candidates.add(canonicalFullId);
   }
@@ -317,7 +322,7 @@ function buildOpenRouterExactCandidates(ref: ModelRef, seen = new Set<string>())
   if (WRAPPER_PROVIDERS.has(ref.provider) && ref.model.includes("/")) {
     const nestedRef = parseModelRef(ref.model, DEFAULT_PROVIDER);
     if (nestedRef) {
-      for (const candidate of buildOpenRouterExactCandidates(nestedRef, nextSeen)) {
+      for (const candidate of await buildOpenRouterExactCandidatesAsync(nestedRef, nextSeen)) {
         candidates.add(candidate);
       }
     }
@@ -479,19 +484,20 @@ async function fetchOpenRouterPricingCatalog(
   return catalog;
 }
 
-function resolveCatalogPricingForRef(params: {
+async function resolveCatalogPricingForRefAsync(params: {
   ref: ModelRef;
   catalogById: Map<string, OpenRouterPricingEntry>;
   catalogByNormalizedId: Map<string, OpenRouterPricingEntry>;
-}): CachedModelPricing | undefined {
-  for (const candidate of buildOpenRouterExactCandidates(params.ref)) {
+}): Promise<CachedModelPricing | undefined> {
+  const candidates = await buildOpenRouterExactCandidatesAsync(params.ref);
+  for (const candidate of candidates) {
     const exact = params.catalogById.get(candidate);
     if (exact) {
       return exact.pricing;
     }
   }
-  for (const candidate of buildOpenRouterExactCandidates(params.ref)) {
-    const normalized = canonicalizeOpenRouterLookupId(candidate);
+  for (const candidate of candidates) {
+    const normalized = await canonicalizeOpenRouterLookupIdAsync(candidate);
     if (!normalized) {
       continue;
     }
@@ -548,7 +554,7 @@ export async function refreshGatewayModelPricingCache(params: {
 
     const catalogByNormalizedId = new Map<string, OpenRouterPricingEntry>();
     for (const entry of catalogById.values()) {
-      const normalizedId = canonicalizeOpenRouterLookupId(entry.id);
+      const normalizedId = await canonicalizeOpenRouterLookupIdAsync(entry.id);
       if (!normalizedId || catalogByNormalizedId.has(normalizedId)) {
         continue;
       }
@@ -558,7 +564,7 @@ export async function refreshGatewayModelPricingCache(params: {
     const nextPricing = new Map<string, CachedModelPricing>();
     for (const ref of refs) {
       // 1. Try OpenRouter first (existing behavior — flat pricing)
-      const openRouterPricing = resolveCatalogPricingForRef({
+      const openRouterPricing = await resolveCatalogPricingForRefAsync({
         ref,
         catalogById,
         catalogByNormalizedId,

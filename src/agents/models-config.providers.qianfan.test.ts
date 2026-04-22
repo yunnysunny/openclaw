@@ -35,7 +35,7 @@ async function loadSecretsModule() {
 beforeAll(loadSecretsModule);
 
 describe("Qianfan provider", () => {
-  it("resolves QIANFAN_API_KEY markers through provider auth lookup", () => {
+  it("resolves QIANFAN_API_KEY markers through provider auth lookup", async () => {
     const resolveAuth = createProviderAuthResolver(
       {
         QIANFAN_API_KEY: "test-key", // pragma: allowlist secret
@@ -43,7 +43,7 @@ describe("Qianfan provider", () => {
       { version: 1, profiles: {} },
     );
 
-    expect(resolveAuth("qianfan")).toMatchObject({
+    await expect(resolveAuth("qianfan")).resolves.toMatchObject({
       apiKey: "QIANFAN_API_KEY",
       mode: "api_key",
       source: "env",

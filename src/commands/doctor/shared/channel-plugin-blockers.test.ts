@@ -10,7 +10,7 @@ describe("channel plugin blockers", () => {
 
   it("skips plugin registry work when config has no plugin blocker surfaces", () => {
     const presenceSpy = vi.spyOn(configPresence, "listPotentialConfiguredChannelIds");
-    const registrySpy = vi.spyOn(manifestRegistry, "loadPluginManifestRegistry");
+    const registrySpy = vi.spyOn(manifestRegistry, "loadPluginManifestRegistrySync");
 
     const hits = scanConfiguredChannelPluginBlockers({
       channels: {
@@ -31,7 +31,7 @@ describe("channel plugin blockers", () => {
 
   it("still evaluates configured channels when plugins are disabled globally", () => {
     vi.spyOn(configPresence, "listPotentialConfiguredChannelIds").mockReturnValue(["slack"]);
-    vi.spyOn(manifestRegistry, "loadPluginManifestRegistry").mockReturnValue({
+    vi.spyOn(manifestRegistry, "loadPluginManifestRegistrySync").mockReturnValue({
       plugins: [
         {
           id: "slack",
@@ -41,7 +41,7 @@ describe("channel plugin blockers", () => {
         },
       ],
       diagnostics: [],
-    } as unknown as ReturnType<typeof manifestRegistry.loadPluginManifestRegistry>);
+    } as unknown as ReturnType<typeof manifestRegistry.loadPluginManifestRegistrySync>);
 
     const hits = scanConfiguredChannelPluginBlockers({
       plugins: {

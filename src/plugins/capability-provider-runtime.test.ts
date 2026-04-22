@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
   resolveRuntimePluginRegistry: vi.fn<
     (params?: unknown) => ReturnType<typeof createEmptyPluginRegistry> | undefined
   >(() => undefined),
-  loadPluginManifestRegistry: vi.fn<() => MockManifestRegistry>(() =>
+  loadPluginManifestRegistrySync: vi.fn<() => MockManifestRegistry>(() =>
     createEmptyMockManifestRegistry(),
   ),
   withBundledPluginAllowlistCompat: vi.fn(
@@ -37,7 +37,7 @@ vi.mock("./loader.js", () => ({
 }));
 
 vi.mock("./manifest-registry.js", () => ({
-  loadPluginManifestRegistry: mocks.loadPluginManifestRegistry,
+  loadPluginManifestRegistrySync: mocks.loadPluginManifestRegistrySync,
 }));
 
 vi.mock("./bundled-compat.js", () => ({
@@ -67,7 +67,7 @@ function expectBundledCompatLoadPath(params: {
     };
   };
 }) {
-  expect(mocks.loadPluginManifestRegistry).toHaveBeenCalledWith({
+  expect(mocks.loadPluginManifestRegistrySync).toHaveBeenCalledWith({
     config: params.cfg,
     env: process.env,
   });
@@ -102,7 +102,7 @@ function createCompatChainConfig() {
 }
 
 function setBundledCapabilityFixture(contractKey: string) {
-  mocks.loadPluginManifestRegistry.mockReturnValue({
+  mocks.loadPluginManifestRegistrySync.mockReturnValue({
     plugins: [
       {
         id: "openai",
@@ -157,8 +157,8 @@ describe("resolvePluginCapabilityProviders", () => {
   beforeEach(() => {
     mocks.resolveRuntimePluginRegistry.mockReset();
     mocks.resolveRuntimePluginRegistry.mockReturnValue(undefined);
-    mocks.loadPluginManifestRegistry.mockReset();
-    mocks.loadPluginManifestRegistry.mockReturnValue(createEmptyMockManifestRegistry());
+    mocks.loadPluginManifestRegistrySync.mockReset();
+    mocks.loadPluginManifestRegistrySync.mockReturnValue(createEmptyMockManifestRegistry());
     mocks.withBundledPluginAllowlistCompat.mockClear();
     mocks.withBundledPluginAllowlistCompat.mockImplementation(
       ({ config, pluginIds }: { config?: OpenClawConfig; pluginIds: string[] }) =>
@@ -199,7 +199,7 @@ describe("resolvePluginCapabilityProviders", () => {
     const providers = resolvePluginCapabilityProviders({ key: "speechProviders" });
 
     expectResolvedCapabilityProviderIds(providers, ["openai"]);
-    expect(mocks.loadPluginManifestRegistry).not.toHaveBeenCalled();
+    expect(mocks.loadPluginManifestRegistrySync).not.toHaveBeenCalled();
     expect(mocks.resolveRuntimePluginRegistry).toHaveBeenCalledWith();
   });
 
@@ -306,7 +306,7 @@ describe("resolvePluginCapabilityProviders", () => {
     const providers = resolvePluginCapabilityProviders({ key: "mediaUnderstandingProviders" });
 
     expectResolvedCapabilityProviderIds(providers, ["google"]);
-    expect(mocks.loadPluginManifestRegistry).toHaveBeenCalledWith({
+    expect(mocks.loadPluginManifestRegistrySync).toHaveBeenCalledWith({
       config: undefined,
       env: process.env,
     });
@@ -336,7 +336,7 @@ describe("resolvePluginCapabilityProviders", () => {
         create: async () => ({ provider: null }),
       },
     } as never);
-    mocks.loadPluginManifestRegistry.mockReturnValue({
+    mocks.loadPluginManifestRegistrySync.mockReturnValue({
       plugins: [
         {
           id: "google",

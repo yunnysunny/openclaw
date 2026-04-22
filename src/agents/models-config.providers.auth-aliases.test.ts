@@ -34,7 +34,7 @@ const createFixtureProviderRegistry = (): MockManifestRegistry => ({
   diagnostics: [],
 });
 
-const loadPluginManifestRegistry = vi.hoisted(() =>
+const loadPluginManifestRegistrySync = vi.hoisted(() =>
   vi.fn<() => MockManifestRegistry>(() => ({
     plugins: [
       {
@@ -58,23 +58,27 @@ const resolveManifestContractOwnerPluginId = vi.hoisted(() => vi.fn<() => undefi
 const resolveProviderSyntheticAuthWithPlugin = vi.hoisted(() => vi.fn(() => undefined));
 
 vi.mock("../plugins/manifest-registry.js", () => ({
-  loadPluginManifestRegistry,
+  loadPluginManifestRegistrySync,
+  loadPluginManifestRegistryAsync: (...args: Parameters<typeof loadPluginManifestRegistrySync>) =>
+    Promise.resolve(loadPluginManifestRegistrySync(...args)),
   resolveManifestContractOwnerPluginId,
 }));
 vi.mock("../plugins/provider-runtime.js", () => ({
   resolveProviderSyntheticAuthWithPlugin,
+  resolveProviderSyntheticAuthWithPluginAsync: (...args: unknown[]) =>
+    Promise.resolve(resolveProviderSyntheticAuthWithPlugin(...args)),
 }));
 
 describe("provider auth aliases", () => {
   beforeEach(async () => {
     vi.resetModules();
-    loadPluginManifestRegistry.mockReset();
-    loadPluginManifestRegistry.mockReturnValue(createFixtureProviderRegistry());
+    loadPluginManifestRegistrySync.mockReset();
+    loadPluginManifestRegistrySync.mockReturnValue(createFixtureProviderRegistry());
     resolveProviderSyntheticAuthWithPlugin.mockReset();
     ({ createProviderAuthResolver } = await import("./models-config.providers.secrets.js"));
   });
 
-  it("shares manifest env vars across aliased providers", () => {
+  it("shares manifest env vars across aliased providers", async () => {
     const resolveAuth = createProviderAuthResolver(
       {
         FIXTURE_PROVIDER_API_KEY: "test-key", // pragma: allowlist secret
@@ -82,19 +86,19 @@ describe("provider auth aliases", () => {
       { version: 1, profiles: {} },
     );
 
-    expect(resolveAuth("fixture-provider")).toMatchObject({
+    await expect(resolveAuth("fixture-provider")).resolves.toMatchObject({
       apiKey: "FIXTURE_PROVIDER_API_KEY",
       mode: "api_key",
       source: "env",
     });
-    expect(resolveAuth("fixture-provider-plan")).toMatchObject({
+    await expect(resolveAuth("fixture-provider-plan")).resolves.toMatchObject({
       apiKey: "FIXTURE_PROVIDER_API_KEY",
       mode: "api_key",
       source: "env",
     });
   });
 
-  it("reuses env keyRef markers from auth profiles for aliased providers", () => {
+  it("reuses env keyRef markers from auth profiles for aliased providers", async () => {
     const resolveAuth = createProviderAuthResolver({} as NodeJS.ProcessEnv, {
       version: 1,
       profiles: {
@@ -106,13 +110,13 @@ describe("provider auth aliases", () => {
       },
     });
 
-    expect(resolveAuth("fixture-provider")).toMatchObject({
+    await expect(resolveAuth("fixture-provider")).resolves.toMatchObject({
       apiKey: "FIXTURE_PROVIDER_API_KEY",
       mode: "api_key",
       source: "profile",
       profileId: "fixture-provider:default",
     });
-    expect(resolveAuth("fixture-provider-plan")).toMatchObject({
+    await expect(resolveAuth("fixture-provider-plan")).resolves.toMatchObject({
       apiKey: "FIXTURE_PROVIDER_API_KEY",
       mode: "api_key",
       source: "profile",
@@ -120,8 +124,8 @@ describe("provider auth aliases", () => {
     });
   });
 
-  it("ignores provider auth aliases from untrusted workspace plugins during runtime auth lookup", () => {
-    loadPluginManifestRegistry.mockReturnValue({
+  it("ignores provider auth aliases from untrusted workspace plugins during runtime auth lookup", async () => {
+    loadPluginManifestRegistrySync.mockReturnValue({
       plugins: [
         {
           id: "openai",
@@ -156,20 +160,20 @@ describe("provider auth aliases", () => {
       {},
     );
 
-    expect(resolveAuth("openai")).toMatchObject({
+    await expect(resolveAuth("openai")).resolves.toMatchObject({
       apiKey: "OPENAI_API_KEY",
       mode: "api_key",
       source: "env",
     });
-    expect(resolveAuth("evil-openai")).toMatchObject({
+    await expect(resolveAuth("evil-openai")).resolves.toMatchObject({
       apiKey: undefined,
       mode: "none",
       source: "none",
     });
   });
 
-  it("prefers bundled provider auth aliases over workspace collisions", () => {
-    loadPluginManifestRegistry.mockReturnValue({
+  it("prefers bundled provider auth aliases over workspace collisions", async () => {
+    loadPluginManifestRegistrySync.mockReturnValue({
       plugins: [
         {
           id: "evil-openai-hijack",
@@ -212,7 +216,7 @@ describe("provider auth aliases", () => {
       },
     );
 
-    expect(resolveAuth("openai-compatible")).toMatchObject({
+    await expect(resolveAuth("openai-compatible")).resolves.toMatchObject({
       apiKey: "OPENAI_API_KEY",
       mode: "api_key",
       source: "env",

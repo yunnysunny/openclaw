@@ -1,7 +1,12 @@
 import { normalizeProviderId } from "../agents/provider-id.js";
 import type { OpenClawConfig } from "../config/types.js";
 import { normalizeOptionalLowercaseString } from "../shared/string-coerce.js";
-import { loadPluginManifestRegistry, type PluginManifestRecord } from "./manifest-registry.js";
+import {
+  loadPluginManifestRegistryAsync,
+  loadPluginManifestRegistrySync,
+  type PluginManifestRecord,
+  type PluginManifestRegistry,
+} from "./manifest-registry.js";
 import type { PluginManifestActivationCapability } from "./manifest.js";
 import type { PluginOrigin } from "./plugin-origin.types.js";
 import { createPluginIdScopeSet, normalizePluginIdScope } from "./plugin-scope.js";
@@ -14,6 +19,28 @@ export type PluginActivationPlannerTrigger =
   | { kind: "route"; route: string }
   | { kind: "capability"; capability: PluginManifestActivationCapability };
 
+function collectManifestActivationPluginIds(params: {
+  trigger: PluginActivationPlannerTrigger;
+  origin?: PluginOrigin;
+  onlyPluginIds?: readonly string[];
+  registry: PluginManifestRegistry;
+}): string[] {
+  const onlyPluginIdSet = createPluginIdScopeSet(normalizePluginIdScope(params.onlyPluginIds));
+
+  return [
+    ...new Set(
+      params.registry.plugins
+        .filter(
+          (plugin) =>
+            (!params.origin || plugin.origin === params.origin) &&
+            (!onlyPluginIdSet || onlyPluginIdSet.has(plugin.id)) &&
+            matchesManifestActivationTrigger(plugin, params.trigger),
+        )
+        .map((plugin) => plugin.id),
+    ),
+  ].toSorted((left, right) => left.localeCompare(right));
+}
+
 export function resolveManifestActivationPluginIds(params: {
   trigger: PluginActivationPlannerTrigger;
   config?: OpenClawConfig;
@@ -23,25 +50,40 @@ export function resolveManifestActivationPluginIds(params: {
   origin?: PluginOrigin;
   onlyPluginIds?: readonly string[];
 }): string[] {
-  const onlyPluginIdSet = createPluginIdScopeSet(normalizePluginIdScope(params.onlyPluginIds));
+  return collectManifestActivationPluginIds({
+    trigger: params.trigger,
+    origin: params.origin,
+    onlyPluginIds: params.onlyPluginIds,
+    registry: loadPluginManifestRegistrySync({
+      config: params.config,
+      workspaceDir: params.workspaceDir,
+      env: params.env,
+      cache: params.cache,
+    }),
+  });
+}
 
-  return [
-    ...new Set(
-      loadPluginManifestRegistry({
-        config: params.config,
-        workspaceDir: params.workspaceDir,
-        env: params.env,
-        cache: params.cache,
-      })
-        .plugins.filter(
-          (plugin) =>
-            (!params.origin || plugin.origin === params.origin) &&
-            (!onlyPluginIdSet || onlyPluginIdSet.has(plugin.id)) &&
-            matchesManifestActivationTrigger(plugin, params.trigger),
-        )
-        .map((plugin) => plugin.id),
-    ),
-  ].toSorted((left, right) => left.localeCompare(right));
+export async function resolveManifestActivationPluginIdsAsync(params: {
+  trigger: PluginActivationPlannerTrigger;
+  config?: OpenClawConfig;
+  workspaceDir?: string;
+  env?: NodeJS.ProcessEnv;
+  cache?: boolean;
+  origin?: PluginOrigin;
+  onlyPluginIds?: readonly string[];
+}): Promise<string[]> {
+  const registry = await loadPluginManifestRegistryAsync({
+    config: params.config,
+    workspaceDir: params.workspaceDir,
+    env: params.env,
+    cache: params.cache,
+  });
+  return collectManifestActivationPluginIds({
+    trigger: params.trigger,
+    origin: params.origin,
+    onlyPluginIds: params.onlyPluginIds,
+    registry,
+  });
 }
 
 function matchesManifestActivationTrigger(

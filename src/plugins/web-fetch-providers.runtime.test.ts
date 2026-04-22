@@ -102,8 +102,8 @@ describe("resolvePluginWebFetchProviders", () => {
 
   beforeEach(() => {
     resetWebFetchProviderSnapshotCacheForTests();
-    vi.spyOn(manifestRegistryModule, "loadPluginManifestRegistry").mockReturnValue(
-      createManifestRegistryFixture() as ManifestRegistryModule["loadPluginManifestRegistry"] extends (
+    vi.spyOn(manifestRegistryModule, "loadPluginManifestRegistrySync").mockReturnValue(
+      createManifestRegistryFixture() as ManifestRegistryModule["loadPluginManifestRegistrySync"] extends (
         ...args: unknown[]
       ) => infer R
         ? R
@@ -261,7 +261,7 @@ describe("resolvePluginWebFetchProviders", () => {
       env,
     });
 
-    expect(manifestRegistryModule.loadPluginManifestRegistry).toHaveBeenCalledWith(
+    expect(manifestRegistryModule.loadPluginManifestRegistrySync).toHaveBeenCalledWith(
       expect.objectContaining({
         workspaceDir: "/tmp/runtime-workspace",
       }),

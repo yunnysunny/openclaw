@@ -34,8 +34,8 @@ describe("anthropic-vertex provider plugin", () => {
         ANTHROPIC_VERTEX_USE_GCP_METADATA: "true",
         GOOGLE_CLOUD_LOCATION: "us-east5",
       } as NodeJS.ProcessEnv,
-      resolveProviderApiKey: () => ({ apiKey: undefined }),
-      resolveProviderAuth: () => ({
+      resolveProviderApiKey: async () => ({ apiKey: undefined }),
+      resolveProviderAuth: async () => ({
         apiKey: undefined,
         discoveryApiKey: undefined,
         mode: "none",

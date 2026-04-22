@@ -19,7 +19,7 @@ async function loadModules() {
 beforeAll(loadModules);
 
 describe("vercel-ai-gateway provider resolution", () => {
-  it("resolves AI_GATEWAY_API_KEY through provider auth lookup", () => {
+  it("resolves AI_GATEWAY_API_KEY through provider auth lookup", async () => {
     const resolveAuth = createProviderAuthResolver(
       {
         AI_GATEWAY_API_KEY: "vercel-gateway-test-key", // pragma: allowlist secret
@@ -27,14 +27,14 @@ describe("vercel-ai-gateway provider resolution", () => {
       { version: 1, profiles: {} },
     );
 
-    expect(resolveAuth("vercel-ai-gateway")).toMatchObject({
+    await expect(resolveAuth("vercel-ai-gateway")).resolves.toMatchObject({
       apiKey: "AI_GATEWAY_API_KEY",
       mode: "api_key",
       source: "env",
     });
   });
 
-  it("prefers env keyRef markers over runtime plaintext in auth profiles", () => {
+  it("prefers env keyRef markers over runtime plaintext in auth profiles", async () => {
     const resolveAuth = createProviderAuthResolver({} as NodeJS.ProcessEnv, {
       version: 1,
       profiles: {
@@ -47,7 +47,7 @@ describe("vercel-ai-gateway provider resolution", () => {
       },
     });
 
-    expect(resolveAuth("vercel-ai-gateway")).toMatchObject({
+    await expect(resolveAuth("vercel-ai-gateway")).resolves.toMatchObject({
       apiKey: "AI_GATEWAY_API_KEY",
       mode: "api_key",
       source: "profile",
@@ -55,7 +55,7 @@ describe("vercel-ai-gateway provider resolution", () => {
     });
   });
 
-  it("uses non-env markers for non-env keyRef vercel profiles", () => {
+  it("uses non-env markers for non-env keyRef vercel profiles", async () => {
     const resolveAuth = createProviderAuthResolver({} as NodeJS.ProcessEnv, {
       version: 1,
       profiles: {
@@ -68,7 +68,7 @@ describe("vercel-ai-gateway provider resolution", () => {
       },
     });
 
-    expect(resolveAuth("vercel-ai-gateway")).toMatchObject({
+    await expect(resolveAuth("vercel-ai-gateway")).resolves.toMatchObject({
       apiKey: NON_ENV_SECRETREF_MARKER,
       mode: "api_key",
       source: "profile",

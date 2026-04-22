@@ -19,7 +19,7 @@ const catalogMocks = vi.hoisted(() => ({
 }));
 
 const manifestRegistryMocks = vi.hoisted(() => ({
-  loadPluginManifestRegistry: vi.fn(() => ({ plugins: [], diagnostics: [] })),
+  loadPluginManifestRegistrySync: vi.fn(() => ({ plugins: [], diagnostics: [] })),
 }));
 
 function createPrompter(overrides: Partial<WizardPrompter>): WizardPrompter {
@@ -464,7 +464,7 @@ vi.mock("../plugins/manifest-registry.js", async () => {
   );
   return {
     ...actual,
-    loadPluginManifestRegistry: manifestRegistryMocks.loadPluginManifestRegistry,
+    loadPluginManifestRegistrySync: manifestRegistryMocks.loadPluginManifestRegistrySync,
   };
 });
 
@@ -496,8 +496,8 @@ describe("setupChannels", () => {
     ({ setupChannels } = await import("./onboard-channels.js"));
     setMinimalOnboardingRegistryForTests();
     catalogMocks.listChannelPluginCatalogEntries.mockReset();
-    manifestRegistryMocks.loadPluginManifestRegistry.mockReset();
-    manifestRegistryMocks.loadPluginManifestRegistry.mockReturnValue({
+    manifestRegistryMocks.loadPluginManifestRegistrySync.mockReset();
+    manifestRegistryMocks.loadPluginManifestRegistrySync.mockReturnValue({
       plugins: [],
       diagnostics: [],
     });
@@ -806,7 +806,7 @@ describe("setupChannels", () => {
   it("treats installed external plugin channels as installed without reinstall prompts", async () => {
     setActivePluginRegistry(createEmptyPluginRegistry());
     catalogMocks.listChannelPluginCatalogEntries.mockReturnValue([createMSTeamsCatalogEntry()]);
-    manifestRegistryMocks.loadPluginManifestRegistry.mockReturnValue({
+    manifestRegistryMocks.loadPluginManifestRegistrySync.mockReturnValue({
       plugins: [
         {
           id: "@openclaw/external-chat-plugin",

@@ -40,6 +40,7 @@ let classifyProviderFailoverReasonWithPlugin: typeof import("./provider-runtime.
 let matchesProviderContextOverflowWithPlugin: typeof import("./provider-runtime.js").matchesProviderContextOverflowWithPlugin;
 let normalizeProviderConfigWithPlugin: typeof import("./provider-runtime.js").normalizeProviderConfigWithPlugin;
 let normalizeProviderModelIdWithPlugin: typeof import("./provider-runtime.js").normalizeProviderModelIdWithPlugin;
+let normalizeProviderModelIdWithPluginAsync: typeof import("./provider-runtime.js").normalizeProviderModelIdWithPluginAsync;
 let applyProviderResolvedModelCompatWithPlugins: typeof import("./provider-runtime.js").applyProviderResolvedModelCompatWithPlugins;
 let applyProviderResolvedTransportWithPlugin: typeof import("./provider-runtime.js").applyProviderResolvedTransportWithPlugin;
 let normalizeProviderTransportWithPlugin: typeof import("./provider-runtime.js").normalizeProviderTransportWithPlugin;
@@ -240,8 +241,11 @@ describe("provider-runtime", () => {
     }));
     vi.doMock("./providers.runtime.js", () => ({
       resolvePluginProviders: (params: unknown) => resolvePluginProvidersMock(params as never),
+      resolvePluginProvidersAsync: async (params: unknown) => resolvePluginProvidersMock(params as never),
       isPluginProvidersLoadInFlight: (params: unknown) =>
         isPluginProvidersLoadInFlightMock(params as never),
+      isPluginProvidersLoadInFlightAsync: async (params: unknown) =>
+        Promise.resolve(isPluginProvidersLoadInFlightMock(params as never)),
     }));
     ({
       augmentModelCatalogWithProviderPlugins,
@@ -257,6 +261,7 @@ describe("provider-runtime", () => {
       matchesProviderContextOverflowWithPlugin,
       normalizeProviderConfigWithPlugin,
       normalizeProviderModelIdWithPlugin,
+      normalizeProviderModelIdWithPluginAsync,
       normalizeProviderTransportWithPlugin,
       prepareProviderExtraParams,
       resolveProviderConfigApiKeyWithPlugin,
@@ -422,6 +427,29 @@ describe("provider-runtime", () => {
         },
       }),
     ).toBe("gemini-3.1-flash-lite-preview");
+    expect(resolvePluginProvidersMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("normalizes model ids asynchronously through the async hook provider path", async () => {
+    resolvePluginProvidersMock.mockReturnValue([
+      {
+        id: "google",
+        label: "Google",
+        hookAliases: ["google-vertex"],
+        auth: [],
+        normalizeModelId: ({ modelId }) => modelId.replace("flash-lite", "flash-lite-preview"),
+      },
+    ]);
+
+    await expect(
+      normalizeProviderModelIdWithPluginAsync({
+        provider: "google-vertex",
+        context: {
+          provider: "google-vertex",
+          modelId: "gemini-3.1-flash-lite",
+        },
+      }),
+    ).resolves.toBe("gemini-3.1-flash-lite-preview");
     expect(resolvePluginProvidersMock).toHaveBeenCalledTimes(1);
   });
 

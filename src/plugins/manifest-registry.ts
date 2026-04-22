@@ -8,7 +8,7 @@ import {
 import { normalizeOptionalTrimmedStringList } from "../shared/string-normalization.js";
 import { resolveUserPath } from "../utils.js";
 import { resolveCompatibilityHostVersion } from "../version.js";
-import { loadBundleManifest } from "./bundle-manifest.js";
+import { loadBundleManifest, loadBundleManifestAsync } from "./bundle-manifest.js";
 import {
   normalizePluginsConfigWithResolver,
   type NormalizedPluginsConfig,
@@ -27,6 +27,7 @@ import type {
 } from "./manifest-types.js";
 import {
   loadPluginManifest,
+  loadPluginManifestAsync,
   type OpenClawPackageManifest,
   type PluginManifestActivation,
   type PluginManifestConfigContracts,
@@ -39,7 +40,7 @@ import {
   type PluginManifestSetup,
 } from "./manifest.js";
 import { checkMinHostVersion } from "./min-host-version.js";
-import { isPathInside, safeRealpathSync } from "./path-safety.js";
+import { isPathInside, safeRealpath, safeRealpathSync } from "./path-safety.js";
 import type { PluginKind } from "./plugin-kind.types.js";
 import type { PluginOrigin } from "./plugin-origin.types.js";
 import { resolvePluginCacheInputs } from "./roots.js";
@@ -154,7 +155,7 @@ export function resolveManifestContractPluginIds(params: {
 }): string[] {
   const onlyPluginIdSet =
     params.onlyPluginIds && params.onlyPluginIds.length > 0 ? new Set(params.onlyPluginIds) : null;
-  return loadPluginManifestRegistry({
+  return loadPluginManifestRegistrySync({
     config: params.config,
     workspaceDir: params.workspaceDir,
     env: params.env,
@@ -181,7 +182,7 @@ export function resolveManifestContractPluginIdsByCompatibilityRuntimePath(param
   if (!normalizedPath) {
     return [];
   }
-  return loadPluginManifestRegistry({
+  return loadPluginManifestRegistrySync({
     config: params.config,
     workspaceDir: params.workspaceDir,
     env: params.env,
@@ -208,7 +209,7 @@ export function resolveManifestContractOwnerPluginId(params: {
   if (!normalizedValue) {
     return undefined;
   }
-  return loadPluginManifestRegistry({
+  return loadPluginManifestRegistrySync({
     config: params.config,
     workspaceDir: params.workspaceDir,
     env: params.env,
@@ -266,6 +267,15 @@ function buildCacheKey(params: {
 function safeStatMtimeMs(filePath: string): number | null {
   try {
     return fs.statSync(filePath).mtimeMs;
+  } catch {
+    return null;
+  }
+}
+
+async function safeStatMtimeMsAsync(filePath: string): Promise<number | null> {
+  try {
+    const st = await fs.promises.stat(filePath);
+    return st.mtimeMs;
   } catch {
     return null;
   }
@@ -478,7 +488,11 @@ function resolveDuplicatePrecedenceRank(params: {
   return 4;
 }
 
-export function loadPluginManifestRegistry(
+/**
+ * Synchronous manifest load; prefer {@link loadPluginManifestRegistryAsync} for new code.
+ * Retained for hot sync paths (e.g. plugin id normalization) that cannot await without a larger refactor.
+ */
+export function loadPluginManifestRegistrySync(
   params: {
     config?: OpenClawConfig;
     workspaceDir?: string;
@@ -612,6 +626,175 @@ export function loadPluginManifestRegistry(
       if (samePlugin) {
         // Prefer higher-precedence origins even if candidates are passed in
         // an unexpected order (config > workspace > global > bundled).
+        if (PLUGIN_ORIGIN_RANK[candidate.origin] < PLUGIN_ORIGIN_RANK[existing.candidate.origin]) {
+          records[existing.recordIndex] = record;
+          seenIds.set(manifest.id, { candidate, recordIndex: existing.recordIndex });
+        }
+        continue;
+      }
+
+      const candidateRank = resolveDuplicatePrecedenceRank({
+        pluginId: manifest.id,
+        candidate,
+        config,
+        env,
+      });
+      const existingRank = resolveDuplicatePrecedenceRank({
+        pluginId: manifest.id,
+        candidate: existing.candidate,
+        config,
+        env,
+      });
+      const candidateWins = candidateRank < existingRank;
+      const winnerCandidate = candidateWins ? candidate : existing.candidate;
+      const overriddenCandidate = candidateWins ? existing.candidate : candidate;
+      if (candidateWins) {
+        records[existing.recordIndex] = record;
+        seenIds.set(manifest.id, { candidate, recordIndex: existing.recordIndex });
+      }
+      diagnostics.push({
+        level: "warn",
+        pluginId: manifest.id,
+        source: overriddenCandidate.source,
+        message: `duplicate plugin id detected; ${overriddenCandidate.origin} plugin will be overridden by ${winnerCandidate.origin} plugin (${winnerCandidate.source})`,
+      });
+      continue;
+    }
+
+    seenIds.set(manifest.id, { candidate, recordIndex: records.length });
+    records.push(record);
+  }
+
+  const registry = { plugins: records, diagnostics };
+  if (cacheEnabled) {
+    const ttl = resolveManifestCacheMs(env);
+    if (ttl > 0) {
+      registryCache.set(cacheKey, { expiresAt: Date.now() + ttl, registry });
+    }
+  }
+  return registry;
+}
+
+export async function loadPluginManifestRegistryAsync(
+  params: Parameters<typeof loadPluginManifestRegistrySync>[0] = {},
+): Promise<PluginManifestRegistry> {
+  const config = params.config ?? {};
+  const normalized = normalizePluginsConfigWithResolver(config.plugins);
+  const env = params.env ?? process.env;
+  const cacheKey = buildCacheKey({ workspaceDir: params.workspaceDir, plugins: normalized, env });
+  const cacheEnabled = params.cache !== false && shouldUseManifestCache(env);
+  if (cacheEnabled) {
+    const cached = registryCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.registry;
+    }
+  }
+
+  const discovery = params.candidates
+    ? {
+        candidates: params.candidates,
+        diagnostics: params.diagnostics ?? [],
+      }
+    : await discoverOpenClawPluginsAsync({
+        workspaceDir: params.workspaceDir,
+        extraPaths: normalized.loadPaths,
+        cache: params.cache,
+        env,
+      });
+  const diagnostics: PluginDiagnostic[] = [...discovery.diagnostics];
+  const candidates: PluginCandidate[] = discovery.candidates;
+  const records: PluginManifestRecord[] = [];
+  const seenIds = new Map<string, SeenIdEntry>();
+  const realpathCache = new Map<string, string>();
+  const currentHostVersion = resolveCompatibilityHostVersion(env);
+
+  for (const candidate of candidates) {
+    const rejectHardlinks = candidate.origin !== "bundled";
+    const isBundleRecord = (candidate.format ?? "openclaw") === "bundle";
+    const manifestRes:
+      | Awaited<ReturnType<typeof loadPluginManifestAsync>>
+      | Awaited<ReturnType<typeof loadBundleManifestAsync>>
+      | { ok: true; manifest: PluginManifest; manifestPath: string } =
+      candidate.origin === "bundled" && candidate.bundledManifest && candidate.bundledManifestPath
+        ? {
+            ok: true,
+            manifest: candidate.bundledManifest,
+            manifestPath: candidate.bundledManifestPath,
+          }
+        : isBundleRecord && candidate.bundleFormat
+          ? await loadBundleManifestAsync({
+              rootDir: candidate.rootDir,
+              bundleFormat: candidate.bundleFormat,
+              rejectHardlinks,
+            })
+          : await loadPluginManifestAsync(candidate.rootDir, rejectHardlinks);
+    if (!manifestRes.ok) {
+      diagnostics.push({
+        level: "error",
+        message: manifestRes.error,
+        source: manifestRes.manifestPath,
+      });
+      continue;
+    }
+    const manifest = manifestRes.manifest;
+    const minHostVersionCheck = checkMinHostVersion({
+      currentVersion: currentHostVersion,
+      minHostVersion: candidate.packageManifest?.install?.minHostVersion,
+    });
+    if (!minHostVersionCheck.ok) {
+      const packageManifestSource = path.join(
+        candidate.packageDir ?? candidate.rootDir,
+        "package.json",
+      );
+      diagnostics.push({
+        level: minHostVersionCheck.kind === "unknown_host_version" ? "warn" : "error",
+        pluginId: manifest.id,
+        source: packageManifestSource,
+        message:
+          minHostVersionCheck.kind === "invalid"
+            ? `plugin manifest invalid | ${minHostVersionCheck.error}`
+            : minHostVersionCheck.kind === "unknown_host_version"
+              ? `plugin requires OpenClaw >=${minHostVersionCheck.requirement.minimumLabel}, but this host version could not be determined; skipping load`
+              : `plugin requires OpenClaw >=${minHostVersionCheck.requirement.minimumLabel}, but this host is ${minHostVersionCheck.currentVersion}; skipping load`,
+      });
+      continue;
+    }
+
+    const configSchema = "configSchema" in manifest ? manifest.configSchema : undefined;
+    let schemaCacheKey: string | undefined;
+    if (!configSchema) {
+      schemaCacheKey = undefined;
+    } else {
+      const manifestMtime = await safeStatMtimeMsAsync(manifestRes.manifestPath);
+      schemaCacheKey = manifestMtime
+        ? `${manifestRes.manifestPath}:${manifestMtime}`
+        : manifestRes.manifestPath;
+    }
+
+    const record = isBundleRecord
+      ? buildBundleRecord({
+          manifest: manifest as Parameters<typeof buildBundleRecord>[0]["manifest"],
+          candidate,
+          manifestPath: manifestRes.manifestPath,
+        })
+      : buildRecord({
+          manifest: manifest as PluginManifest,
+          candidate,
+          manifestPath: manifestRes.manifestPath,
+          schemaCacheKey,
+          configSchema,
+        });
+
+    const existing = seenIds.get(manifest.id);
+    if (existing) {
+      const samePath = existing.candidate.rootDir === candidate.rootDir;
+      let samePlugin = samePath;
+      if (!samePlugin) {
+        const existingReal = await safeRealpath(existing.candidate.rootDir, realpathCache);
+        const candidateReal = await safeRealpath(candidate.rootDir, realpathCache);
+        samePlugin = Boolean(existingReal && candidateReal && existingReal === candidateReal);
+      }
+      if (samePlugin) {
         if (PLUGIN_ORIGIN_RANK[candidate.origin] < PLUGIN_ORIGIN_RANK[existing.candidate.origin]) {
           records[existing.recordIndex] = record;
           seenIds.set(manifest.id, { candidate, recordIndex: existing.recordIndex });

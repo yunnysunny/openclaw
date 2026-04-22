@@ -20,7 +20,7 @@ import {
   isBundledManifestOwner,
   passesManifestOwnerBasePolicy,
 } from "./manifest-owner-policy.js";
-import { loadPluginManifestRegistry, type PluginManifestRecord } from "./manifest-registry.js";
+import { loadPluginManifestRegistrySync, type PluginManifestRecord } from "./manifest-registry.js";
 import { hasKind } from "./slots.js";
 
 function hasRuntimeContractSurface(plugin: PluginManifestRecord): boolean {
@@ -102,7 +102,7 @@ function resolveScopedChannelOwnerPluginIds(params: {
   if (channelIds.length === 0) {
     return [];
   }
-  const registry = loadPluginManifestRegistry({
+  const registry = loadPluginManifestRegistrySync({
     config: params.config,
     workspaceDir: params.workspaceDir,
     env: params.env,
@@ -206,7 +206,7 @@ export function resolveChannelPluginIds(params: {
   workspaceDir?: string;
   env: NodeJS.ProcessEnv;
 }): string[] {
-  return loadPluginManifestRegistry({
+  return loadPluginManifestRegistrySync({
     config: params.config,
     workspaceDir: params.workspaceDir,
     env: params.env,
@@ -244,7 +244,7 @@ export function resolveConfiguredDeferredChannelPluginIds(params: {
   if (configuredChannelIds.size === 0) {
     return [];
   }
-  return loadPluginManifestRegistry({
+  return loadPluginManifestRegistrySync({
     config: params.config,
     workspaceDir: params.workspaceDir,
     env: params.env,
@@ -294,7 +294,7 @@ export function resolveGatewayStartupPluginIds(params: {
   const explicitMemorySlotStartupPluginId = resolveExplicitMemorySlotStartupPluginId(
     params.activationSourceConfig ?? params.config,
   );
-  return loadPluginManifestRegistry({
+  return loadPluginManifestRegistrySync({
     config: params.config,
     workspaceDir: params.workspaceDir,
     env: params.env,

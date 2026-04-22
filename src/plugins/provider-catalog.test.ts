@@ -24,10 +24,10 @@ function createCatalogContext(params: {
   return {
     config: params.config ?? {},
     env: {},
-    resolveProviderApiKey: (providerId) => ({
+    resolveProviderApiKey: async (providerId) => ({
       apiKey: providerId ? params.apiKeys?.[providerId] : undefined,
     }),
-    resolveProviderAuth: (providerId) => ({
+    resolveProviderAuth: async (providerId) => ({
       apiKey: providerId ? params.apiKeys?.[providerId] : undefined,
       mode: providerId && params.apiKeys?.[providerId] ? "api_key" : "none",
       source: providerId && params.apiKeys?.[providerId] ? "env" : "none",

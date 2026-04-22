@@ -26,8 +26,8 @@ function createCatalogContext(
   return {
     config,
     env: {},
-    resolveProviderApiKey: () => ({ apiKey: "test-key" }),
-    resolveProviderAuth: () => ({
+    resolveProviderApiKey: async () => ({ apiKey: "test-key" }),
+    resolveProviderAuth: async () => ({
       apiKey: "test-key",
       mode: "api_key",
       source: "env",

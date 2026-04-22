@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  loadPluginManifestRegistry,
+  loadPluginManifestRegistrySync,
   resolveManifestContractOwnerPluginId,
   resolveManifestContractPluginIds,
   resolveManifestContractPluginIdsByCompatibilityRuntimePath,
@@ -16,7 +16,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function supportsSecretRefWebSearchApiKey(
-  plugin: ReturnType<typeof loadPluginManifestRegistry>["plugins"][number],
+  plugin: ReturnType<typeof loadPluginManifestRegistrySync>["plugins"][number],
 ): boolean {
   const configProperties = isRecord(plugin.configSchema?.["properties"])
     ? plugin.configSchema["properties"]
@@ -70,7 +70,7 @@ describe("web provider public artifacts", () => {
   });
 
   it("registers compatibility runtime paths for bundled SecretRef-capable web search providers", () => {
-    const registry = loadPluginManifestRegistry({ cache: false });
+    const registry = loadPluginManifestRegistrySync({ cache: false });
     const expectedPluginIds = registry.plugins
       .filter(
         (plugin) =>

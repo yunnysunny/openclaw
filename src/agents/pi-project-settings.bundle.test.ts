@@ -17,7 +17,7 @@ vi.mock("../plugins/manifest-registry.js", async () => {
   const fs = await import("node:fs");
   const path = await import("node:path");
   return {
-    loadPluginManifestRegistry: (params: { workspaceDir?: string }) => {
+    loadPluginManifestRegistrySync: (params: { workspaceDir?: string }) => {
       const rootDir = path.join(
         params.workspaceDir ?? "",
         ".openclaw",

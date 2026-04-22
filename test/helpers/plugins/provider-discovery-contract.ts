@@ -80,27 +80,28 @@ function runCatalog(
     provider: ProviderHandle;
     config?: OpenClawConfig;
     env?: NodeJS.ProcessEnv;
-    resolveProviderApiKey?: () => { apiKey: string | undefined };
+    resolveProviderApiKey?: () => Promise<{ apiKey: string | undefined }>;
     resolveProviderAuth?: (
       providerId?: string,
       options?: { oauthMarker?: string },
-    ) => {
+    ) => Promise<{
       apiKey: string | undefined;
       discoveryApiKey?: string;
       mode: "api_key" | "oauth" | "token" | "none";
       source: "env" | "profile" | "none";
       profileId?: string;
-    };
+    }>;
   },
 ) {
   return state.runProviderCatalog({
     provider: params.provider,
     config: params.config ?? {},
     env: params.env ?? ({} as NodeJS.ProcessEnv),
-    resolveProviderApiKey: params.resolveProviderApiKey ?? (() => ({ apiKey: undefined })),
+    resolveProviderApiKey:
+      params.resolveProviderApiKey ?? (async () => ({ apiKey: undefined })),
     resolveProviderAuth:
       params.resolveProviderAuth ??
-      ((_, options) => ({
+      (async (_, options) => ({
         apiKey: options?.oauthMarker,
         discoveryApiKey: undefined,
         mode: options?.oauthMarker ? "oauth" : "none",
@@ -284,7 +285,7 @@ export function describeGithubCopilotProviderDiscoveryContract(params: {
           env: {
             GITHUB_TOKEN: "github-env-token",
           } as NodeJS.ProcessEnv,
-          resolveProviderApiKey: () => ({ apiKey: undefined }),
+          resolveProviderApiKey: async () => ({ apiKey: undefined }),
         }),
       ).resolves.toEqual({
         provider: {
@@ -329,11 +330,11 @@ export function describeVllmProviderDiscoveryContract(params: {
           env: {
             VLLM_API_KEY: "env-vllm-key",
           } as NodeJS.ProcessEnv,
-          resolveProviderApiKey: () => ({
+          resolveProviderApiKey: async () => ({
             apiKey: "VLLM_API_KEY",
             discoveryApiKey: "env-vllm-key",
           }),
-          resolveProviderAuth: () => ({
+          resolveProviderAuth: async () => ({
             apiKey: "VLLM_API_KEY",
             discoveryApiKey: "env-vllm-key",
             mode: "api_key",
@@ -382,11 +383,11 @@ export function describeSglangProviderDiscoveryContract(params: {
           env: {
             SGLANG_API_KEY: "env-sglang-key",
           } as NodeJS.ProcessEnv,
-          resolveProviderApiKey: () => ({
+          resolveProviderApiKey: async () => ({
             apiKey: "SGLANG_API_KEY",
             discoveryApiKey: "env-sglang-key",
           }),
-          resolveProviderAuth: () => ({
+          resolveProviderAuth: async () => ({
             apiKey: "SGLANG_API_KEY",
             discoveryApiKey: "env-sglang-key",
             mode: "api_key",
@@ -424,8 +425,8 @@ export function describeMinimaxProviderDiscoveryContract(
           env: {
             MINIMAX_API_KEY: "minimax-key",
           } as NodeJS.ProcessEnv,
-          resolveProviderApiKey: () => ({ apiKey: "minimax-key" }),
-          resolveProviderAuth: () => ({
+          resolveProviderApiKey: async () => ({ apiKey: "minimax-key" }),
+          resolveProviderAuth: async () => ({
             apiKey: "minimax-key",
             discoveryApiKey: undefined,
             mode: "api_key",
@@ -465,8 +466,8 @@ export function describeMinimaxProviderDiscoveryContract(
           provider: state.minimaxPortalProvider!,
           config: {},
           env: {} as NodeJS.ProcessEnv,
-          resolveProviderApiKey: () => ({ apiKey: undefined }),
-          resolveProviderAuth: () => ({
+          resolveProviderApiKey: async () => ({ apiKey: undefined }),
+          resolveProviderAuth: async () => ({
             apiKey: "minimax-oauth",
             discoveryApiKey: "access-token",
             mode: "oauth",
@@ -501,8 +502,8 @@ export function describeMinimaxProviderDiscoveryContract(
             },
           },
           env: {} as NodeJS.ProcessEnv,
-          resolveProviderApiKey: () => ({ apiKey: undefined }),
-          resolveProviderAuth: () => ({
+          resolveProviderApiKey: async () => ({ apiKey: undefined }),
+          resolveProviderAuth: async () => ({
             apiKey: undefined,
             discoveryApiKey: undefined,
             mode: "none",
@@ -544,8 +545,8 @@ export function describeModelStudioProviderDiscoveryContract(
           env: {
             MODELSTUDIO_API_KEY: "modelstudio-key",
           } as NodeJS.ProcessEnv,
-          resolveProviderApiKey: () => ({ apiKey: "modelstudio-key" }),
-          resolveProviderAuth: () => ({
+          resolveProviderApiKey: async () => ({ apiKey: "modelstudio-key" }),
+          resolveProviderAuth: async () => ({
             apiKey: "modelstudio-key",
             discoveryApiKey: undefined,
             mode: "api_key",
@@ -585,8 +586,8 @@ export function describeCloudflareAiGatewayProviderDiscoveryContract(
           provider: state.cloudflareAiGatewayProvider!,
           config: {},
           env: {} as NodeJS.ProcessEnv,
-          resolveProviderApiKey: () => ({ apiKey: undefined }),
-          resolveProviderAuth: () => ({
+          resolveProviderApiKey: async () => ({ apiKey: undefined }),
+          resolveProviderAuth: async () => ({
             apiKey: undefined,
             discoveryApiKey: undefined,
             mode: "none",
@@ -623,8 +624,8 @@ export function describeCloudflareAiGatewayProviderDiscoveryContract(
           env: {
             CLOUDFLARE_AI_GATEWAY_API_KEY: "secret-value",
           } as NodeJS.ProcessEnv,
-          resolveProviderApiKey: () => ({ apiKey: undefined }),
-          resolveProviderAuth: () => ({
+          resolveProviderApiKey: async () => ({ apiKey: undefined }),
+          resolveProviderAuth: async () => ({
             apiKey: undefined,
             discoveryApiKey: undefined,
             mode: "none",

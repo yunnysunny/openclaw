@@ -13,7 +13,7 @@ import {
   resolveEffectivePluginActivationState,
 } from "../plugins/config-state.js";
 import {
-  loadPluginManifestRegistry,
+  loadPluginManifestRegistrySync,
   type PluginManifestRecord,
 } from "../plugins/manifest-registry.js";
 import { resolveRegistryPluginModuleLocationFromRecords } from "./facade-resolution-shared.js";
@@ -149,7 +149,7 @@ function getFacadeManifestRegistry(params: {
   if (cached) {
     return cached;
   }
-  const loaded = loadPluginManifestRegistry({
+  const loaded = loadPluginManifestRegistrySync({
     config: getFacadeBoundaryResolvedConfig().config,
     cache: true,
     ...(params.env ? { env: params.env } : {}),

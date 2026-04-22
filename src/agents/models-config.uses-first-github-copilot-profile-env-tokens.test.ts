@@ -9,10 +9,12 @@ import { createProviderAuthResolver } from "./models-config.providers.secrets.js
 
 vi.mock("./model-auth-env.js", () => ({
   resolveEnvApiKey: () => null,
+  resolveEnvApiKeyAsync: async () => null,
 }));
 
 vi.mock("./provider-auth-aliases.js", () => ({
   resolveProviderIdForAuth: (provider: string) => provider.trim().toLowerCase(),
+  resolveProviderIdForAuthAsync: async (provider: string) => provider.trim().toLowerCase(),
 }));
 
 vi.mock("./model-auth-env-vars.js", () => ({
@@ -23,6 +25,7 @@ vi.mock("./model-auth-env-vars.js", () => ({
 
 vi.mock("../plugins/provider-runtime.js", () => ({
   resolveProviderSyntheticAuthWithPlugin: () => undefined,
+  resolveProviderSyntheticAuthWithPluginAsync: async () => undefined,
 }));
 
 vi.mock("./models-config.providers.js", () => ({
@@ -37,7 +40,7 @@ vi.mock("./models-config.providers.js", () => ({
 }));
 
 describe("models-config", () => {
-  it("uses the first github-copilot profile when env tokens are missing", () => {
+  it("uses the first github-copilot profile when env tokens are missing", async () => {
     const auth = createProviderAuthResolver({} as NodeJS.ProcessEnv, {
       version: 1,
       profiles: {
@@ -54,7 +57,7 @@ describe("models-config", () => {
       },
     });
 
-    expect(auth("github-copilot")).toEqual({
+    await expect(auth("github-copilot")).resolves.toEqual({
       apiKey: "alpha-token",
       discoveryApiKey: "alpha-token",
       mode: "token",
@@ -191,7 +194,7 @@ describe("models-config", () => {
     expect(plan).toEqual({ action: "noop" });
   });
 
-  it("uses tokenRef env var when github-copilot profile omits plaintext token", () => {
+  it("uses tokenRef env var when github-copilot profile omits plaintext token", async () => {
     const auth = createProviderAuthResolver(
       {
         COPILOT_REF_TOKEN: "token-from-ref-env",
@@ -208,7 +211,7 @@ describe("models-config", () => {
       },
     );
 
-    expect(auth("github-copilot")).toEqual({
+    await expect(auth("github-copilot")).resolves.toEqual({
       apiKey: "COPILOT_REF_TOKEN",
       discoveryApiKey: "token-from-ref-env",
       mode: "token",

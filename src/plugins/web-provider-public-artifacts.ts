@@ -1,6 +1,6 @@
 import path from "node:path";
 import type { PluginLoadOptions } from "./loader.js";
-import { loadPluginManifestRegistry } from "./manifest-registry.js";
+import { loadPluginManifestRegistrySync } from "./manifest-registry.js";
 import type { PluginWebFetchProviderEntry, PluginWebSearchProviderEntry } from "./types.js";
 import { resolveBundledWebFetchResolutionConfig } from "./web-fetch-providers.shared.js";
 import {
@@ -57,7 +57,7 @@ function resolveBundledManifestRecordsByPluginId(params: {
 }) {
   const allowedPluginIds = new Set(params.onlyPluginIds);
   return new Map(
-    loadPluginManifestRegistry({
+    loadPluginManifestRegistrySync({
       config: params.config,
       workspaceDir: params.workspaceDir,
       env: params.env,

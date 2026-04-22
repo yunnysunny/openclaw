@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { uniqueSortedStrings } from "../../../test/helpers/plugins/contracts-testkit.js";
 import {
-  loadPluginManifestRegistry,
+  loadPluginManifestRegistrySync,
   resolveManifestContractPluginIds,
 } from "../manifest-registry.js";
 import {
@@ -43,7 +43,7 @@ describe("plugin contract registry", () => {
       };
     }) => boolean,
   ) {
-    return loadPluginManifestRegistry({})
+    return loadPluginManifestRegistrySync({})
       .plugins.filter(predicate)
       .map((plugin) => plugin.id)
       .toSorted((left, right) => left.localeCompare(right));

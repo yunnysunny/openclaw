@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { loadPluginManifestRegistryMock } = vi.hoisted(() => ({
-  loadPluginManifestRegistryMock: vi.fn(() => {
+const { loadPluginManifestRegistrySyncMock } = vi.hoisted(() => ({
+  loadPluginManifestRegistrySyncMock: vi.fn(() => {
     throw new Error("manifest registry should stay off the explicit bundled fast path");
   }),
 }));
@@ -10,7 +10,7 @@ vi.mock("./manifest-registry.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./manifest-registry.js")>();
   return {
     ...actual,
-    loadPluginManifestRegistry: loadPluginManifestRegistryMock,
+    loadPluginManifestRegistrySync: loadPluginManifestRegistrySyncMock,
   };
 });
 
@@ -22,7 +22,7 @@ import {
 
 describe("web provider public artifacts explicit fast path", () => {
   beforeEach(() => {
-    loadPluginManifestRegistryMock.mockClear();
+    loadPluginManifestRegistrySyncMock.mockClear();
   });
 
   it("resolves bundled web search providers by explicit plugin id without manifest scans", () => {
@@ -33,7 +33,7 @@ describe("web provider public artifacts explicit fast path", () => {
 
     expect(provider?.pluginId).toBe("brave");
     expect(provider?.createTool({ config: {} as never })).toBeNull();
-    expect(loadPluginManifestRegistryMock).not.toHaveBeenCalled();
+    expect(loadPluginManifestRegistrySyncMock).not.toHaveBeenCalled();
   });
 
   it("resolves bundled runtime web search providers by explicit plugin id", () => {
@@ -43,7 +43,7 @@ describe("web provider public artifacts explicit fast path", () => {
 
     expect(provider?.pluginId).toBe("google");
     expect(provider?.createTool({ config: {} as never })).not.toBeNull();
-    expect(loadPluginManifestRegistryMock).not.toHaveBeenCalled();
+    expect(loadPluginManifestRegistrySyncMock).not.toHaveBeenCalled();
   });
 
   it("resolves bundled web fetch providers by explicit plugin id without manifest scans", () => {
@@ -54,6 +54,6 @@ describe("web provider public artifacts explicit fast path", () => {
 
     expect(provider?.pluginId).toBe("firecrawl");
     expect(provider?.createTool({ config: {} as never })).toBeNull();
-    expect(loadPluginManifestRegistryMock).not.toHaveBeenCalled();
+    expect(loadPluginManifestRegistrySyncMock).not.toHaveBeenCalled();
   });
 });

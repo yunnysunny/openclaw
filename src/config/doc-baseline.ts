@@ -364,7 +364,7 @@ async function loadBundledConfigSchemaResponse(): Promise<ConfigSchemaResponse> 
     OPENCLAW_BUNDLED_PLUGINS_DIR: path.join(repoRoot, "extensions"),
   };
 
-  const manifestRegistry = runtime.loadPluginManifestRegistry({
+  const manifestRegistry = runtime.loadPluginManifestRegistrySync({
     cache: false,
     env,
     config: {},

@@ -9,14 +9,14 @@ type ResolveRuntimePluginRegistry = typeof import("./loader.js").resolveRuntimeP
 type LoadOpenClawPlugins = typeof import("./loader.js").loadOpenClawPlugins;
 type IsPluginRegistryLoadInFlight = typeof import("./loader.js").isPluginRegistryLoadInFlight;
 type LoadPluginManifestRegistry =
-  typeof import("./manifest-registry.js").loadPluginManifestRegistry;
+  typeof import("./manifest-registry.js").loadPluginManifestRegistrySync;
 type ApplyPluginAutoEnable = typeof import("../config/plugin-auto-enable.js").applyPluginAutoEnable;
 type SetActivePluginRegistry = typeof import("./runtime.js").setActivePluginRegistry;
 
 const resolveRuntimePluginRegistryMock = vi.fn<ResolveRuntimePluginRegistry>();
 const loadOpenClawPluginsMock = vi.fn<LoadOpenClawPlugins>();
 const isPluginRegistryLoadInFlightMock = vi.fn<IsPluginRegistryLoadInFlight>((_) => false);
-const loadPluginManifestRegistryMock = vi.fn<LoadPluginManifestRegistry>();
+const loadPluginManifestRegistrySyncMock = vi.fn<LoadPluginManifestRegistry>();
 const applyPluginAutoEnableMock = vi.fn<ApplyPluginAutoEnable>();
 
 let resolveOwningPluginIdsForProvider: typeof import("./providers.js").resolveOwningPluginIdsForProvider;
@@ -57,7 +57,7 @@ function createManifestProviderPlugin(params: {
 }
 
 function setManifestPlugins(plugins: PluginManifestRecord[]) {
-  loadPluginManifestRegistryMock.mockReturnValue({
+  loadPluginManifestRegistrySyncMock.mockReturnValue({
     plugins,
     diagnostics: [],
   });
@@ -266,7 +266,7 @@ function expectProviderRuntimeRegistryLoad(params?: { config?: unknown; env?: No
 describe("resolvePluginProviders", () => {
   beforeAll(async () => {
     vi.resetModules();
-    loadPluginManifestRegistryMock.mockReturnValue({
+    loadPluginManifestRegistrySyncMock.mockReturnValue({
       plugins: [],
       diagnostics: [],
     });
@@ -283,8 +283,8 @@ describe("resolvePluginProviders", () => {
         applyPluginAutoEnableMock(...args),
     }));
     vi.doMock("./manifest-registry.js", () => ({
-      loadPluginManifestRegistry: (...args: Parameters<LoadPluginManifestRegistry>) =>
-        loadPluginManifestRegistryMock(...args),
+      loadPluginManifestRegistrySync: (...args: Parameters<LoadPluginManifestRegistry>) =>
+        loadPluginManifestRegistrySyncMock(...args),
     }));
     ({
       resolveActivatableProviderOwnerPluginIds,
@@ -320,7 +320,7 @@ describe("resolvePluginProviders", () => {
     registry.providers.push({ pluginId: "google", provider, source: "bundled" });
     resolveRuntimePluginRegistryMock.mockReturnValue(registry);
     loadOpenClawPluginsMock.mockReturnValue(registry);
-    loadPluginManifestRegistryMock.mockReset();
+    loadPluginManifestRegistrySyncMock.mockReset();
     applyPluginAutoEnableMock.mockReset();
     applyPluginAutoEnableMock.mockImplementation(
       (params): PluginAutoEnableResult => ({

@@ -8,10 +8,10 @@ import {
   setupPluginConfig,
 } from "./setup.plugin-config.js";
 
-const loadPluginManifestRegistry = vi.fn();
+const loadPluginManifestRegistrySync = vi.fn();
 
 vi.mock("../plugins/manifest-registry.js", () => ({
-  loadPluginManifestRegistry,
+  loadPluginManifestRegistrySync,
 }));
 
 function makeManifestPlugin(
@@ -216,7 +216,7 @@ describe("discoverUnconfiguredPlugins", () => {
 
 describe("setupPluginConfig", () => {
   it("allows skipping plugin setup from the multiselect prompt", async () => {
-    loadPluginManifestRegistry.mockReturnValue({
+    loadPluginManifestRegistrySync.mockReturnValue({
       plugins: [
         {
           ...makeManifestPlugin("device-pairing", {
@@ -273,7 +273,7 @@ describe("setupPluginConfig", () => {
   });
 
   it("writes dotted uiHint values into nested plugin config", async () => {
-    loadPluginManifestRegistry.mockReturnValue({
+    loadPluginManifestRegistrySync.mockReturnValue({
       plugins: [
         {
           ...makeManifestPlugin(
@@ -334,7 +334,7 @@ describe("setupPluginConfig", () => {
   });
 
   it("coerces integer schema fields from text input", async () => {
-    loadPluginManifestRegistry.mockReturnValue({
+    loadPluginManifestRegistrySync.mockReturnValue({
       plugins: [
         makeManifestPlugin(
           "retry-plugin",

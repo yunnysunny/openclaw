@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import type { PluginManifestRecord } from "../plugins/manifest-registry.js";
-import { loadPluginManifestRegistry } from "../plugins/manifest-registry.js";
+import { loadPluginManifestRegistrySync } from "../plugins/manifest-registry.js";
 import {
   loadBundledPluginPublicSurfaceModuleSync,
   tryLoadActivatedBundledPluginPublicSurfaceModuleSync,
@@ -91,7 +91,7 @@ function listDeclaredQaRunnerPlugins(
     qaRunners: NonNullable<PluginManifestRecord["qaRunners"]>;
   }
 > {
-  return loadPluginManifestRegistry({ cache: true, ...(env ? { env } : {}) })
+  return loadPluginManifestRegistrySync({ cache: true, ...(env ? { env } : {}) })
     .plugins.filter(
       (
         plugin,

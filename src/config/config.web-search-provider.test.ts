@@ -165,7 +165,7 @@ vi.mock("../plugins/manifest-registry.js", () => {
   });
 
   return {
-    loadPluginManifestRegistry: () => ({
+    loadPluginManifestRegistrySync: () => ({
       plugins: [
         {
           id: "brave",

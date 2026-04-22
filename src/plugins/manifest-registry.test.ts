@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PluginCandidate } from "./discovery.js";
 import {
   clearPluginManifestRegistryCache,
-  loadPluginManifestRegistry,
+  loadPluginManifestRegistrySync,
 } from "./manifest-registry.js";
 import type { OpenClawPackageManifest } from "./manifest.js";
 import { cleanupTrackedTempDirs, makeTrackedTempDir } from "./test-helpers/fs-fixtures.js";
@@ -83,7 +83,7 @@ function createPluginCandidate(params: {
 }
 
 function loadRegistry(candidates: PluginCandidate[]) {
-  return loadPluginManifestRegistry({
+  return loadPluginManifestRegistrySync({
     candidates,
     cache: false,
   });
@@ -99,7 +99,7 @@ function hermeticEnv(overrides: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
   };
 }
 
-function countDuplicateWarnings(registry: ReturnType<typeof loadPluginManifestRegistry>): number {
+function countDuplicateWarnings(registry: ReturnType<typeof loadPluginManifestRegistrySync>): number {
   return registry.diagnostics.filter(
     (diagnostic) =>
       diagnostic.level === "warn" && diagnostic.message?.includes("duplicate plugin id"),
@@ -107,7 +107,7 @@ function countDuplicateWarnings(registry: ReturnType<typeof loadPluginManifestRe
 }
 
 function hasPluginIdMismatchWarning(
-  registry: ReturnType<typeof loadPluginManifestRegistry>,
+  registry: ReturnType<typeof loadPluginManifestRegistrySync>,
 ): boolean {
   return registry.diagnostics.some((diagnostic) =>
     diagnostic.message.includes("plugin id mismatch"),
@@ -115,7 +115,7 @@ function hasPluginIdMismatchWarning(
 }
 
 function expectRegistryDiagnosticContains(
-  registry: ReturnType<typeof loadPluginManifestRegistry>,
+  registry: ReturnType<typeof loadPluginManifestRegistrySync>,
   fragment: string,
 ) {
   expect(registry.diagnostics.some((diag) => diag.message.includes(fragment))).toBe(true);
@@ -173,7 +173,7 @@ function loadRegistryForMinHostVersionCase(params: {
   minHostVersion: string;
   env?: NodeJS.ProcessEnv;
 }) {
-  return loadPluginManifestRegistry({
+  return loadPluginManifestRegistrySync({
     cache: false,
     ...(params.env ? { env: params.env } : {}),
     candidates: [
@@ -193,7 +193,7 @@ function loadRegistryForMinHostVersionCase(params: {
   });
 }
 
-function hasUnsafeManifestDiagnostic(registry: ReturnType<typeof loadPluginManifestRegistry>) {
+function hasUnsafeManifestDiagnostic(registry: ReturnType<typeof loadPluginManifestRegistrySync>) {
   return registry.diagnostics.some((diag) => diag.message.includes("unsafe plugin manifest path"));
 }
 
@@ -224,7 +224,7 @@ function createDuplicateCandidateRegistry(params: {
   writeManifest(bundledDir, manifest);
   writeManifest(duplicateDir, manifest);
 
-  return loadPluginManifestRegistry({
+  return loadPluginManifestRegistrySync({
     cache: false,
     candidates: [
       createPluginCandidate({
@@ -280,7 +280,7 @@ function loadBundleRegistry(params: {
 }
 
 function expectPluginRoot(
-  registry: ReturnType<typeof loadPluginManifestRegistry>,
+  registry: ReturnType<typeof loadPluginManifestRegistrySync>,
   pluginId: string,
 ) {
   const plugin = registry.plugins.find((entry) => entry.id === pluginId);
@@ -289,8 +289,8 @@ function expectPluginRoot(
 }
 
 function expectCachedPluginRoot(params: {
-  first: ReturnType<typeof loadPluginManifestRegistry>;
-  second: ReturnType<typeof loadPluginManifestRegistry>;
+  first: ReturnType<typeof loadPluginManifestRegistrySync>;
+  second: ReturnType<typeof loadPluginManifestRegistrySync>;
   pluginId: string;
   firstRoot: string;
   secondRoot: string;
@@ -309,7 +309,7 @@ afterEach(() => {
   cleanupTrackedTempDirs(tempDirs);
 });
 
-describe("loadPluginManifestRegistry", () => {
+describe("loadPluginManifestRegistrySync", () => {
   it("keeps only the higher-precedence plugin for truly distinct duplicates", () => {
     const dirA = makeTempDir();
     const dirB = makeTempDir();
@@ -375,7 +375,7 @@ describe("loadPluginManifestRegistry", () => {
     writeManifest(bundledDir, manifest);
     writeManifest(globalDir, manifest);
 
-    const registry = loadPluginManifestRegistry({
+    const registry = loadPluginManifestRegistrySync({
       cache: false,
       config: {
         plugins: {
@@ -1091,13 +1091,13 @@ describe("loadPluginManifestRegistry", () => {
       relativePath: "matrix",
     });
 
-    const first = loadPluginManifestRegistry({
+    const first = loadPluginManifestRegistrySync({
       cache: true,
       env: hermeticEnv({
         OPENCLAW_BUNDLED_PLUGINS_DIR: bundledA,
       }),
     });
-    const second = loadPluginManifestRegistry({
+    const second = loadPluginManifestRegistrySync({
       cache: true,
       env: hermeticEnv({
         OPENCLAW_BUNDLED_PLUGINS_DIR: bundledB,
@@ -1137,7 +1137,7 @@ describe("loadPluginManifestRegistry", () => {
       },
     };
 
-    const first = loadPluginManifestRegistry({
+    const first = loadPluginManifestRegistrySync({
       cache: true,
       config,
       env: hermeticEnv({
@@ -1146,7 +1146,7 @@ describe("loadPluginManifestRegistry", () => {
         OPENCLAW_STATE_DIR: path.join(homeA, ".state"),
       }),
     });
-    const second = loadPluginManifestRegistry({
+    const second = loadPluginManifestRegistrySync({
       cache: true,
       config,
       env: hermeticEnv({
@@ -1184,14 +1184,14 @@ describe("loadPluginManifestRegistry", () => {
       }),
     ];
 
-    const olderHost = loadPluginManifestRegistry({
+    const olderHost = loadPluginManifestRegistrySync({
       cache: true,
       candidates,
       env: hermeticEnv({
         OPENCLAW_VERSION: "2026.3.21",
       }),
     });
-    const newerHost = loadPluginManifestRegistry({
+    const newerHost = loadPluginManifestRegistrySync({
       cache: true,
       candidates,
       env: hermeticEnv({

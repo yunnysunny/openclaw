@@ -1,4 +1,4 @@
-import { loadPluginManifestRegistry } from "../plugins/manifest-registry.js";
+import { loadPluginManifestRegistrySync } from "../plugins/manifest-registry.js";
 import {
   normalizeOptionalLowercaseString,
   normalizeOptionalString,
@@ -200,7 +200,7 @@ function isManifestProviderEndpointClass(value: string): value is ProviderEndpoi
 
 function loadManifestProviderEndpointCache(): ManifestProviderEndpointCacheEntry[] {
   if (!manifestProviderEndpointCache) {
-    const registry = loadPluginManifestRegistry({ cache: true });
+    const registry = loadPluginManifestRegistrySync({ cache: true });
     const entries: ManifestProviderEndpointCacheEntry[] = [];
     for (const plugin of registry.plugins) {
       for (const endpoint of plugin.providerEndpoints ?? []) {

@@ -187,7 +187,7 @@ describe("ollama plugin", () => {
     const result = await provider.discovery.run({
       config: {},
       env: {},
-      resolveProviderApiKey: () => ({ apiKey: "", discoveryApiKey: "" }),
+      resolveProviderApiKey: async () => ({ apiKey: "", discoveryApiKey: "" }),
     } as never);
 
     expect(result).toBeNull();
@@ -215,7 +215,7 @@ describe("ollama plugin", () => {
         },
       },
       env: { NODE_ENV: "development" },
-      resolveProviderApiKey: () => ({ apiKey: "" }),
+      resolveProviderApiKey: async () => ({ apiKey: "" }),
     } as never);
 
     expect(result).toBeNull();
@@ -245,7 +245,7 @@ describe("ollama plugin", () => {
         },
       },
       env: { NODE_ENV: "development" },
-      resolveProviderApiKey: () => ({ apiKey: "" }),
+      resolveProviderApiKey: async () => ({ apiKey: "" }),
     } as never);
 
     expect(result).toBeNull();
@@ -265,7 +265,7 @@ describe("ollama plugin", () => {
     const result = await provider.discovery.run({
       config: {},
       env: { NODE_ENV: "development" },
-      resolveProviderApiKey: () => ({ apiKey: "ollama-local" }),
+      resolveProviderApiKey: async () => ({ apiKey: "ollama-local" }),
     } as never);
 
     expect(result).toMatchObject({

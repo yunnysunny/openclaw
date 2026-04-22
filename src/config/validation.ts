@@ -14,7 +14,7 @@ import {
 } from "../plugins/doctor-contract-registry.js";
 import { resolveManifestCommandAliasOwner } from "../plugins/manifest-command-aliases.runtime.js";
 import {
-  loadPluginManifestRegistry,
+  loadPluginManifestRegistrySync,
   resolveManifestContractPluginIds,
 } from "../plugins/manifest-registry.js";
 import { validateJsonSchemaValue } from "../plugins/schema-validator.js";
@@ -697,7 +697,7 @@ function validateConfigObjectWithPluginsBase(
   };
 
   type RegistryInfo = {
-    registry: ReturnType<typeof loadPluginManifestRegistry>;
+    registry: ReturnType<typeof loadPluginManifestRegistrySync>;
     knownIds?: Set<string>;
     overriddenPluginIds?: Set<string>;
     normalizedPlugins?: ReturnType<typeof normalizePluginsConfig>;
@@ -726,7 +726,7 @@ function validateConfigObjectWithPluginsBase(
     }
     const workspaceDir = resolveAgentWorkspaceDir(config, resolveDefaultAgentId(config));
     const overriddenBundledPluginIds = new Set(
-      loadPluginManifestRegistry({
+      loadPluginManifestRegistrySync({
         config,
         workspaceDir: workspaceDir ?? undefined,
         env: opts.env,
@@ -775,7 +775,7 @@ function validateConfigObjectWithPluginsBase(
       effectiveConfig,
       resolveDefaultAgentId(effectiveConfig),
     );
-    const registry = loadPluginManifestRegistry({
+    const registry = loadPluginManifestRegistrySync({
       config: effectiveConfig,
       workspaceDir: workspaceDir ?? undefined,
       env: opts.env,

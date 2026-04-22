@@ -94,20 +94,20 @@ export function runProviderCatalog(params: {
   agentDir?: string;
   workspaceDir?: string;
   env: NodeJS.ProcessEnv;
-  resolveProviderApiKey: (providerId?: string) => {
+  resolveProviderApiKey: (providerId?: string) => Promise<{
     apiKey: string | undefined;
     discoveryApiKey?: string;
-  };
+  }>;
   resolveProviderAuth: (
     providerId?: string,
     options?: { oauthMarker?: string },
-  ) => {
+  ) => Promise<{
     apiKey: string | undefined;
     discoveryApiKey?: string;
     mode: "api_key" | "oauth" | "token" | "none";
     source: "env" | "profile" | "none";
     profileId?: string;
-  };
+  }>;
 }) {
   return resolveProviderCatalogHook(params.provider)?.run({
     config: params.config,

@@ -1,7 +1,7 @@
 import { resolveBundledPluginCompatibleLoadValues } from "./activation-context.js";
 import type { PluginLoadOptions } from "./loader.js";
 import {
-  loadPluginManifestRegistry,
+  loadPluginManifestRegistrySync,
   resolveManifestContractPluginIds,
   type PluginManifestRecord,
 } from "./manifest-registry.js";
@@ -73,7 +73,7 @@ export function resolveManifestDeclaredWebProviderCandidatePluginIds(params: {
 }): string[] | undefined {
   const scopedPluginIds = normalizePluginIdScope(params.onlyPluginIds);
   const onlyPluginIdSet = createPluginIdScopeSet(scopedPluginIds);
-  const ids = loadPluginManifestRegistry({
+  const ids = loadPluginManifestRegistrySync({
     config: params.config,
     workspaceDir: params.workspaceDir,
     env: params.env,

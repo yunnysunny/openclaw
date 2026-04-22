@@ -8,12 +8,12 @@ import {
   type SecretDefaults,
 } from "./runtime-shared.js";
 
-const { loadPluginManifestRegistryMock } = vi.hoisted(() => ({
-  loadPluginManifestRegistryMock: vi.fn(),
+const { loadPluginManifestRegistrySyncMock } = vi.hoisted(() => ({
+  loadPluginManifestRegistrySyncMock: vi.fn(),
 }));
 
 vi.mock("../plugins/manifest-registry.js", () => ({
-  loadPluginManifestRegistry: loadPluginManifestRegistryMock,
+  loadPluginManifestRegistrySync: loadPluginManifestRegistrySyncMock,
 }));
 
 function asConfig(value: unknown): OpenClawConfig {
@@ -77,8 +77,8 @@ function expectInactiveAcpxConfig(config: OpenClawConfig): void {
 
 describe("collectPluginConfigAssignments", () => {
   beforeEach(() => {
-    loadPluginManifestRegistryMock.mockReset();
-    loadPluginManifestRegistryMock.mockReturnValue({
+    loadPluginManifestRegistrySyncMock.mockReset();
+    loadPluginManifestRegistrySyncMock.mockReturnValue({
       plugins: [
         {
           id: "acpx",
@@ -447,7 +447,7 @@ describe("collectPluginConfigAssignments", () => {
   });
 
   it("collects manifest-declared SecretRef surfaces for non-acpx plugins", () => {
-    loadPluginManifestRegistryMock.mockReturnValue({
+    loadPluginManifestRegistrySyncMock.mockReturnValue({
       plugins: [
         {
           id: "other",

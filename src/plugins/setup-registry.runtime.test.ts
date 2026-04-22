@@ -1,18 +1,18 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const loadPluginManifestRegistryMock = vi.hoisted(() => vi.fn());
+const loadPluginManifestRegistrySyncMock = vi.hoisted(() => vi.fn());
 
 vi.mock("./manifest-registry.js", () => ({
-  loadPluginManifestRegistry: loadPluginManifestRegistryMock,
+  loadPluginManifestRegistrySync: loadPluginManifestRegistrySyncMock,
 }));
 
 afterEach(() => {
-  loadPluginManifestRegistryMock.mockReset();
+  loadPluginManifestRegistrySyncMock.mockReset();
 });
 
 describe("setup-registry runtime fallback", () => {
   it("uses bundled manifest cliBackends when the setup-registry runtime is unavailable", async () => {
-    loadPluginManifestRegistryMock.mockReturnValue({
+    loadPluginManifestRegistrySyncMock.mockReturnValue({
       diagnostics: [],
       plugins: [
         {
@@ -42,12 +42,12 @@ describe("setup-registry runtime fallback", () => {
       backend: { id: "Codex-CLI" },
     });
     expect(resolvePluginSetupCliBackendRuntime({ backend: "local-cli" })).toBeUndefined();
-    expect(loadPluginManifestRegistryMock).toHaveBeenCalledTimes(1);
-    expect(loadPluginManifestRegistryMock).toHaveBeenCalledWith({ cache: true });
+    expect(loadPluginManifestRegistrySyncMock).toHaveBeenCalledTimes(1);
+    expect(loadPluginManifestRegistrySyncMock).toHaveBeenCalledWith({ cache: true });
   });
 
   it("preserves fail-closed setup lookup when the runtime module explicitly declines to resolve", async () => {
-    loadPluginManifestRegistryMock.mockReturnValue({
+    loadPluginManifestRegistrySyncMock.mockReturnValue({
       diagnostics: [],
       plugins: [
         {
@@ -70,6 +70,6 @@ describe("setup-registry runtime fallback", () => {
     });
 
     expect(resolvePluginSetupCliBackendRuntime({ backend: "codex-cli" })).toBeUndefined();
-    expect(loadPluginManifestRegistryMock).not.toHaveBeenCalled();
+    expect(loadPluginManifestRegistrySyncMock).not.toHaveBeenCalled();
   });
 });

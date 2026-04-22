@@ -1,5 +1,5 @@
 import type { OpenClawConfig } from "../config/types.openclaw.js";
-import { resolveProviderSyntheticAuthWithPlugin } from "../plugins/provider-runtime.js";
+import { resolveProviderSyntheticAuthWithPluginAsync } from "../plugins/provider-runtime.js";
 import type { AuthProfileStore } from "./auth-profiles/types.js";
 import {
   isNonSecretApiKeyMarker,
@@ -7,14 +7,14 @@ import {
 } from "./model-auth-markers.js";
 import {
   listAuthProfilesForProvider,
-  resolveApiKeyFromCredential,
-  resolveApiKeyFromProfiles,
-  resolveEnvApiKeyVarName,
+  resolveApiKeyFromCredentialAsync,
+  resolveApiKeyFromProfilesAsync,
+  resolveEnvApiKeyVarNameAsync,
   toDiscoveryApiKey,
   type ProviderApiKeyResolver,
   type ProviderAuthResolver,
 } from "./models-config.providers.secret-helpers.js";
-import { resolveProviderIdForAuth } from "./provider-auth-aliases.js";
+import { resolveProviderIdForAuthAsync } from "./provider-auth-aliases.js";
 
 export type {
   ProfileApiKeyResolution,
@@ -31,9 +31,12 @@ export {
   normalizeHeaderValues,
   normalizeResolvedEnvApiKey,
   resolveApiKeyFromCredential,
+  resolveApiKeyFromCredentialAsync,
   resolveApiKeyFromProfiles,
+  resolveApiKeyFromProfilesAsync,
   resolveAwsSdkApiKeyVarName,
   resolveEnvApiKeyVarName,
+  resolveEnvApiKeyVarNameAsync,
   resolveMissingProviderApiKey,
   toDiscoveryApiKey,
 } from "./models-config.providers.secret-helpers.js";
@@ -49,18 +52,21 @@ export function createProviderApiKeyResolver(
   authStoreInput: AuthProfileStoreInput,
   config?: OpenClawConfig,
 ): ProviderApiKeyResolver {
-  return (provider: string): { apiKey: string | undefined; discoveryApiKey?: string } => {
-    const authProvider = resolveProviderIdForAuth(provider, { config, env });
-    const envVar = resolveEnvApiKeyVarName(authProvider, env);
+  return async (
+    provider: string,
+  ): Promise<{ apiKey: string | undefined; discoveryApiKey?: string }> => {
+    const authProvider = await resolveProviderIdForAuthAsync(provider, { config, env });
+    const envVar = await resolveEnvApiKeyVarNameAsync(authProvider, env);
     if (envVar) {
       return {
         apiKey: envVar,
         discoveryApiKey: toDiscoveryApiKey(env[envVar]),
       };
     }
-    const fromConfig = resolveConfigBackedProviderAuth({
+    const fromConfig = await resolveConfigBackedProviderAuthAsync({
       provider: authProvider,
       config,
+      env,
     });
     if (fromConfig?.apiKey) {
       return {
@@ -68,7 +74,7 @@ export function createProviderApiKeyResolver(
         discoveryApiKey: fromConfig.discoveryApiKey,
       };
     }
-    const fromProfiles = resolveApiKeyFromProfiles({
+    const fromProfiles = await resolveApiKeyFromProfilesAsync({
       provider: authProvider,
       store: resolveAuthProfileStoreInput(authStoreInput),
       env,
@@ -87,8 +93,8 @@ export function createProviderAuthResolver(
   authStoreInput: AuthProfileStoreInput,
   config?: OpenClawConfig,
 ): ProviderAuthResolver {
-  return (provider: string, options?: { oauthMarker?: string }) => {
-    const authProvider = resolveProviderIdForAuth(provider, { config, env });
+  return async (provider: string, options?: { oauthMarker?: string }) => {
+    const authProvider = await resolveProviderIdForAuthAsync(provider, { config, env });
     const authStore = resolveAuthProfileStoreInput(authStoreInput);
     const ids = listAuthProfilesForProvider(authStore, authProvider);
 
@@ -116,7 +122,7 @@ export function createProviderAuthResolver(
         };
         continue;
       }
-      const resolved = resolveApiKeyFromCredential(cred, env);
+      const resolved = await resolveApiKeyFromCredentialAsync(cred, env);
       if (!resolved) {
         continue;
       }
@@ -132,7 +138,7 @@ export function createProviderAuthResolver(
       return oauthCandidate;
     }
 
-    const envVar = resolveEnvApiKeyVarName(authProvider, env);
+    const envVar = await resolveEnvApiKeyVarNameAsync(authProvider, env);
     if (envVar) {
       return {
         apiKey: envVar,
@@ -142,9 +148,10 @@ export function createProviderAuthResolver(
       };
     }
 
-    const fromConfig = resolveConfigBackedProviderAuth({
+    const fromConfig = await resolveConfigBackedProviderAuthAsync({
       provider: authProvider,
       config,
+      env,
     });
     if (fromConfig) {
       return {
@@ -163,16 +170,24 @@ export function createProviderAuthResolver(
   };
 }
 
-function resolveConfigBackedProviderAuth(params: { provider: string; config?: OpenClawConfig }):
+async function resolveConfigBackedProviderAuthAsync(params: {
+  provider: string;
+  config?: OpenClawConfig;
+  env?: NodeJS.ProcessEnv;
+}): Promise<
   | {
       apiKey: string;
       discoveryApiKey?: string;
       mode: "api_key";
       source: "config";
     }
-  | undefined {
-  const authProvider = resolveProviderIdForAuth(params.provider, { config: params.config });
-  const synthetic = resolveProviderSyntheticAuthWithPlugin({
+  | undefined
+> {
+  const authProvider = await resolveProviderIdForAuthAsync(params.provider, {
+    config: params.config,
+    env: params.env,
+  });
+  const synthetic = await resolveProviderSyntheticAuthWithPluginAsync({
     provider: authProvider,
     config: params.config,
     context: {

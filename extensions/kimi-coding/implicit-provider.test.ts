@@ -17,7 +17,7 @@ async function runKimiCatalog(params: {
           : {},
       },
     },
-    resolveProviderApiKey: () => ({ apiKey: params.apiKey ?? "" }),
+    resolveProviderApiKey: async () => ({ apiKey: params.apiKey ?? "" }),
   } as never);
   return catalogResult ?? null;
 }

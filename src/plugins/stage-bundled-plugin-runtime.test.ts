@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { stageBundledPluginRuntime } from "../../scripts/stage-bundled-plugin-runtime.mjs";
 import { bundledDistPluginFile } from "../../test/helpers/bundled-plugin-paths.js";
 import { discoverOpenClawPlugins } from "./discovery.js";
-import { loadPluginManifestRegistry } from "./manifest-registry.js";
+import { loadPluginManifestRegistrySync } from "./manifest-registry.js";
 import { cleanupTrackedTempDirs, makeTrackedTempDir } from "./test-helpers/fs-fixtures.js";
 
 const tempDirs: string[] = [];
@@ -405,7 +405,7 @@ describe("stageBundledPluginRuntime", () => {
       env,
       cache: false,
     });
-    const manifestRegistry = loadPluginManifestRegistry({
+    const manifestRegistry = loadPluginManifestRegistrySync({
       env,
       cache: false,
       candidates: discovery.candidates,

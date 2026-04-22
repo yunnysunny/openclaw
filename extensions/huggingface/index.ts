@@ -44,7 +44,7 @@ export default defineSingleProviderPluginEntry({
         if (discoveryEnabled === false) {
           return null;
         }
-        const { apiKey, discoveryApiKey } = ctx.resolveProviderApiKey(PROVIDER_ID);
+        const { apiKey, discoveryApiKey } = await ctx.resolveProviderApiKey(PROVIDER_ID);
         if (!apiKey) {
           return null;
         }

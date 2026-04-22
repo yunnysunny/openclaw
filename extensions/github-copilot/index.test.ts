@@ -64,7 +64,7 @@ describe("github-copilot plugin", () => {
       config: {},
       agentDir: "/tmp/agent",
       env: { GH_TOKEN: "gh_test_token" },
-      resolveProviderApiKey: () => ({ apiKey: "gh_test_token" }),
+      resolveProviderApiKey: async () => ({ apiKey: "gh_test_token" }),
     } as never);
 
     expect(result).toBeNull();

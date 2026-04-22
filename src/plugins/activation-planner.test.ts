@@ -1,23 +1,28 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  loadPluginManifestRegistry: vi.fn(),
+  loadPluginManifestRegistrySync: vi.fn(),
+  loadPluginManifestRegistryAsync: vi.fn(),
 }));
 
 vi.mock("./manifest-registry.js", () => ({
-  loadPluginManifestRegistry: (...args: unknown[]) => mocks.loadPluginManifestRegistry(...args),
+  loadPluginManifestRegistrySync: (...args: unknown[]) => mocks.loadPluginManifestRegistrySync(...args),
+  loadPluginManifestRegistryAsync: (...args: unknown[]) => mocks.loadPluginManifestRegistryAsync(...args),
 }));
 
 let resolveManifestActivationPluginIds: typeof import("./activation-planner.js").resolveManifestActivationPluginIds;
+let resolveManifestActivationPluginIdsAsync: typeof import("./activation-planner.js").resolveManifestActivationPluginIdsAsync;
 
 describe("resolveManifestActivationPluginIds", () => {
   beforeAll(async () => {
-    ({ resolveManifestActivationPluginIds } = await import("./activation-planner.js"));
+    ({ resolveManifestActivationPluginIds, resolveManifestActivationPluginIdsAsync } =
+      await import("./activation-planner.js"));
   });
 
   beforeEach(() => {
-    mocks.loadPluginManifestRegistry.mockReset();
-    mocks.loadPluginManifestRegistry.mockReturnValue({
+    mocks.loadPluginManifestRegistrySync.mockReset();
+    mocks.loadPluginManifestRegistryAsync.mockReset();
+    const registry = {
       plugins: [
         {
           id: "memory-core",
@@ -72,7 +77,9 @@ describe("resolveManifestActivationPluginIds", () => {
         },
       ],
       diagnostics: [],
-    });
+    };
+    mocks.loadPluginManifestRegistrySync.mockReturnValue(registry);
+    mocks.loadPluginManifestRegistryAsync.mockResolvedValue(registry);
   });
 
   it("matches command triggers from activation metadata and legacy command aliases", () => {
@@ -190,5 +197,32 @@ describe("resolveManifestActivationPluginIds", () => {
         onlyPluginIds: [],
       }),
     ).toEqual([]);
+  });
+
+  it("loads the manifest registry asynchronously and matches the sync planner results", async () => {
+    mocks.loadPluginManifestRegistrySync.mockClear();
+    mocks.loadPluginManifestRegistryAsync.mockClear();
+
+    await expect(
+      resolveManifestActivationPluginIdsAsync({
+        trigger: { kind: "command", command: "memory" },
+      }),
+    ).resolves.toEqual(["memory-core"]);
+
+    await expect(
+      resolveManifestActivationPluginIdsAsync({
+        trigger: { kind: "provider", provider: "openai" },
+      }),
+    ).resolves.toEqual(["openai"]);
+
+    await expect(
+      resolveManifestActivationPluginIdsAsync({
+        trigger: { kind: "provider", provider: "openai" },
+        onlyPluginIds: [],
+      }),
+    ).resolves.toEqual([]);
+
+    expect(mocks.loadPluginManifestRegistryAsync).toHaveBeenCalled();
+    expect(mocks.loadPluginManifestRegistrySync).not.toHaveBeenCalled();
   });
 });

@@ -5,7 +5,7 @@ import {
   withBundledPluginVitestCompat,
 } from "./bundled-compat.js";
 import { resolveRuntimePluginRegistry } from "./loader.js";
-import { loadPluginManifestRegistry } from "./manifest-registry.js";
+import { loadPluginManifestRegistrySync } from "./manifest-registry.js";
 import type { PluginRegistry } from "./registry-types.js";
 
 type CapabilityProviderRegistryKey =
@@ -48,7 +48,7 @@ function resolveBundledCapabilityCompatPluginIds(params: {
   providerId?: string;
 }): string[] {
   const contractKey = CAPABILITY_CONTRACT_KEY[params.key];
-  return loadPluginManifestRegistry({
+  return loadPluginManifestRegistrySync({
     config: params.cfg,
     env: process.env,
   })

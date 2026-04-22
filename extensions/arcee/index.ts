@@ -70,12 +70,12 @@ function buildArceeAuthMethods() {
 }
 
 async function resolveArceeCatalog(ctx: ProviderCatalogContext) {
-  const directKey = ctx.resolveProviderApiKey(PROVIDER_ID).apiKey;
+  const directKey = (await ctx.resolveProviderApiKey(PROVIDER_ID)).apiKey;
   if (directKey) {
     return { provider: { ...buildArceeProvider(), apiKey: directKey } };
   }
 
-  const openRouterKey = ctx.resolveProviderApiKey("openrouter").apiKey;
+  const openRouterKey = (await ctx.resolveProviderApiKey("openrouter")).apiKey;
   if (openRouterKey) {
     return { provider: { ...buildArceeOpenRouterProvider(), apiKey: openRouterKey } };
   }

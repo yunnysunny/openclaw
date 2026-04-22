@@ -76,8 +76,8 @@ function buildPortalProviderCatalog(params: { baseUrl: string; apiKey: string })
   };
 }
 
-function resolveApiCatalog(ctx: ProviderCatalogContext) {
-  const apiKey = ctx.resolveProviderApiKey(API_PROVIDER_ID).apiKey;
+async function resolveApiCatalog(ctx: ProviderCatalogContext) {
+  const apiKey = (await ctx.resolveProviderApiKey(API_PROVIDER_ID)).apiKey;
   if (!apiKey) {
     return null;
   }
@@ -89,9 +89,9 @@ function resolveApiCatalog(ctx: ProviderCatalogContext) {
   };
 }
 
-function resolvePortalCatalog(ctx: ProviderCatalogContext) {
+async function resolvePortalCatalog(ctx: ProviderCatalogContext) {
   const explicitProvider = ctx.config.models?.providers?.[PORTAL_PROVIDER_ID];
-  const envApiKey = ctx.resolveProviderApiKey(PORTAL_PROVIDER_ID).apiKey;
+  const envApiKey = (await ctx.resolveProviderApiKey(PORTAL_PROVIDER_ID)).apiKey;
   const authStore = ensureAuthProfileStore(ctx.agentDir, {
     allowKeychainPrompt: false,
   });

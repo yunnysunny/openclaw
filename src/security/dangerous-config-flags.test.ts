@@ -2,12 +2,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
 import { collectEnabledInsecureOrDangerousFlags } from "./dangerous-config-flags.js";
 
-const { loadPluginManifestRegistryMock } = vi.hoisted(() => ({
-  loadPluginManifestRegistryMock: vi.fn(),
+const { loadPluginManifestRegistrySyncMock } = vi.hoisted(() => ({
+  loadPluginManifestRegistrySyncMock: vi.fn(),
 }));
 
 vi.mock("../plugins/manifest-registry.js", () => ({
-  loadPluginManifestRegistry: loadPluginManifestRegistryMock,
+  loadPluginManifestRegistrySync: loadPluginManifestRegistrySyncMock,
 }));
 
 function asConfig(value: unknown): OpenClawConfig {
@@ -16,11 +16,11 @@ function asConfig(value: unknown): OpenClawConfig {
 
 describe("collectEnabledInsecureOrDangerousFlags", () => {
   beforeEach(() => {
-    loadPluginManifestRegistryMock.mockReset();
+    loadPluginManifestRegistrySyncMock.mockReset();
   });
 
   it("collects manifest-declared dangerous plugin config values", () => {
-    loadPluginManifestRegistryMock.mockReturnValue({
+    loadPluginManifestRegistrySyncMock.mockReturnValue({
       plugins: [
         {
           id: "acpx",
@@ -50,7 +50,7 @@ describe("collectEnabledInsecureOrDangerousFlags", () => {
   });
 
   it("ignores plugin config values that are not declared as dangerous", () => {
-    loadPluginManifestRegistryMock.mockReturnValue({
+    loadPluginManifestRegistrySyncMock.mockReturnValue({
       plugins: [
         {
           id: "other",

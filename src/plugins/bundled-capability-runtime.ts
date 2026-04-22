@@ -11,7 +11,7 @@ import { createCapturedPluginRegistration } from "./captured-registration.js";
 import { discoverOpenClawPlugins } from "./discovery.js";
 import { getCachedPluginJitiLoader, type PluginJitiLoaderCache } from "./jiti-loader-cache.js";
 import type { PluginLoadOptions } from "./loader.js";
-import { loadPluginManifestRegistry } from "./manifest-registry.js";
+import { loadPluginManifestRegistrySync } from "./manifest-registry.js";
 import { unwrapDefaultModuleExport } from "./module-export.js";
 import { createEmptyPluginRegistry } from "./registry-empty.js";
 import type { PluginRecord, PluginRegistry } from "./registry.js";
@@ -230,7 +230,7 @@ export function loadBundledCapabilityRuntimeRegistry(params: {
     cache: false,
     env,
   });
-  const manifestRegistry = loadPluginManifestRegistry({
+  const manifestRegistry = loadPluginManifestRegistrySync({
     config: buildBundledCapabilityRuntimeConfig(params.pluginIds, env),
     cache: false,
     env,

@@ -1,4 +1,4 @@
-import { loadPluginManifestRegistry } from "../plugins/manifest-registry.js";
+import { loadPluginManifestRegistrySync } from "../plugins/manifest-registry.js";
 import { loadBundledChannelSecretContractApi } from "./channel-contract-api.js";
 import type { SecretTargetRegistryEntry } from "./target-registry-types.js";
 
@@ -8,7 +8,7 @@ const SIBLING_REF_SHAPE = "sibling_ref"; // pragma: allowlist secret
 function listChannelSecretTargetRegistryEntries(): SecretTargetRegistryEntry[] {
   const entries: SecretTargetRegistryEntry[] = [];
 
-  for (const record of loadPluginManifestRegistry({}).plugins) {
+  for (const record of loadPluginManifestRegistrySync({}).plugins) {
     if (record.origin !== "bundled") {
       continue;
     }

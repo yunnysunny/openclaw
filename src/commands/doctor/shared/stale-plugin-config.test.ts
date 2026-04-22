@@ -25,7 +25,7 @@ function manifest(id: string): PluginManifestRecord {
 
 describe("doctor stale plugin config helpers", () => {
   beforeEach(() => {
-    vi.spyOn(manifestRegistry, "loadPluginManifestRegistry").mockReturnValue({
+    vi.spyOn(manifestRegistry, "loadPluginManifestRegistrySync").mockReturnValue({
       plugins: [manifest("discord"), manifest("voice-call"), manifest("openai")],
       diagnostics: [],
     });
@@ -100,7 +100,7 @@ describe("doctor stale plugin config helpers", () => {
   });
 
   it("does not auto-repair stale refs while plugin discovery has errors", () => {
-    vi.spyOn(manifestRegistry, "loadPluginManifestRegistry").mockReturnValue({
+    vi.spyOn(manifestRegistry, "loadPluginManifestRegistrySync").mockReturnValue({
       plugins: [],
       diagnostics: [
         { level: "error", message: "plugin path not found: /missing", source: "/missing" },

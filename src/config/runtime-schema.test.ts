@@ -24,7 +24,7 @@ vi.mock("./config.js", () => {
 });
 
 vi.mock("../plugins/manifest-registry.js", () => ({
-  loadPluginManifestRegistry: (...args: unknown[]) => mockLoadPluginManifestRegistry(...args),
+  loadPluginManifestRegistrySync: (...args: unknown[]) => mockLoadPluginManifestRegistry(...args),
 }));
 
 function makeSnapshot(params: { valid: boolean; config?: OpenClawConfig }): ConfigFileSnapshot {

@@ -3,7 +3,11 @@ import path from "node:path";
 import JSON5 from "json5";
 import type { ChannelConfigRuntimeSchema } from "../channels/plugins/types.config.js";
 import { MANIFEST_KEY } from "../compat/legacy-names.js";
-import { matchBoundaryFileOpenFailure, openBoundaryFileSync } from "../infra/boundary-file-read.js";
+import {
+  matchBoundaryFileOpenFailure,
+  openBoundaryFile,
+  openBoundaryFileSync,
+} from "../infra/boundary-file-read.js";
 import { normalizeOptionalString } from "../shared/string-coerce.js";
 import { normalizeTrimmedStringList } from "../shared/string-normalization.js";
 import { isRecord } from "../utils.js";
@@ -683,6 +687,19 @@ export function resolvePluginManifestPath(rootDir: string): string {
   return path.join(rootDir, PLUGIN_MANIFEST_FILENAME);
 }
 
+export async function resolvePluginManifestPathAsync(rootDir: string): Promise<string> {
+  for (const filename of PLUGIN_MANIFEST_FILENAMES) {
+    const candidate = path.join(rootDir, filename);
+    try {
+      await fs.promises.access(candidate);
+      return candidate;
+    } catch {
+      continue;
+    }
+  }
+  return path.join(rootDir, PLUGIN_MANIFEST_FILENAME);
+}
+
 function parsePluginKind(raw: unknown): PluginKind | PluginKind[] | undefined {
   if (typeof raw === "string") {
     return raw as PluginKind;
@@ -693,43 +710,7 @@ function parsePluginKind(raw: unknown): PluginKind | PluginKind[] | undefined {
   return undefined;
 }
 
-export function loadPluginManifest(
-  rootDir: string,
-  rejectHardlinks = true,
-): PluginManifestLoadResult {
-  const manifestPath = resolvePluginManifestPath(rootDir);
-  const opened = openBoundaryFileSync({
-    absolutePath: manifestPath,
-    rootPath: rootDir,
-    boundaryLabel: "plugin root",
-    rejectHardlinks,
-  });
-  if (!opened.ok) {
-    return matchBoundaryFileOpenFailure(opened, {
-      path: () => ({
-        ok: false,
-        error: `plugin manifest not found: ${manifestPath}`,
-        manifestPath,
-      }),
-      fallback: (failure) => ({
-        ok: false,
-        error: `unsafe plugin manifest path: ${manifestPath} (${failure.reason})`,
-        manifestPath,
-      }),
-    });
-  }
-  let raw: unknown;
-  try {
-    raw = JSON5.parse(fs.readFileSync(opened.fd, "utf-8"));
-  } catch (err) {
-    return {
-      ok: false,
-      error: `failed to parse plugin manifest: ${String(err)}`,
-      manifestPath,
-    };
-  } finally {
-    fs.closeSync(opened.fd);
-  }
+function finalizePluginManifestLoad(raw: unknown, manifestPath: string): PluginManifestLoadResult {
   if (!isRecord(raw)) {
     return { ok: false, error: "plugin manifest must be an object", manifestPath };
   }
@@ -815,6 +796,86 @@ export function loadPluginManifest(
     },
     manifestPath,
   };
+}
+
+export function loadPluginManifest(
+  rootDir: string,
+  rejectHardlinks = true,
+): PluginManifestLoadResult {
+  const manifestPath = resolvePluginManifestPath(rootDir);
+  const opened = openBoundaryFileSync({
+    absolutePath: manifestPath,
+    rootPath: rootDir,
+    boundaryLabel: "plugin root",
+    rejectHardlinks,
+  });
+  if (!opened.ok) {
+    return matchBoundaryFileOpenFailure(opened, {
+      path: () => ({
+        ok: false,
+        error: `plugin manifest not found: ${manifestPath}`,
+        manifestPath,
+      }),
+      fallback: (failure) => ({
+        ok: false,
+        error: `unsafe plugin manifest path: ${manifestPath} (${failure.reason})`,
+        manifestPath,
+      }),
+    });
+  }
+  let raw: unknown;
+  try {
+    raw = JSON5.parse(fs.readFileSync(opened.fd, "utf-8"));
+  } catch (err) {
+    return {
+      ok: false,
+      error: `failed to parse plugin manifest: ${String(err)}`,
+      manifestPath,
+    };
+  } finally {
+    fs.closeSync(opened.fd);
+  }
+  return finalizePluginManifestLoad(raw, manifestPath);
+}
+
+export async function loadPluginManifestAsync(
+  rootDir: string,
+  rejectHardlinks = true,
+): Promise<PluginManifestLoadResult> {
+  const manifestPath = await resolvePluginManifestPathAsync(rootDir);
+  const opened = await openBoundaryFile({
+    absolutePath: manifestPath,
+    rootPath: rootDir,
+    boundaryLabel: "plugin root",
+    rejectHardlinks,
+  });
+  if (!opened.ok) {
+    return matchBoundaryFileOpenFailure(opened, {
+      path: () => ({
+        ok: false,
+        error: `plugin manifest not found: ${manifestPath}`,
+        manifestPath,
+      }),
+      fallback: (failure) => ({
+        ok: false,
+        error: `unsafe plugin manifest path: ${manifestPath} (${failure.reason})`,
+        manifestPath,
+      }),
+    });
+  }
+  let raw: unknown;
+  try {
+    raw = JSON5.parse(await fs.promises.readFile(opened.fd, "utf-8"));
+  } catch (err) {
+    return {
+      ok: false,
+      error: `failed to parse plugin manifest: ${String(err)}`,
+      manifestPath,
+    };
+  } finally {
+    await fs.promises.close(opened.fd);
+  }
+  return finalizePluginManifestLoad(raw, manifestPath);
 }
 
 // package.json "openclaw" metadata (used for setup/catalog)

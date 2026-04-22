@@ -6,6 +6,7 @@ import {
   type ResolvedBoundaryPath,
 } from "./boundary-path.js";
 import type { PathAliasPolicy } from "./path-alias-guards.js";
+import { openVerifiedFileAsync } from "./safe-open-async.js";
 import {
   openVerifiedFileSync,
   type SafeOpenSyncAllowedType,
@@ -140,6 +141,33 @@ function openBoundaryFileResolved(params: {
   };
 }
 
+async function openBoundaryFileResolvedAsync(params: {
+  absolutePath: string;
+  resolvedPath: string;
+  rootRealPath: string;
+  maxBytes?: number;
+  rejectHardlinks?: boolean;
+  allowedType?: SafeOpenSyncAllowedType;
+}): Promise<BoundaryFileOpenResult> {
+  const opened = await openVerifiedFileAsync({
+    filePath: params.absolutePath,
+    resolvedPath: params.resolvedPath,
+    rejectHardlinks: params.rejectHardlinks ?? true,
+    maxBytes: params.maxBytes,
+    allowedType: params.allowedType,
+  });
+  if (!opened.ok) {
+    return opened;
+  }
+  return {
+    ok: true,
+    path: opened.path,
+    fd: opened.fd,
+    stat: opened.stat,
+    rootRealPath: params.rootRealPath,
+  };
+}
+
 function finalizeBoundaryFileOpen(params: {
   resolved: ResolvedBoundaryFilePath | BoundaryFileOpenResult;
   maxBytes?: number;
@@ -161,10 +189,28 @@ function finalizeBoundaryFileOpen(params: {
   });
 }
 
+async function finalizeBoundaryFileOpenAsync(params: {
+  resolved: ResolvedBoundaryFilePath | BoundaryFileOpenResult;
+  maxBytes?: number;
+  rejectHardlinks?: boolean;
+  allowedType?: SafeOpenSyncAllowedType;
+}): Promise<BoundaryFileOpenResult> {
+  if ("ok" in params.resolved) {
+    return params.resolved;
+  }
+  return openBoundaryFileResolvedAsync({
+    absolutePath: params.resolved.absolutePath,
+    resolvedPath: params.resolved.resolvedPath,
+    rootRealPath: params.resolved.rootRealPath,
+    maxBytes: params.maxBytes,
+    rejectHardlinks: params.rejectHardlinks,
+    allowedType: params.allowedType,
+  });
+}
+
 export async function openBoundaryFile(
   params: OpenBoundaryFileParams,
 ): Promise<BoundaryFileOpenResult> {
-  const ioFs = params.ioFs ?? fs;
   const maybeResolved = resolveBoundaryFilePathGeneric({
     absolutePath: params.absolutePath,
     resolve: (absolutePath) =>
@@ -178,12 +224,11 @@ export async function openBoundaryFile(
       }),
   });
   const resolved = maybeResolved instanceof Promise ? await maybeResolved : maybeResolved;
-  return finalizeBoundaryFileOpen({
+  return finalizeBoundaryFileOpenAsync({
     resolved,
     maxBytes: params.maxBytes,
     rejectHardlinks: params.rejectHardlinks,
     allowedType: params.allowedType,
-    ioFs,
   });
 }
 

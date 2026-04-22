@@ -140,8 +140,8 @@ async function resolveLoadablePluginOrigins(params: {
     params.config,
     resolveDefaultAgentId(params.config),
   );
-  const { loadPluginManifestRegistry } = await loadRuntimeManifestHelpers();
-  const manifestRegistry = loadPluginManifestRegistry({
+  const { loadPluginManifestRegistrySync } = await loadRuntimeManifestHelpers();
+  const manifestRegistry = loadPluginManifestRegistrySync({
     config: params.config,
     workspaceDir,
     cache: true,

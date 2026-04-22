@@ -265,7 +265,7 @@ export async function discoverOpenAICompatibleSelfHostedProvider<
   if (params.ctx.config.models?.providers?.[params.providerId]) {
     return null;
   }
-  const { apiKey, discoveryApiKey } = params.ctx.resolveProviderApiKey(params.providerId);
+  const { apiKey, discoveryApiKey } = await params.ctx.resolveProviderApiKey(params.providerId);
   if (!apiKey) {
     return null;
   }

@@ -31,7 +31,7 @@ function mockSinglePlugin(plugin: {
   setup?: unknown;
   configContracts?: unknown;
 }) {
-  mocks.loadPluginManifestRegistry.mockReturnValue({
+  mocks.loadPluginManifestRegistrySync.mockReturnValue({
     plugins: [plugin],
     diagnostics: [],
   });
@@ -104,7 +104,7 @@ function mockDuplicateSetupClaims(params: {
           bundled: { cliBackends: ["codex-cli"] },
           workspace: { cliBackends: ["CODEX-CLI"] },
         };
-  mocks.loadPluginManifestRegistry.mockReturnValue({
+  mocks.loadPluginManifestRegistrySync.mockReturnValue({
     plugins: [
       {
         id: "openai",
@@ -161,7 +161,7 @@ describe("setup-registry getJiti", () => {
   it("disables native jiti loading on Windows for setup-api modules", () => {
     const pluginRoot = makeTempDir();
     fs.writeFileSync(path.join(pluginRoot, "setup-api.js"), "export default {};\n", "utf-8");
-    mocks.loadPluginManifestRegistry.mockReturnValue({
+    mocks.loadPluginManifestRegistrySync.mockReturnValue({
       plugins: [{ id: "test-plugin", rootDir: pluginRoot }],
       diagnostics: [],
     });
@@ -188,7 +188,7 @@ describe("setup-registry getJiti", () => {
   it("skips setup-api loading when config has no relevant migration triggers", () => {
     const pluginRoot = makeTempDir();
     fs.writeFileSync(path.join(pluginRoot, "setup-api.js"), "export default {};\n", "utf-8");
-    mocks.loadPluginManifestRegistry.mockReturnValue({
+    mocks.loadPluginManifestRegistrySync.mockReturnValue({
       plugins: [
         {
           id: "amazon-bedrock",
@@ -232,7 +232,7 @@ describe("setup-registry getJiti", () => {
     const voiceCallRoot = makeTempDir();
     fs.writeFileSync(path.join(bedrockRoot, "setup-api.js"), "export default {};\n", "utf-8");
     fs.writeFileSync(path.join(voiceCallRoot, "setup-api.js"), "export default {};\n", "utf-8");
-    mocks.loadPluginManifestRegistry.mockReturnValue({
+    mocks.loadPluginManifestRegistrySync.mockReturnValue({
       plugins: [
         {
           id: "amazon-bedrock",
@@ -308,7 +308,7 @@ describe("setup-registry getJiti", () => {
   it("prefers setup provider descriptors over top-level provider ids", () => {
     const pluginRoot = makeTempDir();
     fs.writeFileSync(path.join(pluginRoot, "setup-api.js"), "export default {};\n", "utf-8");
-    mocks.loadPluginManifestRegistry.mockReturnValue({
+    mocks.loadPluginManifestRegistrySync.mockReturnValue({
       plugins: [
         {
           id: "amazon-bedrock",
@@ -354,7 +354,7 @@ describe("setup-registry getJiti", () => {
     const anthropicRoot = makeTempDir();
     fs.writeFileSync(path.join(openaiRoot, "setup-api.js"), "export default {};\n", "utf-8");
     fs.writeFileSync(path.join(anthropicRoot, "setup-api.js"), "export default {};\n", "utf-8");
-    mocks.loadPluginManifestRegistry.mockReturnValue({
+    mocks.loadPluginManifestRegistrySync.mockReturnValue({
       plugins: [
         {
           id: "openai",
@@ -427,7 +427,7 @@ describe("setup-registry getJiti", () => {
   it("swallows rejected async setup provider registration returns", async () => {
     const pluginRoot = makeTempDir();
     fs.writeFileSync(path.join(pluginRoot, "setup-api.js"), "export default {};\n", "utf-8");
-    mocks.loadPluginManifestRegistry.mockReturnValue({
+    mocks.loadPluginManifestRegistrySync.mockReturnValue({
       plugins: [
         {
           id: "openai",
@@ -538,7 +538,7 @@ describe("setup-registry getJiti", () => {
     const pluginRoot = makeTempDir();
     fs.writeFileSync(path.join(pluginRoot, "setup-api.js"), "export default {};\n", "utf-8");
     setupRegistryTesting.setMaxSetupLookupCacheEntriesForTest(1);
-    mocks.loadPluginManifestRegistry.mockReturnValue({
+    mocks.loadPluginManifestRegistrySync.mockReturnValue({
       plugins: [
         {
           id: "openai",

@@ -6,7 +6,7 @@ import type { OpenClawConfig } from "../config/types.js";
 import { asNullableRecord } from "../shared/record-coerce.js";
 import { discoverOpenClawPlugins } from "./discovery.js";
 import { getCachedPluginJitiLoader, type PluginJitiLoaderCache } from "./jiti-loader-cache.js";
-import { loadPluginManifestRegistry } from "./manifest-registry.js";
+import { loadPluginManifestRegistrySync } from "./manifest-registry.js";
 import { resolvePluginCacheInputs, type PluginSourceRoots } from "./roots.js";
 
 const CONTRACT_API_EXTENSIONS = [".js", ".mjs", ".cjs", ".ts", ".mts", ".cts"] as const;
@@ -36,7 +36,7 @@ type PluginDoctorContractEntry = {
 };
 
 type PluginManifestRegistryRecord = ReturnType<
-  typeof loadPluginManifestRegistry
+  typeof loadPluginManifestRegistrySync
 >["plugins"][number];
 
 const jitiLoaders: PluginJitiLoaderCache = new Map();
@@ -281,7 +281,7 @@ function resolvePluginDoctorContracts(params?: {
     env,
     cache: true,
   });
-  const manifestRegistry = loadPluginManifestRegistry({
+  const manifestRegistry = loadPluginManifestRegistrySync({
     workspaceDir: params?.workspaceDir,
     env,
     cache: true,

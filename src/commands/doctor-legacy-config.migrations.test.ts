@@ -13,7 +13,7 @@ vi.mock("../plugins/setup-registry.js", () => ({
 }));
 
 vi.mock("../plugins/manifest-registry.js", () => ({
-  loadPluginManifestRegistry: () => ({
+  loadPluginManifestRegistrySync: () => ({
     plugins: [
       {
         id: "brave",

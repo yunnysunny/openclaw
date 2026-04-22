@@ -1,7 +1,7 @@
 import { normalizeLowercaseStringOrEmpty } from "../../shared/string-coerce.js";
 import { loadBundledCapabilityRuntimeRegistry } from "../bundled-capability-runtime.js";
 import {
-  loadPluginManifestRegistry,
+  loadPluginManifestRegistrySync,
   resolveManifestContractPluginIds,
 } from "../manifest-registry.js";
 import { resolveBundledExplicitProviderContractsFromPublicArtifacts } from "../provider-contract-public-artifacts.js";
@@ -90,7 +90,7 @@ function resolveBundledManifestContracts(): PluginRegistrationContractEntry[] {
       toolNames: [...entry.toolNames],
     }));
   }
-  return loadPluginManifestRegistry({})
+  return loadPluginManifestRegistrySync({})
     .plugins.filter(
       (plugin) =>
         plugin.origin === "bundled" &&

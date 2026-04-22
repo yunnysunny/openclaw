@@ -7,7 +7,7 @@ import {
   passesManifestOwnerBasePolicy,
 } from "./manifest-owner-policy.js";
 import {
-  loadPluginManifestRegistry,
+  loadPluginManifestRegistrySync,
   type PluginManifestRecord,
   type PluginManifestRegistry,
 } from "./manifest-registry.js";
@@ -21,7 +21,7 @@ type ProviderManifestLoadParams = {
 type NormalizedPluginsConfig = ReturnType<typeof normalizePluginsConfig>;
 
 function loadProviderManifestRegistry(params: ProviderManifestLoadParams): PluginManifestRegistry {
-  return loadPluginManifestRegistry({
+  return loadPluginManifestRegistrySync({
     config: params.config,
     workspaceDir: params.workspaceDir,
     env: params.env,

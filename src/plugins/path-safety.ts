@@ -19,6 +19,20 @@ export function safeRealpathSync(targetPath: string, cache?: Map<string, string>
   }
 }
 
+export async function safeRealpath(targetPath: string, cache?: Map<string, string>): Promise<string | null> {
+  const cached = cache?.get(targetPath);
+  if (cached) {
+    return cached;
+  }
+  try {
+    const resolved = await fs.promises.realpath(targetPath);
+    cache?.set(targetPath, resolved);
+    return resolved;
+  } catch {
+    return null;
+  }
+}
+
 export function safeStatSync(targetPath: string): fs.Stats | null {
   try {
     return fs.statSync(targetPath);

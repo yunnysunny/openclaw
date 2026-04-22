@@ -1,5 +1,8 @@
 import type { OpenClawConfig } from "../config/types.openclaw.js";
-import { loadPluginManifestRegistry } from "../plugins/manifest-registry.js";
+import {
+  loadPluginManifestRegistryAsync,
+  loadPluginManifestRegistrySync,
+} from "../plugins/manifest-registry.js";
 import type { PluginManifestRecord } from "../plugins/manifest-registry.js";
 import {
   isWorkspacePluginAllowedByConfig,
@@ -56,14 +59,22 @@ function shouldUsePluginAuthAliases(
   return isWorkspacePluginTrustedForAuthAliases(plugin, params?.config);
 }
 
-export function resolveProviderAuthAliasMap(
+/** Build alias map using async manifest discovery (preferred for awaited auth flows). */
+export async function resolveProviderAuthAliasMapAsync(
   params?: ProviderAuthAliasLookupParams,
-): Record<string, string> {
-  const registry = loadPluginManifestRegistry({
+): Promise<Record<string, string>> {
+  const registry = await loadPluginManifestRegistryAsync({
     config: params?.config,
     workspaceDir: params?.workspaceDir,
     env: params?.env,
   });
+  return buildProviderAuthAliasMapFromRegistry(registry, params);
+}
+
+function buildProviderAuthAliasMapFromRegistry(
+  registry: Awaited<ReturnType<typeof loadPluginManifestRegistryAsync>>,
+  params?: ProviderAuthAliasLookupParams,
+): Record<string, string> {
   const preferredAliases = new Map<string, ProviderAuthAliasCandidate>();
   const aliases: Record<string, string> = Object.create(null) as Record<string, string>;
   for (const plugin of registry.plugins) {
@@ -94,6 +105,29 @@ export function resolveProviderAuthAliasMap(
     aliases[alias] = candidate.target;
   }
   return aliases;
+}
+
+export function resolveProviderAuthAliasMap(
+  params?: ProviderAuthAliasLookupParams,
+): Record<string, string> {
+  const registry = loadPluginManifestRegistrySync({
+    config: params?.config,
+    workspaceDir: params?.workspaceDir,
+    env: params?.env,
+  });
+  return buildProviderAuthAliasMapFromRegistry(registry, params);
+}
+
+export async function resolveProviderIdForAuthAsync(
+  provider: string,
+  params?: ProviderAuthAliasLookupParams,
+): Promise<string> {
+  const normalized = normalizeProviderId(provider);
+  if (!normalized) {
+    return normalized;
+  }
+  const aliases = await resolveProviderAuthAliasMapAsync(params);
+  return aliases[normalized] ?? normalized;
 }
 
 export function resolveProviderIdForAuth(

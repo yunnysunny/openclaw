@@ -13,8 +13,11 @@ import {
   prepareProviderExtraParams,
   resetProviderRuntimeHookCacheForTest,
   resolveProviderHookPlugin,
+  resolveProviderHookPluginAsync,
   resolveProviderPluginsForHooks,
+  resolveProviderPluginsForHooksAsync,
   resolveProviderRuntimePlugin,
+  resolveProviderRuntimePluginAsync,
   wrapProviderStreamFn,
 } from "./provider-hook-runtime.js";
 import { resolveBundledProviderPolicySurface } from "./provider-public-artifacts.js";
@@ -72,7 +75,10 @@ export {
   clearProviderRuntimeHookCache,
   prepareProviderExtraParams,
   resetProviderRuntimeHookCacheForTest,
+  resolveProviderHookPluginAsync,
+  resolveProviderPluginsForHooksAsync,
   resolveProviderRuntimePlugin,
+  resolveProviderRuntimePluginAsync,
   wrapProviderStreamFn,
 };
 
@@ -310,6 +316,17 @@ export function normalizeProviderModelIdWithPlugin(params: {
   context: ProviderNormalizeModelIdContext;
 }): string | undefined {
   const plugin = resolveProviderHookPlugin(params);
+  return normalizeOptionalString(plugin?.normalizeModelId?.(params.context));
+}
+
+export async function normalizeProviderModelIdWithPluginAsync(params: {
+  provider: string;
+  config?: OpenClawConfig;
+  workspaceDir?: string;
+  env?: NodeJS.ProcessEnv;
+  context: ProviderNormalizeModelIdContext;
+}): Promise<string | undefined> {
+  const plugin = await resolveProviderHookPluginAsync(params);
   return normalizeOptionalString(plugin?.normalizeModelId?.(params.context));
 }
 
@@ -704,6 +721,17 @@ export function resolveProviderSyntheticAuthWithPlugin(params: {
   context: ProviderResolveSyntheticAuthContext;
 }) {
   return resolveProviderRuntimePlugin(params)?.resolveSyntheticAuth?.(params.context) ?? undefined;
+}
+
+export async function resolveProviderSyntheticAuthWithPluginAsync(params: {
+  provider: string;
+  config?: OpenClawConfig;
+  workspaceDir?: string;
+  env?: NodeJS.ProcessEnv;
+  context: ProviderResolveSyntheticAuthContext;
+}) {
+  const raw = resolveProviderRuntimePlugin(params)?.resolveSyntheticAuth?.(params.context);
+  return (await Promise.resolve(raw)) ?? undefined;
 }
 
 export function resolveExternalAuthProfilesWithPlugins(params: {

@@ -19,7 +19,7 @@ const loadBundledPluginPublicSurfaceModuleSync = vi.hoisted(() =>
   }),
 );
 
-const loadPluginManifestRegistry = vi.hoisted(() =>
+const loadPluginManifestRegistrySync = vi.hoisted(() =>
   vi.fn(() => ({
     diagnostics: [],
     plugins: [
@@ -55,7 +55,7 @@ const facadeMockHelpers = vi.hoisted(() => {
 });
 
 vi.mock("./plugins/manifest-registry.js", () => ({
-  loadPluginManifestRegistry,
+  loadPluginManifestRegistrySync,
 }));
 
 vi.mock("./plugin-sdk/facade-loader.js", () => ({

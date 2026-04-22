@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { modelKey } from "../agents/model-selection.js";
 import type { OpenClawConfig } from "../config/config.js";
-import type { normalizeProviderModelIdWithPlugin } from "../plugins/provider-runtime.js";
+import type {
+  normalizeProviderModelIdWithPlugin,
+  normalizeProviderModelIdWithPluginAsync,
+} from "../plugins/provider-runtime.js";
 import { withFetchPreconnect } from "../test-utils/fetch-mock.js";
 
 const normalizeProviderModelIdWithPluginMock = vi.hoisted(() =>
@@ -9,7 +12,13 @@ const normalizeProviderModelIdWithPluginMock = vi.hoisted(() =>
 );
 
 vi.mock("../plugins/provider-runtime.js", () => {
-  return { normalizeProviderModelIdWithPlugin: normalizeProviderModelIdWithPluginMock };
+  return {
+    normalizeProviderModelIdWithPlugin: normalizeProviderModelIdWithPluginMock,
+    normalizeProviderModelIdWithPluginAsync: vi
+      .fn<typeof normalizeProviderModelIdWithPluginAsync>(
+        async (params) => normalizeProviderModelIdWithPluginMock(params),
+      ),
+  };
 });
 
 import {

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { saveAuthProfileStore } from "./store.js";
 import type { AuthProfileStore } from "./types.js";
 
-const loadPluginManifestRegistry = vi.hoisted(() =>
+const loadPluginManifestRegistrySync = vi.hoisted(() =>
   vi.fn(() => ({
     plugins: [
       {
@@ -18,7 +18,7 @@ const loadPluginManifestRegistry = vi.hoisted(() =>
 );
 
 vi.mock("../../plugins/manifest-registry.js", () => ({
-  loadPluginManifestRegistry,
+  loadPluginManifestRegistrySync,
 }));
 
 vi.mock("./external-auth.js", () => ({
@@ -29,7 +29,7 @@ vi.mock("./external-auth.js", () => ({
 async function importAuthProfileModulesWithAliasRegistry() {
   vi.resetModules();
   vi.doMock("../../plugins/manifest-registry.js", () => ({
-    loadPluginManifestRegistry,
+    loadPluginManifestRegistrySync,
   }));
   const [{ resolveAuthProfileOrder }, { markAuthProfileGood }] = await Promise.all([
     import("./order.js"),
@@ -40,7 +40,7 @@ async function importAuthProfileModulesWithAliasRegistry() {
 
 describe("resolveAuthProfileOrder", () => {
   beforeEach(() => {
-    loadPluginManifestRegistry.mockClear();
+    loadPluginManifestRegistrySync.mockClear();
   });
 
   afterEach(() => {

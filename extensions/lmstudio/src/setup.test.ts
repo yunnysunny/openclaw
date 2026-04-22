@@ -84,11 +84,11 @@ function buildDiscoveryContext(params?: {
   return {
     config: params?.config ?? ({} as OpenClawConfig),
     env: params?.env ?? {},
-    resolveProviderApiKey: () => ({
+    resolveProviderApiKey: async () => ({
       apiKey: params?.apiKey,
       discoveryApiKey: params?.discoveryApiKey,
     }),
-    resolveProviderAuth: () => ({
+    resolveProviderAuth: async () => ({
       apiKey: params?.apiKey,
       discoveryApiKey: params?.discoveryApiKey,
       mode: "none" as const,

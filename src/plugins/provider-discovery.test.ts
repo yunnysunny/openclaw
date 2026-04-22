@@ -55,8 +55,8 @@ function createCatalogRuntimeContext() {
   return {
     config: {},
     env: {},
-    resolveProviderApiKey: () => ({ apiKey: undefined }),
-    resolveProviderAuth: () => ({
+    resolveProviderApiKey: async () => ({ apiKey: undefined }),
+    resolveProviderAuth: async () => ({
       apiKey: undefined,
       discoveryApiKey: undefined,
       mode: "none" as const,

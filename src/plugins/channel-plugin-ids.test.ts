@@ -3,7 +3,7 @@ import type { OpenClawConfig } from "../config/config.js";
 
 const listPotentialConfiguredChannelIds = vi.hoisted(() => vi.fn());
 const hasPotentialConfiguredChannels = vi.hoisted(() => vi.fn());
-const loadPluginManifestRegistry = vi.hoisted(() => vi.fn());
+const loadPluginManifestRegistrySync = vi.hoisted(() => vi.fn());
 
 vi.mock("../channels/config-presence.js", () => ({
   listPotentialConfiguredChannelIds,
@@ -14,7 +14,7 @@ vi.mock("./manifest-registry.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./manifest-registry.js")>();
   return {
     ...actual,
-    loadPluginManifestRegistry,
+    loadPluginManifestRegistrySync,
   };
 });
 
@@ -157,7 +157,7 @@ function expectStartupPluginIds(params: {
       env: params.env ?? process.env,
     }),
   ).toEqual(params.expected);
-  expect(loadPluginManifestRegistry).toHaveBeenCalled();
+  expect(loadPluginManifestRegistrySync).toHaveBeenCalled();
 }
 
 function expectStartupPluginIdsCase(params: {
@@ -298,7 +298,7 @@ describe("resolveGatewayStartupPluginIds", () => {
       }
       return true;
     });
-    loadPluginManifestRegistry.mockReset().mockReturnValue(createManifestRegistryFixture());
+    loadPluginManifestRegistrySync.mockReset().mockReturnValue(createManifestRegistryFixture());
   });
 
   it.each([
@@ -471,7 +471,7 @@ describe("resolveConfiguredChannelPluginIds", () => {
       }
       return false;
     });
-    loadPluginManifestRegistry.mockReset().mockReturnValue(createManifestRegistryFixture());
+    loadPluginManifestRegistrySync.mockReset().mockReturnValue(createManifestRegistryFixture());
   });
 
   it("uses manifest activation channel ownership before falling back to direct channel lists", () => {

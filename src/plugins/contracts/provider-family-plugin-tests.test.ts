@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { loadPluginManifestRegistry } from "../manifest-registry.js";
+import { loadPluginManifestRegistrySync } from "../manifest-registry.js";
 
 type SharedFamilyHookKind = "replay" | "stream" | "tool-compat";
 
@@ -68,7 +68,7 @@ function listFiles(dir: string): string[] {
 }
 
 function listBundledPluginRoots() {
-  return loadPluginManifestRegistry({})
+  return loadPluginManifestRegistrySync({})
     .plugins.filter((plugin) => plugin.origin === "bundled")
     .map((plugin) => ({
       pluginId: plugin.id,

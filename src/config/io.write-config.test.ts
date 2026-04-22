@@ -22,7 +22,7 @@ const mockMaintainConfigBackups = vi.hoisted(() =>
 );
 
 vi.mock("../plugins/manifest-registry.js", () => ({
-  loadPluginManifestRegistry: mockLoadPluginManifestRegistry,
+  loadPluginManifestRegistrySync: mockLoadPluginManifestRegistry,
 }));
 
 vi.mock("../plugins/doctor-contract-registry.js", async (importOriginal) => {

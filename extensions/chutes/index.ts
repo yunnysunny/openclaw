@@ -166,7 +166,7 @@ export default definePluginEntry({
       catalog: {
         order: "profile",
         run: async (ctx) => {
-          const { apiKey, discoveryApiKey } = ctx.resolveProviderAuth(PROVIDER_ID, {
+          const { apiKey, discoveryApiKey } = await ctx.resolveProviderAuth(PROVIDER_ID, {
             oauthMarker: resolveOAuthApiKeyMarker(PROVIDER_ID),
           });
           if (!apiKey) {

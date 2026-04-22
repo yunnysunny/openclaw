@@ -87,12 +87,13 @@ function resolveDefaultBaseUrl(surface: StepFunSurface, region: StepFunRegion): 
   return region === "cn" ? STEPFUN_STANDARD_CN_BASE_URL : STEPFUN_STANDARD_INTL_BASE_URL;
 }
 
-function resolveStepFunCatalog(
+async function resolveStepFunCatalog(
   ctx: ProviderCatalogContext,
   params: { providerId: string; surface: StepFunSurface },
 ) {
-  const auth = ctx.resolveProviderAuth(params.providerId);
-  const apiKey = auth.apiKey ?? ctx.resolveProviderApiKey(params.providerId).apiKey;
+  const auth = await ctx.resolveProviderAuth(params.providerId);
+  const resolvedKey = await ctx.resolveProviderApiKey(params.providerId);
+  const apiKey = auth.apiKey ?? resolvedKey.apiKey;
   if (!apiKey) {
     return null;
   }

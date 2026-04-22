@@ -7,7 +7,7 @@ import { buildPluginApi } from "./api-builder.js";
 import { collectPluginConfigContractMatches } from "./config-contracts.js";
 import { discoverOpenClawPlugins } from "./discovery.js";
 import { getCachedPluginJitiLoader, type PluginJitiLoaderCache } from "./jiti-loader-cache.js";
-import { loadPluginManifestRegistry, type PluginManifestRecord } from "./manifest-registry.js";
+import { loadPluginManifestRegistrySync, type PluginManifestRecord } from "./manifest-registry.js";
 import { resolvePluginCacheInputs } from "./roots.js";
 import type { PluginRuntime } from "./runtime/types.js";
 import { listSetupCliBackendIds, listSetupProviderIds } from "./setup-descriptors.js";
@@ -230,7 +230,7 @@ function resolveRelevantSetupMigrationPluginIds(params: {
   env?: NodeJS.ProcessEnv;
 }): string[] {
   const ids = new Set<string>(collectConfiguredPluginEntryIds(params.config));
-  const registry = loadPluginManifestRegistry({
+  const registry = loadPluginManifestRegistrySync({
     workspaceDir: params.workspaceDir,
     env: params.env,
     cache: true,
@@ -347,7 +347,7 @@ function loadSetupManifestRegistry(params?: { workspaceDir?: string; env?: NodeJ
     env,
     cache: true,
   });
-  return loadPluginManifestRegistry({
+  return loadPluginManifestRegistrySync({
     workspaceDir: params?.workspaceDir,
     env,
     cache: true,

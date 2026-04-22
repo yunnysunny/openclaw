@@ -79,7 +79,7 @@ describe("arcee provider plugin", () => {
   it("builds the direct Arcee AI model catalog", async () => {
     const provider = await registerSingleProviderPlugin(arceePlugin);
     const catalogProvider = await runSingleProviderCatalog(provider, {
-      resolveProviderApiKey: (id?: string) =>
+      resolveProviderApiKey: async (id?: string) =>
         id === "arcee" ? { apiKey: "test-key" } : { apiKey: undefined },
     });
 
@@ -95,9 +95,9 @@ describe("arcee provider plugin", () => {
   it("builds the OpenRouter-backed Arcee AI model catalog", async () => {
     const provider = await registerSingleProviderPlugin(arceePlugin);
     const catalogProvider = await runSingleProviderCatalog(provider, {
-      resolveProviderApiKey: (id?: string) =>
+      resolveProviderApiKey: async (id?: string) =>
         id === "openrouter" ? { apiKey: "sk-or-test" } : { apiKey: undefined },
-      resolveProviderAuth: () => ({
+      resolveProviderAuth: async () => ({
         apiKey: "sk-or-test",
         mode: "api_key",
         source: "env",

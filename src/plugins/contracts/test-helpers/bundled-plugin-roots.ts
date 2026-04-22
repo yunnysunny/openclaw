@@ -1,8 +1,8 @@
 import { relative, resolve } from "node:path";
-import { loadPluginManifestRegistry } from "../../manifest-registry.js";
+import { loadPluginManifestRegistrySync } from "../../manifest-registry.js";
 
 const bundledPluginRoots = new Map(
-  loadPluginManifestRegistry({ cache: true, config: {} })
+  loadPluginManifestRegistrySync({ cache: true, config: {} })
     .plugins.filter((plugin) => plugin.origin === "bundled")
     .map((plugin) => [plugin.id, plugin.rootDir] as const),
 );

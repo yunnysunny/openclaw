@@ -298,8 +298,8 @@ export async function setupPluginConfig(params: {
   prompter: WizardPrompter;
   workspaceDir?: string;
 }): Promise<OpenClawConfig> {
-  const { loadPluginManifestRegistry } = await loadManifestRegistryModule();
-  const registry = loadPluginManifestRegistry({
+  const { loadPluginManifestRegistrySync } = await loadManifestRegistryModule();
+  const registry = loadPluginManifestRegistrySync({
     config: params.config,
     workspaceDir: params.workspaceDir,
   });
@@ -360,8 +360,8 @@ export async function configurePluginConfig(params: {
   prompter: WizardPrompter;
   workspaceDir?: string;
 }): Promise<OpenClawConfig> {
-  const { loadPluginManifestRegistry } = await loadManifestRegistryModule();
-  const registry = loadPluginManifestRegistry({
+  const { loadPluginManifestRegistrySync } = await loadManifestRegistryModule();
+  const registry = loadPluginManifestRegistrySync({
     config: params.config,
     workspaceDir: params.workspaceDir,
   });

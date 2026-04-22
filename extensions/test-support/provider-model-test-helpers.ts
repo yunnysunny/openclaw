@@ -41,10 +41,10 @@ export async function runSingleProviderCatalog(
   const catalog = await provider.catalog.run({
     config: {},
     env: {},
-    resolveProviderApiKey: params.resolveProviderApiKey ?? (() => ({ apiKey: "test-key" })),
+    resolveProviderApiKey: params.resolveProviderApiKey ?? (async () => ({ apiKey: "test-key" })),
     resolveProviderAuth:
       params.resolveProviderAuth ??
-      (() => ({
+      (async () => ({
         apiKey: "test-key",
         mode: "api_key",
         source: "env",
