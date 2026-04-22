@@ -5,6 +5,7 @@ import {
   openBoundaryFile,
   openBoundaryFileSync,
 } from "../infra/boundary-file-read.js";
+import { closeFileDescriptorAsync, readFileUtf8FromFd } from "../infra/fd-promise.js";
 import {
   normalizeLowercaseStringOrEmpty,
   normalizeOptionalString,
@@ -1055,12 +1056,12 @@ async function readPackageManifestAsync(
     return null;
   }
   try {
-    const text = await fs.promises.readFile(opened.fd, "utf-8");
+    const text = await readFileUtf8FromFd(opened.fd);
     return JSON.parse(text) as PackageManifest;
   } catch {
     return null;
   } finally {
-    await fs.promises.close(opened.fd);
+    await closeFileDescriptorAsync(opened.fd);
   }
 }
 
@@ -1323,7 +1324,7 @@ async function resolvePackageEntrySourceAsync(params: {
       });
     }
     const safeSource = opened.path;
-    await fs.promises.close(opened.fd);
+    await closeFileDescriptorAsync(opened.fd);
     return safeSource;
   };
   if (!rejectHardlinks) {

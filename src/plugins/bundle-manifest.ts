@@ -6,6 +6,7 @@ import {
   openBoundaryFile,
   openBoundaryFileSync,
 } from "../infra/boundary-file-read.js";
+import { closeFileDescriptorAsync, readFileUtf8FromFd } from "../infra/fd-promise.js";
 import {
   normalizeLowercaseStringOrEmpty,
   normalizeOptionalString,
@@ -185,7 +186,7 @@ async function loadBundleManifestFileAsync(params: {
     });
   }
   try {
-    const text = await fs.promises.readFile(opened.fd, "utf-8");
+    const text = await readFileUtf8FromFd(opened.fd);
     const raw = JSON5.parse(text) as unknown;
     if (!isRecord(raw)) {
       return { ok: false, error: "plugin manifest must be an object", manifestPath };
@@ -198,7 +199,7 @@ async function loadBundleManifestFileAsync(params: {
       manifestPath,
     };
   } finally {
-    await fs.promises.close(opened.fd);
+    await closeFileDescriptorAsync(opened.fd);
   }
 }
 

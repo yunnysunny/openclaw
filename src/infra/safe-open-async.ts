@@ -1,9 +1,14 @@
 import fs from "node:fs";
+import { promisify } from "node:util";
 import {
   sameFileIdentity,
   type SafeOpenSyncAllowedType,
   type SafeOpenSyncResult,
 } from "./safe-open-sync.js";
+
+const openAsync = promisify(fs.open);
+const fstatAsync = promisify(fs.fstat);
+const closeAsync = promisify(fs.close);
 
 export type SafeOpenAsyncResult = SafeOpenSyncResult;
 
@@ -20,6 +25,12 @@ function isAllowedType(stat: fs.Stats, allowedType: SafeOpenSyncAllowedType): bo
   return stat.isFile();
 }
 
+/**
+ * Async counterpart to `openVerifiedFileSync`, returning a **raw** OS file
+ * descriptor. Uses `fs.open` (not `fs.promises.open` / `FileHandle`) so callers
+ * can own the fd without a `FileHandle` finalizer also closing it on GC (which
+ * caused EBADF / double-close when the numeric `fd` was used elsewhere).
+ */
 export async function openVerifiedFileAsync(params: {
   filePath: string;
   resolvedPath?: string;
@@ -32,7 +43,7 @@ export async function openVerifiedFileAsync(params: {
   const constants = fs.constants;
   const openReadFlags =
     constants.O_RDONLY | (typeof constants.O_NOFOLLOW === "number" ? constants.O_NOFOLLOW : 0);
-  let handle: fs.FileHandle | null = null;
+  let fd: number | null = null;
   try {
     if (params.rejectPathSymlink) {
       const candidateStat = await fs.promises.lstat(params.filePath);
@@ -57,16 +68,12 @@ export async function openVerifiedFileAsync(params: {
       return { ok: false, reason: "validation" };
     }
 
-    handle = await fs.promises.open(realPath, openReadFlags);
-    const openedStat = await handle.stat();
+    fd = await openAsync(realPath, openReadFlags);
+    const openedStat = await fstatAsync(fd);
     if (!isAllowedType(openedStat, allowedType)) {
-      await handle.close();
-      handle = null;
       return { ok: false, reason: "validation" };
     }
     if (params.rejectHardlinks && openedStat.isFile() && openedStat.nlink > 1) {
-      await handle.close();
-      handle = null;
       return { ok: false, reason: "validation" };
     }
     if (
@@ -74,31 +81,23 @@ export async function openVerifiedFileAsync(params: {
       openedStat.isFile() &&
       openedStat.size > params.maxBytes
     ) {
-      await handle.close();
-      handle = null;
       return { ok: false, reason: "validation" };
     }
     if (!sameFileIdentity(preOpenStat, openedStat)) {
-      await handle.close();
-      handle = null;
       return { ok: false, reason: "validation" };
     }
 
-    const fdNum = handle.fd;
-    handle = null;
-    return { ok: true, path: realPath, fd: fdNum, stat: openedStat };
+    const opened = { ok: true as const, path: realPath, fd, stat: openedStat };
+    fd = null;
+    return opened;
   } catch (error) {
-    if (handle !== null) {
-      await handle.close().catch(() => {});
-      handle = null;
-    }
     if (isExpectedPathError(error)) {
       return { ok: false, reason: "path", error };
     }
     return { ok: false, reason: "io", error };
   } finally {
-    if (handle !== null) {
-      await handle.close().catch(() => {});
+    if (fd !== null) {
+      await closeAsync(fd).catch(() => {});
     }
   }
 }

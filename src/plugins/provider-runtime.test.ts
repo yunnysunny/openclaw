@@ -245,7 +245,7 @@ describe("provider-runtime", () => {
       isPluginProvidersLoadInFlight: (params: unknown) =>
         isPluginProvidersLoadInFlightMock(params as never),
       isPluginProvidersLoadInFlightAsync: async (params: unknown) =>
-        Promise.resolve(isPluginProvidersLoadInFlightMock(params as never)),
+        isPluginProvidersLoadInFlightMock(params as never),
     }));
     ({
       augmentModelCatalogWithProviderPlugins,

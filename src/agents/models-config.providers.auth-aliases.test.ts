@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+type ResolveProviderSyntheticAuthFn = typeof import("../plugins/provider-runtime.js").resolveProviderSyntheticAuthWithPlugin;
+
 let createProviderAuthResolver: typeof import("./models-config.providers.secrets.js").createProviderAuthResolver;
 
 type MockManifestRegistry = {
@@ -65,8 +67,12 @@ vi.mock("../plugins/manifest-registry.js", () => ({
 }));
 vi.mock("../plugins/provider-runtime.js", () => ({
   resolveProviderSyntheticAuthWithPlugin,
-  resolveProviderSyntheticAuthWithPluginAsync: (...args: unknown[]) =>
-    Promise.resolve(resolveProviderSyntheticAuthWithPlugin(...args)),
+  resolveProviderSyntheticAuthWithPluginAsync: (
+    ...args: Parameters<ResolveProviderSyntheticAuthFn>
+  ) =>
+    Promise.resolve(
+      (resolveProviderSyntheticAuthWithPlugin as unknown as ResolveProviderSyntheticAuthFn)(...args),
+    ),
 }));
 
 describe("provider auth aliases", () => {

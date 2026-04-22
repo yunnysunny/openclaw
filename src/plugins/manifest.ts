@@ -8,6 +8,7 @@ import {
   openBoundaryFile,
   openBoundaryFileSync,
 } from "../infra/boundary-file-read.js";
+import { closeFileDescriptorAsync, readFileUtf8FromFd } from "../infra/fd-promise.js";
 import { normalizeOptionalString } from "../shared/string-coerce.js";
 import { normalizeTrimmedStringList } from "../shared/string-normalization.js";
 import { isRecord } from "../utils.js";
@@ -865,7 +866,7 @@ export async function loadPluginManifestAsync(
   }
   let raw: unknown;
   try {
-    raw = JSON5.parse(await fs.promises.readFile(opened.fd, "utf-8"));
+    raw = JSON5.parse(await readFileUtf8FromFd(opened.fd));
   } catch (err) {
     return {
       ok: false,
@@ -873,7 +874,7 @@ export async function loadPluginManifestAsync(
       manifestPath,
     };
   } finally {
-    await fs.promises.close(opened.fd);
+    await closeFileDescriptorAsync(opened.fd);
   }
   return finalizePluginManifestLoad(raw, manifestPath);
 }

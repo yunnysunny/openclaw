@@ -13,7 +13,11 @@ import {
   normalizePluginsConfigWithResolver,
   type NormalizedPluginsConfig,
 } from "./config-policy.js";
-import { discoverOpenClawPlugins, type PluginCandidate } from "./discovery.js";
+import {
+  discoverOpenClawPlugins,
+  discoverOpenClawPluginsAsync,
+  type PluginCandidate,
+} from "./discovery.js";
 import type { PluginManifestCommandAlias } from "./manifest-command-aliases.js";
 import {
   clearPluginManifestRegistryCache,
