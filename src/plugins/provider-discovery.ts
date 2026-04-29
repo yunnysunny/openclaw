@@ -21,14 +21,19 @@ export async function resolvePluginDiscoveryProviders(params: {
   env?: NodeJS.ProcessEnv;
   onlyPluginIds?: string[];
 }): Promise<ProviderPlugin[]> {
-  return (await loadProviderRuntime())
-    .resolvePluginDiscoveryProvidersRuntime(params)
-    .filter((provider) => resolveProviderCatalogHook(provider));
+  const mod = await loadProviderRuntime();
+  const providers = await mod.resolvePluginDiscoveryProvidersRuntimeAsync({
+    config: params.config,
+    workspaceDir: params.workspaceDir,
+    env: params.env,
+    onlyPluginIds: params.onlyPluginIds,
+  });
+  return providers.filter((provider) => resolveProviderCatalogHook(provider));
 }
 
-export function groupPluginDiscoveryProvidersByOrder(
+export async function groupPluginDiscoveryProvidersByOrder(
   providers: ProviderPlugin[],
-): Record<ProviderDiscoveryOrder, ProviderPlugin[]> {
+): Promise<Record<ProviderDiscoveryOrder, ProviderPlugin[]>> {
   const grouped = {
     simple: [],
     profile: [],
@@ -48,14 +53,14 @@ export function groupPluginDiscoveryProvidersByOrder(
   return grouped;
 }
 
-export function normalizePluginDiscoveryResult(params: {
+export async function normalizePluginDiscoveryResult(params: {
   provider: ProviderPlugin;
   result:
     | { provider: ModelProviderConfig }
     | { providers: Record<string, ModelProviderConfig> }
     | null
     | undefined;
-}): Record<string, ModelProviderConfig> {
+}): Promise<Record<string, ModelProviderConfig>> {
   const result = params.result;
   if (!result) {
     return {};
@@ -88,7 +93,7 @@ export function normalizePluginDiscoveryResult(params: {
   return normalized;
 }
 
-export function runProviderCatalog(params: {
+export async function runProviderCatalog(params: {
   provider: ProviderPlugin;
   config: OpenClawConfig;
   agentDir?: string;
@@ -109,7 +114,7 @@ export function runProviderCatalog(params: {
     profileId?: string;
   }>;
 }) {
-  return resolveProviderCatalogHook(params.provider)?.run({
+  const hook = resolveProviderCatalogHook(params.provider)?.run({
     config: params.config,
     agentDir: params.agentDir,
     workspaceDir: params.workspaceDir,
@@ -117,4 +122,5 @@ export function runProviderCatalog(params: {
     resolveProviderApiKey: params.resolveProviderApiKey,
     resolveProviderAuth: params.resolveProviderAuth,
   });
+  return hook === undefined ? undefined : await hook;
 }

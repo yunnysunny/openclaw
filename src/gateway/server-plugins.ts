@@ -2,9 +2,12 @@ import { randomUUID } from "node:crypto";
 import { normalizeModelRef, parseModelRef } from "../agents/model-selection.js";
 import { applyPluginAutoEnable } from "../config/plugin-auto-enable.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
-import { resolveGatewayStartupPluginIds } from "../plugins/channel-plugin-ids.js";
+import {
+  resolveGatewayStartupPluginIds,
+  resolveGatewayStartupPluginIdsAsync,
+} from "../plugins/channel-plugin-ids.js";
 import { normalizePluginsConfig } from "../plugins/config-state.js";
-import { loadOpenClawPlugins } from "../plugins/loader.js";
+import { loadOpenClawPlugins, loadOpenClawPluginsAsync } from "../plugins/loader.js";
 import { createEmptyPluginRegistry } from "../plugins/registry-empty.js";
 import { setActivePluginRegistry } from "../plugins/runtime.js";
 import { getPluginRuntimeGatewayRequestScope } from "../plugins/runtime/gateway-request-scope.js";
@@ -459,6 +462,85 @@ export function loadGatewayPlugins(params: {
     };
   }
   const pluginRegistry = loadOpenClawPlugins({
+    config: resolvedConfig,
+    activationSourceConfig: params.activationSourceConfig ?? params.cfg,
+    autoEnabledReasons: autoEnabled.autoEnabledReasons,
+    workspaceDir: params.workspaceDir,
+    onlyPluginIds: pluginIds,
+    logger: createGatewayPluginRegistrationLogger({
+      suppressInfoLogs: params.suppressPluginInfoLogs,
+    }),
+    coreGatewayHandlers: params.coreGatewayHandlers,
+    runtimeOptions: {
+      allowGatewaySubagentBinding: true,
+    },
+    preferSetupRuntimeForChannelPlugins: params.preferSetupRuntimeForChannelPlugins,
+  });
+  const pluginMethods = Object.keys(pluginRegistry.gatewayHandlers);
+  const gatewayMethods = Array.from(new Set([...params.baseMethods, ...pluginMethods]));
+  return { pluginRegistry, gatewayMethods };
+}
+
+export async function loadGatewayPluginsAsync(params: {
+  cfg: OpenClawConfig;
+  activationSourceConfig?: OpenClawConfig;
+  autoEnabledReasons?: Readonly<Record<string, string[]>>;
+  workspaceDir: string;
+  log: {
+    info: (msg: string) => void;
+    warn: (msg: string) => void;
+    error: (msg: string) => void;
+    debug: (msg: string) => void;
+  };
+  coreGatewayHandlers: Record<string, GatewayRequestHandler>;
+  baseMethods: string[];
+  pluginIds?: string[];
+  preferSetupRuntimeForChannelPlugins?: boolean;
+  suppressPluginInfoLogs?: boolean;
+}): Promise<ReturnType<typeof loadGatewayPlugins>> {
+  const activationAutoEnabled =
+    params.activationSourceConfig !== undefined
+      ? applyPluginAutoEnable({
+          config: params.activationSourceConfig,
+          env: process.env,
+        })
+      : undefined;
+  const autoEnabled =
+    params.activationSourceConfig !== undefined
+      ? {
+          config: params.cfg,
+          changes: activationAutoEnabled?.changes ?? [],
+          autoEnabledReasons:
+            params.autoEnabledReasons ?? activationAutoEnabled?.autoEnabledReasons ?? {},
+        }
+      : params.autoEnabledReasons !== undefined
+        ? {
+            config: params.cfg,
+            changes: [],
+            autoEnabledReasons: params.autoEnabledReasons,
+          }
+        : applyPluginAutoEnable({
+            config: params.cfg,
+            env: process.env,
+          });
+  const resolvedConfig = autoEnabled.config;
+  const pluginIds =
+    params.pluginIds ??
+    (await resolveGatewayStartupPluginIdsAsync({
+      config: resolvedConfig,
+      activationSourceConfig: params.activationSourceConfig,
+      workspaceDir: params.workspaceDir,
+      env: process.env,
+    }));
+  if (pluginIds.length === 0) {
+    const pluginRegistry = createEmptyPluginRegistry();
+    setActivePluginRegistry(pluginRegistry, undefined, "gateway-bindable", params.workspaceDir);
+    return {
+      pluginRegistry,
+      gatewayMethods: [...params.baseMethods],
+    };
+  }
+  const pluginRegistry = await loadOpenClawPluginsAsync({
     config: resolvedConfig,
     activationSourceConfig: params.activationSourceConfig ?? params.cfg,
     autoEnabledReasons: autoEnabled.autoEnabledReasons,

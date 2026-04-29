@@ -7,6 +7,7 @@ import {
 } from "./model-auth-markers.js";
 import {
   listAuthProfilesForProvider,
+  listAuthProfilesForProviderAsync,
   resolveApiKeyFromCredentialAsync,
   resolveApiKeyFromProfilesAsync,
   resolveEnvApiKeyVarNameAsync,
@@ -26,10 +27,12 @@ export type {
 
 export {
   listAuthProfilesForProvider,
+  listAuthProfilesForProviderAsync,
   normalizeApiKeyConfig,
   normalizeConfiguredProviderApiKey,
   normalizeHeaderValues,
   normalizeResolvedEnvApiKey,
+  normalizeResolvedEnvApiKeyAsync,
   resolveApiKeyFromCredential,
   resolveApiKeyFromCredentialAsync,
   resolveApiKeyFromProfiles,
@@ -38,6 +41,7 @@ export {
   resolveEnvApiKeyVarName,
   resolveEnvApiKeyVarNameAsync,
   resolveMissingProviderApiKey,
+  resolveMissingProviderApiKeyAsync,
   toDiscoveryApiKey,
 } from "./models-config.providers.secret-helpers.js";
 

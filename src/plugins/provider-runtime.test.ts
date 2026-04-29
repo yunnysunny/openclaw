@@ -46,6 +46,7 @@ let applyProviderResolvedTransportWithPlugin: typeof import("./provider-runtime.
 let normalizeProviderTransportWithPlugin: typeof import("./provider-runtime.js").normalizeProviderTransportWithPlugin;
 let prepareProviderExtraParams: typeof import("./provider-runtime.js").prepareProviderExtraParams;
 let resolveProviderConfigApiKeyWithPlugin: typeof import("./provider-runtime.js").resolveProviderConfigApiKeyWithPlugin;
+let resolveProviderConfigApiKeyWithPluginAsync: typeof import("./provider-runtime.js").resolveProviderConfigApiKeyWithPluginAsync;
 let resolveProviderStreamFn: typeof import("./provider-runtime.js").resolveProviderStreamFn;
 let resolveProviderCacheTtlEligibility: typeof import("./provider-runtime.js").resolveProviderCacheTtlEligibility;
 let resolveProviderBinaryThinking: typeof import("./provider-runtime.js").resolveProviderBinaryThinking;
@@ -238,6 +239,8 @@ describe("provider-runtime", () => {
     vi.doMock("./providers.js", () => ({
       resolveCatalogHookProviderPluginIds: (params: unknown) =>
         resolveCatalogHookProviderPluginIdsMock(params as never),
+      resolveCatalogHookProviderPluginIdsAsync: async (params: unknown) =>
+        resolveCatalogHookProviderPluginIdsMock(params as never),
     }));
     vi.doMock("./providers.runtime.js", () => ({
       resolvePluginProviders: (params: unknown) => resolvePluginProvidersMock(params as never),
@@ -265,6 +268,7 @@ describe("provider-runtime", () => {
       normalizeProviderTransportWithPlugin,
       prepareProviderExtraParams,
       resolveProviderConfigApiKeyWithPlugin,
+      resolveProviderConfigApiKeyWithPluginAsync,
       resolveProviderStreamFn,
       resolveProviderCacheTtlEligibility,
       resolveProviderBinaryThinking,
@@ -873,6 +877,16 @@ describe("provider-runtime", () => {
       }),
     ).toBe("DEMO_PROFILE");
 
+    expect(
+      await resolveProviderConfigApiKeyWithPluginAsync({
+        provider: DEMO_PROVIDER_ID,
+        context: {
+          provider: DEMO_PROVIDER_ID,
+          env: { DEMO_PROFILE: "default" } as NodeJS.ProcessEnv,
+        },
+      }),
+    ).toBe("DEMO_PROFILE");
+
     await prepareProviderDynamicModel({
       provider: DEMO_PROVIDER_ID,
       context: createDemoRuntimeContext({
@@ -1246,6 +1260,30 @@ describe("provider-runtime", () => {
       resolveUsageAuth,
       fetchUsageSnapshot,
     );
+  });
+
+  it("resolveProviderConfigApiKeyWithPluginAsync prefers resolveConfigApiKeyAsync", async () => {
+    resolvePluginProvidersMock.mockReturnValue([
+      {
+        id: "async-pref",
+        label: "Async pref",
+        auth: [],
+        resolveConfigApiKey: () => "from-sync",
+        resolveConfigApiKeyAsync: async () => "from-async",
+      } as ProviderPlugin,
+    ]);
+    expect(
+      resolveProviderConfigApiKeyWithPlugin({
+        provider: "async-pref",
+        context: { provider: "async-pref", env: process.env },
+      }),
+    ).toBe("from-sync");
+    expect(
+      await resolveProviderConfigApiKeyWithPluginAsync({
+        provider: "async-pref",
+        context: { provider: "async-pref", env: process.env },
+      }),
+    ).toBe("from-async");
   });
 
   it("merges compat contributions from owner and foreign provider plugins", () => {

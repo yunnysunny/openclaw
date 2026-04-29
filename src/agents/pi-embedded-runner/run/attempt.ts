@@ -89,7 +89,7 @@ import {
   findClientToolNameConflicts,
   toClientToolDefinitions,
 } from "../../pi-tool-definition-adapter.js";
-import { createOpenClawCodingTools, resolveToolLoopDetectionConfig } from "../../pi-tools.js";
+import { createOpenClawCodingToolsAsync, resolveToolLoopDetectionConfig } from "../../pi-tools.js";
 import { wrapStreamFnTextTransforms } from "../../plugin-text-transforms.js";
 import { describeProviderRequestRoutingSummary } from "../../provider-attribution.js";
 import { registerProviderStreamForModel } from "../../provider-stream.js";
@@ -475,8 +475,8 @@ export async function runEmbeddedAttempt(
     const agentDir = params.agentDir ?? resolveOpenClawAgentDir();
     const toolsRaw = params.disableTools
       ? []
-      : (() => {
-          const allTools = createOpenClawCodingTools({
+      : await (async () => {
+          const allTools = await createOpenClawCodingToolsAsync({
             agentId: sessionAgentId,
             ...buildEmbeddedAttemptToolRunContext(params),
             exec: {

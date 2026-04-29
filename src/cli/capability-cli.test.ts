@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   loadConfig: vi.fn(() => ({})),
   loadAuthProfileStoreForRuntime: vi.fn(() => ({ profiles: {}, order: {} })),
   listProfilesForProvider: vi.fn(() => []),
+  listProfilesForProviderAsync: vi.fn(async () => []),
   updateAuthProfileStoreWithLock: vi.fn(
     async ({ updater }: { updater: (store: any) => boolean }) => {
       const store = {
@@ -145,6 +146,8 @@ vi.mock("../agents/auth-profiles.js", () => ({
     mocks.loadAuthProfileStoreForRuntime as unknown as typeof import("../agents/auth-profiles.js").loadAuthProfileStoreForRuntime,
   listProfilesForProvider:
     mocks.listProfilesForProvider as typeof import("../agents/auth-profiles.js").listProfilesForProvider,
+  listProfilesForProviderAsync:
+    mocks.listProfilesForProviderAsync as typeof import("../agents/auth-profiles.js").listProfilesForProviderAsync,
 }));
 
 vi.mock("../agents/auth-profiles/store.js", () => ({
@@ -259,6 +262,7 @@ describe("capability cli", () => {
       .mockResolvedValue([{ id: "gpt-5.4", provider: "openai", name: "GPT-5.4" }] as never);
     mocks.loadAuthProfileStoreForRuntime.mockReset().mockReturnValue({ profiles: {}, order: {} });
     mocks.listProfilesForProvider.mockReset().mockReturnValue([]);
+    mocks.listProfilesForProviderAsync.mockReset().mockResolvedValue([]);
     mocks.updateAuthProfileStoreWithLock
       .mockReset()
       .mockImplementation(async ({ updater }: { updater: (store: any) => boolean }) => {
@@ -774,7 +778,7 @@ describe("capability cli", () => {
         "anthropic:default": { errorCount: 3 },
       },
     } as never);
-    mocks.listProfilesForProvider.mockReturnValue(["openai:default", "openai:secondary"] as never);
+    mocks.listProfilesForProviderAsync.mockResolvedValue(["openai:default", "openai:secondary"] as never);
 
     let updatedStore: Record<string, any> | null = null;
     mocks.updateAuthProfileStoreWithLock.mockImplementationOnce(
@@ -822,7 +826,7 @@ describe("capability cli", () => {
   });
 
   it("fails logout if the auth store update does not complete", async () => {
-    mocks.listProfilesForProvider.mockReturnValue(["openai:default"] as never);
+    mocks.listProfilesForProviderAsync.mockResolvedValue(["openai:default"] as never);
     mocks.updateAuthProfileStoreWithLock.mockResolvedValueOnce(null as never);
 
     await expect(

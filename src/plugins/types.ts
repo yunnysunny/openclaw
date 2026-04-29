@@ -1176,6 +1176,17 @@ export type ProviderPlugin = {
    */
   resolveConfigApiKey?: (ctx: ProviderResolveConfigApiKeyContext) => string | null | undefined;
   /**
+   * Async variant of {@link resolveConfigApiKey} for env-marker resolution that
+   * needs filesystem, subprocess, or network I/O.
+   *
+   * When present, OpenClaw prefers this over `resolveConfigApiKey` on async
+   * config paths (for example `normalizeProvidersAsync`). Sync paths continue
+   * to use `resolveConfigApiKey` only.
+   */
+  resolveConfigApiKeyAsync?: (
+    ctx: ProviderResolveConfigApiKeyContext,
+  ) => Promise<string | null | undefined> | string | null | undefined;
+  /**
    * @deprecated Legacy static capability bag kept only for compatibility.
    *
    * New provider behavior should use explicit hooks instead. Core replay and

@@ -1,6 +1,7 @@
 import { normalizeLowercaseStringOrEmpty } from "../../shared/string-coerce.js";
 import { loadBundledCapabilityRuntimeRegistry } from "../bundled-capability-runtime.js";
 import {
+  loadPluginManifestRegistryAsync,
   loadPluginManifestRegistrySync,
   resolveManifestContractPluginIds,
 } from "../manifest-registry.js";
@@ -92,6 +93,63 @@ function resolveBundledManifestContracts(): PluginRegistrationContractEntry[] {
   }
   return loadPluginManifestRegistrySync({})
     .plugins.filter(
+      (plugin) =>
+        plugin.origin === "bundled" &&
+        (plugin.cliBackends.length > 0 ||
+          plugin.providers.length > 0 ||
+          (plugin.contracts?.speechProviders?.length ?? 0) > 0 ||
+          (plugin.contracts?.realtimeTranscriptionProviders?.length ?? 0) > 0 ||
+          (plugin.contracts?.realtimeVoiceProviders?.length ?? 0) > 0 ||
+          (plugin.contracts?.mediaUnderstandingProviders?.length ?? 0) > 0 ||
+          (plugin.contracts?.imageGenerationProviders?.length ?? 0) > 0 ||
+          (plugin.contracts?.videoGenerationProviders?.length ?? 0) > 0 ||
+          (plugin.contracts?.musicGenerationProviders?.length ?? 0) > 0 ||
+          (plugin.contracts?.webFetchProviders?.length ?? 0) > 0 ||
+          (plugin.contracts?.webSearchProviders?.length ?? 0) > 0 ||
+          (plugin.contracts?.tools?.length ?? 0) > 0),
+    )
+    .map((plugin) => ({
+      pluginId: plugin.id,
+      cliBackendIds: uniqueStrings(plugin.cliBackends),
+      providerIds: uniqueStrings(plugin.providers),
+      speechProviderIds: uniqueStrings(plugin.contracts?.speechProviders ?? []),
+      realtimeTranscriptionProviderIds: uniqueStrings(
+        plugin.contracts?.realtimeTranscriptionProviders ?? [],
+      ),
+      realtimeVoiceProviderIds: uniqueStrings(plugin.contracts?.realtimeVoiceProviders ?? []),
+      mediaUnderstandingProviderIds: uniqueStrings(
+        plugin.contracts?.mediaUnderstandingProviders ?? [],
+      ),
+      imageGenerationProviderIds: uniqueStrings(plugin.contracts?.imageGenerationProviders ?? []),
+      videoGenerationProviderIds: uniqueStrings(plugin.contracts?.videoGenerationProviders ?? []),
+      musicGenerationProviderIds: uniqueStrings(plugin.contracts?.musicGenerationProviders ?? []),
+      webFetchProviderIds: uniqueStrings(plugin.contracts?.webFetchProviders ?? []),
+      webSearchProviderIds: uniqueStrings(plugin.contracts?.webSearchProviders ?? []),
+      toolNames: uniqueStrings(plugin.contracts?.tools ?? []),
+    }));
+}
+
+async function resolveBundledManifestContractsAsync(): Promise<PluginRegistrationContractEntry[]> {
+  if (process.env.VITEST) {
+    return BUNDLED_PLUGIN_CONTRACT_SNAPSHOTS.map((entry) => ({
+      pluginId: entry.pluginId,
+      cliBackendIds: [...entry.cliBackendIds],
+      providerIds: [...entry.providerIds],
+      speechProviderIds: [...entry.speechProviderIds],
+      realtimeTranscriptionProviderIds: [...entry.realtimeTranscriptionProviderIds],
+      realtimeVoiceProviderIds: [...entry.realtimeVoiceProviderIds],
+      mediaUnderstandingProviderIds: [...entry.mediaUnderstandingProviderIds],
+      imageGenerationProviderIds: [...entry.imageGenerationProviderIds],
+      videoGenerationProviderIds: [...entry.videoGenerationProviderIds],
+      musicGenerationProviderIds: [...entry.musicGenerationProviderIds],
+      webFetchProviderIds: [...entry.webFetchProviderIds],
+      webSearchProviderIds: [...entry.webSearchProviderIds],
+      toolNames: [...entry.toolNames],
+    }));
+  }
+  const manifestRegistry = await loadPluginManifestRegistryAsync({});
+  return manifestRegistry.plugins
+    .filter(
       (plugin) =>
         plugin.origin === "bundled" &&
         (plugin.cliBackends.length > 0 ||
@@ -758,6 +816,12 @@ export const musicGenerationProviderContractRegistry: MusicGenerationProviderCon
 
 function loadPluginRegistrationContractRegistry(): PluginRegistrationContractEntry[] {
   return resolveBundledManifestContracts();
+}
+
+export async function loadPluginRegistrationContractRegistryAsync(): Promise<
+  PluginRegistrationContractEntry[]
+> {
+  return resolveBundledManifestContractsAsync();
 }
 
 export const pluginRegistrationContractRegistry: PluginRegistrationContractEntry[] =

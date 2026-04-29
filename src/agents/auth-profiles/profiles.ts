@@ -1,6 +1,6 @@
 import { normalizeStringEntries } from "../../shared/string-normalization.js";
 import { normalizeSecretInput } from "../../utils/normalize-secret-input.js";
-import { resolveProviderIdForAuth } from "../provider-auth-aliases.js";
+import { resolveProviderIdForAuth, resolveProviderIdForAuthAsync } from "../provider-auth-aliases.js";
 import { normalizeProviderId } from "../provider-id.js";
 import {
   ensureAuthProfileStoreForLocalUpdate,
@@ -129,6 +129,20 @@ export function listProfilesForProvider(store: AuthProfileStore, provider: strin
   return Object.entries(store.profiles)
     .filter(([, cred]) => resolveProviderIdForAuth(cred.provider) === providerKey)
     .map(([id]) => id);
+}
+
+export async function listProfilesForProviderAsync(
+  store: AuthProfileStore,
+  provider: string,
+): Promise<string[]> {
+  const providerKey = await resolveProviderIdForAuthAsync(provider);
+  const ids: string[] = [];
+  for (const [id, cred] of Object.entries(store.profiles)) {
+    if ((await resolveProviderIdForAuthAsync(cred.provider)) === providerKey) {
+      ids.push(id);
+    }
+  }
+  return ids;
 }
 
 export async function markAuthProfileGood(params: {

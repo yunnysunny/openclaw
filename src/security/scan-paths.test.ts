@@ -5,6 +5,7 @@ import {
   extensionUsesSkippedScannerPath,
   isPathInside,
   isPathInsideWithRealpath,
+  isPathInsideWithRealpathAsync,
 } from "./scan-paths.js";
 
 // ---------------------------------------------------------------------------
@@ -78,6 +79,26 @@ describe("isPathInsideWithRealpath", () => {
     const child = path.join(nonExistentBase, "child.ts");
     const result = isPathInsideWithRealpath(nonExistentBase, child);
     expect(result).toBe(false);
+  });
+});
+
+describe("isPathInsideWithRealpathAsync", () => {
+  const tmpDir = os.tmpdir();
+
+  it("returns true when both paths exist and candidate is inside base", async () => {
+    await expect(isPathInsideWithRealpathAsync(tmpDir, tmpDir)).resolves.toBe(true);
+  });
+
+  it("returns false when candidate is outside base", async () => {
+    await expect(isPathInsideWithRealpathAsync(tmpDir, "/etc")).resolves.toBe(false);
+  });
+
+  it("returns true only when explicitly opting out of realpath checks", async () => {
+    const nonExistent = path.join(tmpDir, "__does_not_exist_clawin_test_async__");
+    await expect(isPathInsideWithRealpathAsync(tmpDir, nonExistent)).resolves.toBe(false);
+    await expect(
+      isPathInsideWithRealpathAsync(tmpDir, nonExistent, { requireRealpath: false }),
+    ).resolves.toBe(true);
   });
 });
 

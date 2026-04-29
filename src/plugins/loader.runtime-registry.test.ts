@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { __testing, clearPluginLoaderCache, resolveRuntimePluginRegistry } from "./loader.js";
+import {
+  __testing,
+  clearPluginLoaderCache,
+  inFlightPluginRegistryLoads,
+  loadOpenClawPluginsAsync,
+  resolveRuntimePluginRegistry,
+  resolveRuntimePluginRegistryAsync,
+  waitForInFlightPluginRegistryLoad,
+} from "./loader.js";
 import { resetPluginLoaderTestStateForTest } from "./loader.test-fixtures.js";
 import {
   getMemoryEmbeddingProvider,
@@ -207,6 +215,55 @@ describe("resolveRuntimePluginRegistry", () => {
     const scopedEmpty = resolveRuntimePluginRegistry({ ...loadOptions, onlyPluginIds: [] });
     expect(scopedEmpty).not.toBe(registry);
     expect(scopedEmpty?.plugins).toEqual([]);
+  });
+});
+
+describe("resolveRuntimePluginRegistryAsync", () => {
+  it("reuses the compatible active registry before attempting a fresh load", async () => {
+    const registry = createEmptyPluginRegistry();
+    const loadOptions = {
+      config: {
+        plugins: {
+          allow: ["demo"],
+        },
+      },
+      workspaceDir: "/tmp/workspace-a",
+    };
+    const { cacheKey } = __testing.resolvePluginLoadCacheContext(loadOptions);
+    setActivePluginRegistry(registry, cacheKey);
+
+    await expect(resolveRuntimePluginRegistryAsync(loadOptions)).resolves.toBe(registry);
+  });
+
+  it("falls back to the current active runtime when no explicit load context is provided", async () => {
+    const registry = createEmptyPluginRegistry();
+    setActivePluginRegistry(registry, "startup-registry");
+
+    await expect(resolveRuntimePluginRegistryAsync()).resolves.toBe(registry);
+  });
+});
+
+describe("loadOpenClawPluginsAsync", () => {
+  it("rejects activate:false with cache default like the sync entry", async () => {
+    await expect(
+      loadOpenClawPluginsAsync({ activate: false, cache: true }),
+    ).rejects.toThrow("loadOpenClawPlugins: activate:false requires cache:false");
+  });
+
+  it("concurrent async loads for the same cache key share one registry (in-flight + cache)", async () => {
+    const loadOptions = {
+      config: {
+        plugins: {
+          allow: ["demo"],
+        },
+      },
+      workspaceDir: "/tmp/workspace-a",
+    };
+    const [a, b] = await Promise.all([
+      loadOpenClawPluginsAsync(loadOptions),
+      loadOpenClawPluginsAsync(loadOptions),
+    ]);
+    expect(a).toBe(b);
   });
 });
 

@@ -29,6 +29,9 @@ vi.mock("../../config/plugin-auto-enable.js", () => ({
 }));
 
 const resolveBundledPluginSources = vi.fn();
+const resolveBundledPluginSourcesAsync = vi.fn(async (...args: unknown[]) =>
+  resolveBundledPluginSources(...args),
+);
 const getChannelPluginCatalogEntry = vi.fn();
 const listChannelPluginCatalogEntries = vi.fn((..._args: unknown[]) => []);
 vi.mock("../../channels/plugins/catalog.js", () => {
@@ -67,6 +70,8 @@ vi.mock("../../plugins/bundled-sources.js", () => ({
     return undefined;
   },
   resolveBundledPluginSources: (...args: unknown[]) => resolveBundledPluginSources(...args),
+  resolveBundledPluginSourcesAsync: (...args: unknown[]) =>
+    resolveBundledPluginSourcesAsync(...args),
 }));
 
 vi.mock("../../plugins/loader.js", () => ({

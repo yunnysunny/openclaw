@@ -21,6 +21,7 @@ import {
   resolveExtensionApiAlias,
   resolvePluginRuntimeModulePath,
   resolvePluginSdkAliasFile,
+  resolvePluginSdkAliasFileAsync,
   shouldPreferNativeJiti,
 } from "./sdk-alias.js";
 import {
@@ -54,6 +55,22 @@ function withCwd<T>(cwd: string, run: () => T): T {
     return run();
   } finally {
     cwdSpy.mockRestore();
+  }
+}
+
+function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
+  const originalPlatform = process.platform;
+  Object.defineProperty(process, "platform", {
+    configurable: true,
+    value: platform,
+  });
+  try {
+    return run();
+  } finally {
+    Object.defineProperty(process, "platform", {
+      configurable: true,
+      value: originalPlatform,
+    });
   }
 }
 
@@ -221,6 +238,23 @@ function resolvePluginSdkAlias(params: {
       argv1: params.argv1,
     });
   return params.env ? withEnv(params.env, run) : run();
+}
+
+async function resolvePluginSdkAliasAsync(params: {
+  srcFile: string;
+  distFile: string;
+  modulePath: string;
+  argv1?: string;
+  env?: NodeJS.ProcessEnv;
+}) {
+  const run = () =>
+    resolvePluginSdkAliasFileAsync({
+      srcFile: params.srcFile,
+      distFile: params.distFile,
+      modulePath: params.modulePath,
+      argv1: params.argv1,
+    });
+  return params.env ? await withEnv(params.env, run) : await run();
 }
 
 function resolvePluginRuntimeModule(params: {
@@ -841,10 +875,12 @@ describe("plugin sdk alias helpers", () => {
   });
 
   it("uses transpiled Jiti loads for source TypeScript plugin entries", () => {
-    expect(shouldPreferNativeJiti("/repo/dist/plugins/runtime/index.js")).toBe(true);
-    expect(
-      shouldPreferNativeJiti(`/repo/${bundledPluginFile("discord", "src/channel.runtime.ts")}`),
-    ).toBe(false);
+    withPlatform("linux", () => {
+      expect(shouldPreferNativeJiti("/repo/dist/plugins/runtime/index.js")).toBe(true);
+      expect(
+        shouldPreferNativeJiti(`/repo/${bundledPluginFile("discord", "src/channel.runtime.ts")}`),
+      ).toBe(false);
+    });
   });
 
   it("disables native Jiti loads under Bun even for built JavaScript entries", () => {
@@ -917,21 +953,23 @@ describe("plugin sdk alias helpers", () => {
   });
 
   it("keeps bundled plugin dist modules on the aliased Jiti path", () => {
-    expect(
-      resolvePluginLoaderJitiTryNative(`/repo/${bundledDistPluginFile("browser", "index.js")}`, {
-        preferBuiltDist: true,
-      }),
-    ).toBe(false);
-    expect(
-      resolvePluginLoaderJitiTryNative(`/repo/${bundledDistPluginFile("browser", "helper.ts")}`, {
-        preferBuiltDist: true,
-      }),
-    ).toBe(false);
-    expect(
-      resolvePluginLoaderJitiTryNative("/repo/dist/plugins/runtime/index.js", {
-        preferBuiltDist: true,
-      }),
-    ).toBe(true);
+    withPlatform("linux", () => {
+      expect(
+        resolvePluginLoaderJitiTryNative(`/repo/${bundledDistPluginFile("browser", "index.js")}`, {
+          preferBuiltDist: true,
+        }),
+      ).toBe(false);
+      expect(
+        resolvePluginLoaderJitiTryNative(`/repo/${bundledDistPluginFile("browser", "helper.ts")}`, {
+          preferBuiltDist: true,
+        }),
+      ).toBe(false);
+      expect(
+        resolvePluginLoaderJitiTryNative("/repo/dist/plugins/runtime/index.js", {
+          preferBuiltDist: true,
+        }),
+      ).toBe(true);
+    });
   });
 
   it("keeps plugin loader Jiti cache keys stable across alias insertion order", () => {
@@ -1010,22 +1048,23 @@ describe("plugin sdk alias helpers", () => {
   });
 
   it("detects bundled plugin extension paths across source and dist roots", () => {
+    const repoRoot = path.join(path.parse(process.cwd()).root, "repo");
     expect(
       isBundledPluginExtensionPath({
-        modulePath: "/repo/extensions/demo/api.js",
-        openClawPackageRoot: "/repo",
+        modulePath: path.join(repoRoot, "extensions", "demo", "api.js"),
+        openClawPackageRoot: repoRoot,
       }),
     ).toBe(true);
     expect(
       isBundledPluginExtensionPath({
-        modulePath: "/repo/dist/extensions/demo/api.js",
-        openClawPackageRoot: "/repo",
+        modulePath: path.join(repoRoot, "dist", "extensions", "demo", "api.js"),
+        openClawPackageRoot: repoRoot,
       }),
     ).toBe(true);
     expect(
       isBundledPluginExtensionPath({
-        modulePath: "/repo/vendor/demo/api.js",
-        openClawPackageRoot: "/repo",
+        modulePath: path.join(repoRoot, "vendor", "demo", "api.js"),
+        openClawPackageRoot: repoRoot,
       }),
     ).toBe(false);
   });
@@ -1261,5 +1300,26 @@ describe("buildPluginLoaderAliasMap memoization", () => {
     expect(second).toEqual(first);
     // Same key set
     expect(Object.keys(second).toSorted()).toEqual(Object.keys(first).toSorted());
+  });
+
+  it("resolvePluginSdkAliasFileAsync matches sync resolution", async () => {
+    const fixture = createPluginSdkAliasFixture();
+    const modulePath = path.join(fixture.root, "src", "plugins", "loader.ts");
+    const argv1 = path.join(fixture.root, "node_modules", ".bin", "openclaw");
+    const syncResolved = resolvePluginSdkAlias({
+      srcFile: "index.ts",
+      distFile: "index.js",
+      modulePath,
+      argv1,
+      env: { NODE_ENV: undefined },
+    });
+    const asyncResolved = await resolvePluginSdkAliasAsync({
+      srcFile: "index.ts",
+      distFile: "index.js",
+      modulePath,
+      argv1,
+      env: { NODE_ENV: undefined },
+    });
+    expect(asyncResolved).toBe(syncResolved);
   });
 });

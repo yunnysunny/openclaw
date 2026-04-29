@@ -5,7 +5,7 @@ import {
 } from "../infra/package-update-utils.js";
 import type { UpdateChannel } from "../infra/update-channels.js";
 import { resolveUserPath } from "../utils.js";
-import { resolveBundledPluginSources } from "./bundled-sources.js";
+import { resolveBundledPluginSourcesAsync } from "./bundled-sources.js";
 import { installPluginFromClawHub } from "./clawhub.js";
 import {
   installPluginFromNpmSpec,
@@ -614,7 +614,7 @@ export async function syncPluginsForUpdateChannel(params: {
     warnings: [],
     errors: [],
   };
-  const bundled = resolveBundledPluginSources({
+  const bundled = await resolveBundledPluginSourcesAsync({
     workspaceDir: params.workspaceDir,
     env,
   });

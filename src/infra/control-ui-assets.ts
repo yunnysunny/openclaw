@@ -31,7 +31,7 @@ export async function resolveControlUiDistIndexHealth(
       });
   return {
     indexPath,
-    exists: Boolean(indexPath && controlUiFsRuntime.existsSync(indexPath)),
+    exists: Boolean(indexPath && (await controlUiFsRuntime.exists(indexPath))),
   };
 }
 
@@ -81,7 +81,7 @@ export async function resolveControlUiDistIndexPath(
   const normalized = path.resolve(argv1);
   const entrypointCandidates = [normalized];
   try {
-    const realpathEntrypoint = controlUiFsRuntime.realpathSync(normalized);
+    const realpathEntrypoint = await controlUiFsRuntime.realpath(normalized);
     if (realpathEntrypoint !== normalized) {
       entrypointCandidates.push(realpathEntrypoint);
     }
@@ -113,12 +113,12 @@ export async function resolveControlUiDistIndexPath(
     for (let i = 0; i < 8; i++) {
       const pkgJsonPath = path.join(dir, "package.json");
       const indexPath = path.join(dir, "dist", "control-ui", "index.html");
-      if (controlUiFsRuntime.existsSync(pkgJsonPath)) {
+      if (await controlUiFsRuntime.exists(pkgJsonPath)) {
         try {
-          const raw = controlUiFsRuntime.readFileSync(pkgJsonPath, "utf-8");
+          const raw = await controlUiFsRuntime.readFile(pkgJsonPath, "utf-8");
           const parsed = JSON.parse(raw) as { name?: unknown };
           if (parsed.name === "openclaw") {
-            return controlUiFsRuntime.existsSync(indexPath) ? indexPath : null;
+            return (await controlUiFsRuntime.exists(indexPath)) ? indexPath : null;
           }
           // Stop at the first package boundary to avoid resolving through unrelated ancestors.
           break;
@@ -312,12 +312,12 @@ export async function ensureControlUiAssetsBuilt(
   }
 
   const indexPath = resolveControlUiDistIndexPathForRoot(repoRoot);
-  if (controlUiFsRuntime.existsSync(indexPath)) {
+  if (await controlUiFsRuntime.exists(indexPath)) {
     return { ok: true, built: false };
   }
 
   const uiScript = path.join(repoRoot, "scripts", "ui.js");
-  if (!controlUiFsRuntime.existsSync(uiScript)) {
+  if (!(await controlUiFsRuntime.exists(uiScript))) {
     return {
       ok: false,
       built: false,
@@ -339,7 +339,7 @@ export async function ensureControlUiAssetsBuilt(
     };
   }
 
-  if (!controlUiFsRuntime.existsSync(indexPath)) {
+  if (!(await controlUiFsRuntime.exists(indexPath))) {
     return {
       ok: false,
       built: true,

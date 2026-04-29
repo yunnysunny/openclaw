@@ -86,6 +86,7 @@ export type GatewayRequestContext = {
   findRunningWizard: () => string | null;
   purgeWizardSession: (id: string) => void;
   getRuntimeSnapshot: () => ChannelRuntimeSnapshot;
+  getRuntimeSnapshotAsync: () => Promise<ChannelRuntimeSnapshot>;
   startChannel: (
     channel: import("../../channels/plugins/types.public.js").ChannelId,
     accountId?: string,

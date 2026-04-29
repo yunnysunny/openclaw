@@ -1,18 +1,24 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
-import { resolveOpenClawPluginToolsForOptions } from "./openclaw-plugin-tools.js";
+import {
+  resolveOpenClawPluginToolsForOptions,
+  resolveOpenClawPluginToolsForOptionsAsync,
+} from "./openclaw-plugin-tools.js";
 
 const hoisted = vi.hoisted(() => ({
   resolvePluginTools: vi.fn(),
+  resolvePluginToolsAsync: vi.fn(),
 }));
 
 vi.mock("../plugins/tools.js", () => ({
   resolvePluginTools: (...args: unknown[]) => hoisted.resolvePluginTools(...args),
+  resolvePluginToolsAsync: (...args: unknown[]) => hoisted.resolvePluginToolsAsync(...args),
 }));
 
 describe("createOpenClawTools browser plugin integration", () => {
   afterEach(() => {
     hoisted.resolvePluginTools.mockReset();
+    hoisted.resolvePluginToolsAsync.mockReset();
   });
 
   it("keeps the browser tool returned by plugin resolution", () => {
@@ -116,5 +122,36 @@ describe("createOpenClawTools browser plugin integration", () => {
     const result = await browserTool.execute("tool-call", {});
     const details = (result.details ?? {}) as { workspaceOnly?: boolean | null };
     expect(details.workspaceOnly).toBe(true);
+  });
+
+  it("keeps the browser tool returned by async plugin resolution", async () => {
+    hoisted.resolvePluginToolsAsync.mockResolvedValue([
+      {
+        name: "browser",
+        description: "browser fixture tool",
+        parameters: {
+          type: "object",
+          properties: {},
+        },
+        async execute() {
+          return {
+            content: [{ type: "text", text: "ok" }],
+          };
+        },
+      },
+    ]);
+
+    const config = {
+      plugins: {
+        allow: ["browser"],
+      },
+    } as OpenClawConfig;
+
+    const tools = await resolveOpenClawPluginToolsForOptionsAsync({
+      options: { config },
+      resolvedConfig: config,
+    });
+
+    expect(tools.map((tool) => tool.name)).toContain("browser");
   });
 });

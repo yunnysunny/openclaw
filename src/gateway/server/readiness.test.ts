@@ -22,6 +22,7 @@ function snapshotWith(
 function createManager(snapshot: ChannelRuntimeSnapshot): ChannelManager {
   return {
     getRuntimeSnapshot: vi.fn(() => snapshot),
+    getRuntimeSnapshotAsync: vi.fn(async () => snapshot),
     startChannels: vi.fn(),
     startChannel: vi.fn(),
     stopChannel: vi.fn(),

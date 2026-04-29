@@ -232,6 +232,14 @@ function safeRealpathSync(dir: string): string | null {
   }
 }
 
+async function safeRealpath(dir: string): Promise<string | null> {
+  try {
+    return await fs.promises.realpath(path.resolve(dir));
+  } catch {
+    return null;
+  }
+}
+
 function resolveSiblingAgentDirs(primaryAgentDir: string): string[] {
   const normalized = path.resolve(primaryAgentDir);
   const parentOfAgent = path.dirname(normalized);
@@ -266,6 +274,39 @@ function resolveSiblingAgentDirs(primaryAgentDir: string): string[] {
   return result;
 }
 
+async function resolveSiblingAgentDirsAsync(primaryAgentDir: string): Promise<string[]> {
+  const normalized = path.resolve(primaryAgentDir);
+  const parentOfAgent = path.dirname(normalized);
+  const candidateAgentsRoot = path.dirname(parentOfAgent);
+  const looksLikeStandardLayout =
+    path.basename(normalized) === "agent" && path.basename(candidateAgentsRoot) === "agents";
+
+  const agentsRoot = looksLikeStandardLayout
+    ? candidateAgentsRoot
+    : path.join(resolveStateDir(), "agents");
+
+  let entries: fs.Dirent[];
+  try {
+    entries = await fs.promises.readdir(agentsRoot, { withFileTypes: true });
+  } catch {
+    entries = [];
+  }
+  const discovered = entries
+    .filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
+    .map((entry) => path.join(agentsRoot, entry.name, "agent"));
+
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const dir of [normalized, ...discovered]) {
+    const real = await safeRealpath(dir);
+    if (real && !seen.has(real)) {
+      seen.add(real);
+      result.push(real);
+    }
+  }
+  return result;
+}
+
 export async function writeOAuthCredentials(
   provider: string,
   creds: OAuthCredentials,
@@ -280,7 +321,7 @@ export async function writeOAuthCredentials(
   });
   const resolvedAgentDir = path.resolve(resolveAuthAgentDir(agentDir));
   const targetAgentDirs = options?.syncSiblingAgents
-    ? resolveSiblingAgentDirs(resolvedAgentDir)
+    ? await resolveSiblingAgentDirsAsync(resolvedAgentDir)
     : [resolvedAgentDir];
 
   const credential = {
@@ -297,9 +338,9 @@ export async function writeOAuthCredentials(
   });
 
   if (options?.syncSiblingAgents) {
-    const primaryReal = safeRealpathSync(resolvedAgentDir);
+    const primaryReal = await safeRealpath(resolvedAgentDir);
     for (const targetAgentDir of targetAgentDirs) {
-      const targetReal = safeRealpathSync(targetAgentDir);
+      const targetReal = await safeRealpath(targetAgentDir);
       if (targetReal && primaryReal && targetReal === primaryReal) {
         continue;
       }

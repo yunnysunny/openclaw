@@ -1,7 +1,7 @@
-import syncFs from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { openBoundaryFile } from "../../infra/boundary-file-read.js";
+import { closeFileDescriptorAsync, readFileUtf8FromFd } from "../../infra/fd-promise.js";
 import { resolveUserPath } from "../../utils.js";
 import {
   DEFAULT_AGENTS_FILENAME,
@@ -47,10 +47,10 @@ export async function ensureSandboxWorkspace(
             continue;
           }
           try {
-            const content = syncFs.readFileSync(opened.fd, "utf-8");
+            const content = await readFileUtf8FromFd(opened.fd);
             await fs.writeFile(dest, content, { encoding: "utf-8", flag: "wx" });
           } finally {
-            syncFs.closeSync(opened.fd);
+            await closeFileDescriptorAsync(opened.fd);
           }
         } catch {
           // ignore missing seed file

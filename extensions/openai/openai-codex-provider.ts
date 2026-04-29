@@ -6,7 +6,7 @@ import type {
 } from "openclaw/plugin-sdk/plugin-entry";
 import {
   ensureAuthProfileStoreForLocalUpdate,
-  listProfilesForProvider,
+  listProfilesForProviderAsync,
   type OAuthCredential,
   type ProviderAuthResult,
 } from "openclaw/plugin-sdk/provider-auth";
@@ -368,7 +368,7 @@ export function buildOpenAICodexProviderPlugin(): ProviderPlugin {
       order: "profile",
       run: async (ctx) => {
         const authStore = ensureOpenAICodexCatalogAuthStore(ctx);
-        if (listProfilesForProvider(authStore, PROVIDER_ID).length === 0) {
+        if ((await listProfilesForProviderAsync(authStore, PROVIDER_ID)).length === 0) {
           return null;
         }
         return {

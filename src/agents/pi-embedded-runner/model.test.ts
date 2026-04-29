@@ -6,7 +6,23 @@ vi.mock("../model-suppression.js", () => ({
   shouldSuppressBuiltInModel: ({ provider, id }: { provider?: string; id?: string }) =>
     (provider === "openai" || provider === "azure-openai-responses") &&
     id?.trim().toLowerCase() === "gpt-5.3-codex-spark",
+  shouldSuppressBuiltInModelAsync: async ({ provider, id }: { provider?: string; id?: string }) =>
+    (provider === "openai" || provider === "azure-openai-responses") &&
+    id?.trim().toLowerCase() === "gpt-5.3-codex-spark",
   buildSuppressedBuiltInModelError: ({ provider, id }: { provider?: string; id?: string }) => {
+    if (
+      (provider !== "openai" && provider !== "azure-openai-responses") ||
+      id?.trim().toLowerCase() !== "gpt-5.3-codex-spark"
+    ) {
+      return undefined;
+    }
+    return `Unknown model: ${provider}/gpt-5.3-codex-spark. gpt-5.3-codex-spark is only supported via openai-codex OAuth. Use openai-codex/gpt-5.3-codex-spark.`;
+  },
+  buildSuppressedBuiltInModelErrorAsync: async (params: {
+    provider?: string;
+    id?: string;
+  }) => {
+    const { provider, id } = params;
     if (
       (provider !== "openai" && provider !== "azure-openai-responses") ||
       id?.trim().toLowerCase() !== "gpt-5.3-codex-spark"
@@ -19,6 +35,7 @@ vi.mock("../model-suppression.js", () => ({
 
 vi.mock("../pi-model-discovery.js", () => ({
   discoverAuthStorage: vi.fn(() => ({ mocked: true })),
+  discoverAuthStorageAsync: vi.fn(async () => ({ mocked: true })),
   discoverModels: vi.fn(() => ({ find: vi.fn(() => null) })),
 }));
 

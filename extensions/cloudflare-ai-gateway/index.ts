@@ -4,7 +4,7 @@ import {
   buildApiKeyCredential,
   ensureApiKeyFromOptionEnvOrPrompt,
   ensureAuthProfileStore,
-  listProfilesForProvider,
+  listProfilesForProviderAsync,
   normalizeApiKeyInput,
   normalizeOptionalSecretInput,
   upsertAuthProfile,
@@ -199,7 +199,7 @@ export default definePluginEntry({
           const envManagedApiKey = normalizeOptionalString(ctx.env[PROVIDER_ENV_VAR])
             ? PROVIDER_ENV_VAR
             : undefined;
-          for (const profileId of listProfilesForProvider(authStore, PROVIDER_ID)) {
+          for (const profileId of await listProfilesForProviderAsync(authStore, PROVIDER_ID)) {
             const provider = buildCloudflareAiGatewayCatalogProvider({
               credential: authStore.profiles[profileId],
               envApiKey: envManagedApiKey,

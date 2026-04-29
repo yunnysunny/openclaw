@@ -1,6 +1,6 @@
 import path from "node:path";
 import { resolveConfigDir, resolveUserPath } from "../utils.js";
-import { resolveBundledPluginsDir } from "./bundled-dir.js";
+import { resolveBundledPluginsDir, resolveBundledPluginsDirAsync } from "./bundled-dir.js";
 
 export type PluginSourceRoots = {
   stock?: string;
@@ -25,6 +25,18 @@ export function resolvePluginSourceRoots(params: {
   return { stock, global, workspace };
 }
 
+export async function resolvePluginSourceRootsAsync(params: {
+  workspaceDir?: string;
+  env?: NodeJS.ProcessEnv;
+}): Promise<PluginSourceRoots> {
+  const env = params.env ?? process.env;
+  const workspaceRoot = params.workspaceDir ? resolveUserPath(params.workspaceDir, env) : undefined;
+  const stock = await resolveBundledPluginsDirAsync(env);
+  const global = path.join(resolveConfigDir(env), "extensions");
+  const workspace = workspaceRoot ? path.join(workspaceRoot, ".openclaw", "extensions") : undefined;
+  return { stock, global, workspace };
+}
+
 // Shared env-aware cache inputs for discovery, manifest, and loader caches.
 export function resolvePluginCacheInputs(params: {
   workspaceDir?: string;
@@ -37,6 +49,24 @@ export function resolvePluginCacheInputs(params: {
     env,
   });
   // Preserve caller order because load-path precedence follows input order.
+  const loadPaths = (params.loadPaths ?? [])
+    .filter((entry): entry is string => typeof entry === "string")
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => resolveUserPath(entry, env));
+  return { roots, loadPaths };
+}
+
+export async function resolvePluginCacheInputsAsync(params: {
+  workspaceDir?: string;
+  loadPaths?: string[];
+  env?: NodeJS.ProcessEnv;
+}): Promise<PluginCacheInputs> {
+  const env = params.env ?? process.env;
+  const roots = await resolvePluginSourceRootsAsync({
+    workspaceDir: params.workspaceDir,
+    env,
+  });
   const loadPaths = (params.loadPaths ?? [])
     .filter((entry): entry is string => typeof entry === "string")
     .map((entry) => entry.trim())

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolveOpenClawPackageRootSync } from "../infra/openclaw-root.js";
+import { resolveOpenClawPackageRoot, resolveOpenClawPackageRootSync } from "../infra/openclaw-root.js";
 import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 
 type PluginSdkAliasCandidateKind = "dist" | "src";
@@ -33,6 +33,17 @@ function resolveLoaderModulePath(params: LoaderModuleResolveParams = {}): string
 function readPluginSdkPackageJson(packageRoot: string): PluginSdkPackageJson | null {
   try {
     const pkgRaw = fs.readFileSync(path.join(packageRoot, "package.json"), "utf-8");
+    return JSON.parse(pkgRaw) as PluginSdkPackageJson;
+  } catch {
+    return null;
+  }
+}
+
+async function readPluginSdkPackageJsonAsync(
+  packageRoot: string,
+): Promise<PluginSdkPackageJson | null> {
+  try {
+    const pkgRaw = await fs.promises.readFile(path.join(packageRoot, "package.json"), "utf-8");
     return JSON.parse(pkgRaw) as PluginSdkPackageJson;
   } catch {
     return null;
@@ -74,12 +85,52 @@ function hasTrustedOpenClawRootIndicator(params: {
   return hasCliEntryExport || hasOpenClawBin || hasOpenClawEntrypoint;
 }
 
+async function hasTrustedOpenClawRootIndicatorAsync(params: {
+  packageRoot: string;
+  packageJson: PluginSdkPackageJson;
+}): Promise<boolean> {
+  const packageExports = params.packageJson.exports ?? {};
+  const hasPluginSdkRootExport = Object.prototype.hasOwnProperty.call(
+    packageExports,
+    "./plugin-sdk",
+  );
+  if (!hasPluginSdkRootExport) {
+    return false;
+  }
+  const hasCliEntryExport = Object.prototype.hasOwnProperty.call(packageExports, "./cli-entry");
+  const hasOpenClawBin =
+    (typeof params.packageJson.bin === "string" &&
+      normalizeLowercaseStringOrEmpty(params.packageJson.bin).includes("openclaw")) ||
+    (typeof params.packageJson.bin === "object" &&
+      params.packageJson.bin !== null &&
+      typeof params.packageJson.bin.openclaw === "string");
+  const hasOpenClawEntrypoint = await fs.promises
+    .access(path.join(params.packageRoot, "openclaw.mjs"))
+    .then(() => true)
+    .catch(() => false);
+  return hasCliEntryExport || hasOpenClawBin || hasOpenClawEntrypoint;
+}
+
 function readPluginSdkSubpathsFromPackageRoot(packageRoot: string): string[] | null {
   const pkg = readPluginSdkPackageJson(packageRoot);
   if (!pkg) {
     return null;
   }
   if (!hasTrustedOpenClawRootIndicator({ packageRoot, packageJson: pkg })) {
+    return null;
+  }
+  const subpaths = listPluginSdkSubpathsFromPackageJson(pkg);
+  return subpaths.length > 0 ? subpaths : null;
+}
+
+async function readPluginSdkSubpathsFromPackageRootAsync(
+  packageRoot: string,
+): Promise<string[] | null> {
+  const pkg = await readPluginSdkPackageJsonAsync(packageRoot);
+  if (!pkg) {
+    return null;
+  }
+  if (!(await hasTrustedOpenClawRootIndicatorAsync({ packageRoot, packageJson: pkg }))) {
     return null;
   }
   const subpaths = listPluginSdkSubpathsFromPackageJson(pkg);
@@ -111,6 +162,25 @@ function findNearestPluginSdkPackageRoot(startDir: string, maxDepth = 12): strin
   let cursor = path.resolve(startDir);
   for (let i = 0; i < maxDepth; i += 1) {
     const subpaths = readPluginSdkSubpathsFromPackageRoot(cursor);
+    if (subpaths) {
+      return cursor;
+    }
+    const parent = path.dirname(cursor);
+    if (parent === cursor) {
+      break;
+    }
+    cursor = parent;
+  }
+  return null;
+}
+
+async function findNearestPluginSdkPackageRootAsync(
+  startDir: string,
+  maxDepth = 12,
+): Promise<string | null> {
+  let cursor = path.resolve(startDir);
+  for (let i = 0; i < maxDepth; i += 1) {
+    const subpaths = await readPluginSdkSubpathsFromPackageRootAsync(cursor);
     if (subpaths) {
       return cursor;
     }
@@ -159,6 +229,33 @@ function resolveLoaderPluginSdkPackageRoot(
     findNearestPluginSdkPackageRoot(path.dirname(params.modulePath)) ??
     (params.cwd ? findNearestPluginSdkPackageRoot(params.cwd) : null) ??
     findNearestPluginSdkPackageRoot(process.cwd())
+  );
+}
+
+async function resolveLoaderPluginSdkPackageRootAsync(
+  params: LoaderModuleResolveParams & { modulePath: string },
+): Promise<string | null> {
+  const cwd = params.cwd ?? path.dirname(params.modulePath);
+  const fromCwd = await resolveOpenClawPackageRoot({ cwd });
+  const fromExplicitHints =
+    (params.argv1
+      ? await resolveOpenClawPackageRoot({
+          cwd,
+          argv1: params.argv1,
+        })
+      : null) ??
+    (params.moduleUrl
+      ? await resolveOpenClawPackageRoot({
+          cwd,
+          moduleUrl: params.moduleUrl,
+        })
+      : null);
+  return (
+    fromCwd ??
+    fromExplicitHints ??
+    (await findNearestPluginSdkPackageRootAsync(path.dirname(params.modulePath))) ??
+    (params.cwd ? await findNearestPluginSdkPackageRootAsync(params.cwd) : null) ??
+    (await findNearestPluginSdkPackageRootAsync(process.cwd()))
   );
 }
 
@@ -241,6 +338,65 @@ export function resolvePluginSdkAliasFile(params: {
     })) {
       if (fs.existsSync(candidate)) {
         return candidate;
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+export async function resolvePluginSdkAliasFileAsync(params: {
+  srcFile: string;
+  distFile: string;
+  modulePath?: string;
+  argv1?: string;
+  cwd?: string;
+  moduleUrl?: string;
+  pluginSdkResolution?: PluginSdkResolutionPreference;
+}): Promise<string | null> {
+  try {
+    const modulePath = resolveLoaderModulePath(params);
+    const orderedKinds = resolvePluginSdkAliasCandidateOrder({
+      modulePath,
+      isProduction: process.env.NODE_ENV === "production",
+      pluginSdkResolution: params.pluginSdkResolution,
+    });
+    const packageRoot = await resolveLoaderPluginSdkPackageRootAsync({
+      ...params,
+      modulePath,
+    });
+    const candidates = packageRoot
+      ? orderedKinds.map((kind) =>
+          kind === "src"
+            ? path.join(packageRoot, "src", "plugin-sdk", params.srcFile)
+            : path.join(packageRoot, "dist", "plugin-sdk", params.distFile),
+        )
+      : (() => {
+          let cursor = path.dirname(modulePath);
+          const fallbackCandidates: string[] = [];
+          for (let i = 0; i < 6; i += 1) {
+            for (const kind of orderedKinds) {
+              fallbackCandidates.push(
+                kind === "src"
+                  ? path.join(cursor, "src", "plugin-sdk", params.srcFile)
+                  : path.join(cursor, "dist", "plugin-sdk", params.distFile),
+              );
+            }
+            const parent = path.dirname(cursor);
+            if (parent === cursor) {
+              break;
+            }
+            cursor = parent;
+          }
+          return fallbackCandidates;
+        })();
+    for (const candidate of candidates) {
+      try {
+        await fs.promises.access(candidate);
+        return candidate;
+      } catch {
+        continue;
       }
     }
   } catch {

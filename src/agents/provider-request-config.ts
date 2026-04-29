@@ -694,6 +694,31 @@ export function resolveProviderRequestConfig(params: {
   };
 }
 
+export async function resolveProviderRequestConfigAsync(params: {
+  provider: string;
+  api?: RequestApi;
+  baseUrl?: string;
+  capability?: ProviderRequestCapability;
+  transport?: ProviderRequestTransport;
+  discoveredHeaders?: Record<string, string>;
+  providerHeaders?: Record<string, string>;
+  modelHeaders?: Record<string, string>;
+  authHeader?: boolean;
+  request?: ProviderRequestTransportOverrides;
+}): Promise<ResolvedProviderRequestConfig> {
+  const resolved = resolveProviderRequestPolicyConfig(params);
+  return {
+    api: resolved.api,
+    baseUrl: resolved.baseUrl,
+    headers: resolved.extraHeaders.headers,
+    extraHeaders: resolved.extraHeaders,
+    auth: resolved.auth,
+    proxy: resolved.proxy,
+    tls: resolved.tls,
+    policy: resolved.policy,
+  };
+}
+
 export function resolveProviderRequestHeaders(params: {
   provider: string;
   api?: RequestApi;

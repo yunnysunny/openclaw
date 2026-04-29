@@ -1,6 +1,7 @@
 export * from "./models-config.providers.static.js";
 export { resolveImplicitProviders } from "./models-config.providers.implicit.js";
-export { normalizeProviders } from "./models-config.providers.normalize.js";
+export type { ImplicitProviderContextAsync } from "./models-config.providers.implicit.js";
+export { normalizeProviders, normalizeProvidersAsync } from "./models-config.providers.normalize.js";
 export type {
   ProfileApiKeyResolution,
   ProviderApiKeyResolver,

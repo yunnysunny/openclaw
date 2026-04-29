@@ -357,6 +357,7 @@ export async function loadRunOverflowCompactionHarness(): Promise<{
 
   vi.doMock("../runtime-plugins.js", () => ({
     ensureRuntimePluginsLoaded: mockedEnsureRuntimePluginsLoaded,
+    ensureRuntimePluginsLoadedAsync: mockedEnsureRuntimePluginsLoaded,
   }));
 
   vi.doMock("../../plugins/provider-runtime.js", () => ({

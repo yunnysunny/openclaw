@@ -351,6 +351,43 @@ function normalizeManifestContracts(value: unknown): PluginManifestContracts | u
   return Object.keys(contracts).length > 0 ? contracts : undefined;
 }
 
+async function normalizeManifestContractsAsync(
+  value: unknown,
+): Promise<PluginManifestContracts | undefined> {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const memoryEmbeddingProviders = normalizeTrimmedStringList(value.memoryEmbeddingProviders);
+  const speechProviders = normalizeTrimmedStringList(value.speechProviders);
+  const realtimeTranscriptionProviders = normalizeTrimmedStringList(
+    value.realtimeTranscriptionProviders,
+  );
+  const realtimeVoiceProviders = normalizeTrimmedStringList(value.realtimeVoiceProviders);
+  const mediaUnderstandingProviders = normalizeTrimmedStringList(value.mediaUnderstandingProviders);
+  const imageGenerationProviders = normalizeTrimmedStringList(value.imageGenerationProviders);
+  const videoGenerationProviders = normalizeTrimmedStringList(value.videoGenerationProviders);
+  const musicGenerationProviders = normalizeTrimmedStringList(value.musicGenerationProviders);
+  const webFetchProviders = normalizeTrimmedStringList(value.webFetchProviders);
+  const webSearchProviders = normalizeTrimmedStringList(value.webSearchProviders);
+  const tools = normalizeTrimmedStringList(value.tools);
+  const contracts = {
+    ...(memoryEmbeddingProviders.length > 0 ? { memoryEmbeddingProviders } : {}),
+    ...(speechProviders.length > 0 ? { speechProviders } : {}),
+    ...(realtimeTranscriptionProviders.length > 0 ? { realtimeTranscriptionProviders } : {}),
+    ...(realtimeVoiceProviders.length > 0 ? { realtimeVoiceProviders } : {}),
+    ...(mediaUnderstandingProviders.length > 0 ? { mediaUnderstandingProviders } : {}),
+    ...(imageGenerationProviders.length > 0 ? { imageGenerationProviders } : {}),
+    ...(videoGenerationProviders.length > 0 ? { videoGenerationProviders } : {}),
+    ...(musicGenerationProviders.length > 0 ? { musicGenerationProviders } : {}),
+    ...(webFetchProviders.length > 0 ? { webFetchProviders } : {}),
+    ...(webSearchProviders.length > 0 ? { webSearchProviders } : {}),
+    ...(tools.length > 0 ? { tools } : {}),
+  } satisfies PluginManifestContracts;
+
+  return Object.keys(contracts).length > 0 ? contracts : undefined;
+}
+
 function isManifestConfigLiteral(value: unknown): value is PluginManifestConfigLiteral {
   return (
     value === null ||
@@ -640,6 +677,67 @@ function normalizeProviderAuthChoices(
   return normalized.length > 0 ? normalized : undefined;
 }
 
+async function normalizeProviderAuthChoicesAsync(
+  value: unknown,
+): Promise<PluginManifestProviderAuthChoice[] | undefined> {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const normalized: PluginManifestProviderAuthChoice[] = [];
+  for (const entry of value) {
+    if (!isRecord(entry)) {
+      continue;
+    }
+    const provider = normalizeOptionalString(entry.provider) ?? "";
+    const method = normalizeOptionalString(entry.method) ?? "";
+    const choiceId = normalizeOptionalString(entry.choiceId) ?? "";
+    if (!provider || !method || !choiceId) {
+      continue;
+    }
+    const choiceLabel = normalizeOptionalString(entry.choiceLabel) ?? "";
+    const choiceHint = normalizeOptionalString(entry.choiceHint) ?? "";
+    const assistantPriority =
+      typeof entry.assistantPriority === "number" && Number.isFinite(entry.assistantPriority)
+        ? entry.assistantPriority
+        : undefined;
+    const assistantVisibility =
+      entry.assistantVisibility === "manual-only" || entry.assistantVisibility === "visible"
+        ? entry.assistantVisibility
+        : undefined;
+    const deprecatedChoiceIds = normalizeTrimmedStringList(entry.deprecatedChoiceIds);
+    const groupId = normalizeOptionalString(entry.groupId) ?? "";
+    const groupLabel = normalizeOptionalString(entry.groupLabel) ?? "";
+    const groupHint = normalizeOptionalString(entry.groupHint) ?? "";
+    const optionKey = normalizeOptionalString(entry.optionKey) ?? "";
+    const cliFlag = normalizeOptionalString(entry.cliFlag) ?? "";
+    const cliOption = normalizeOptionalString(entry.cliOption) ?? "";
+    const cliDescription = normalizeOptionalString(entry.cliDescription) ?? "";
+    const onboardingScopes = normalizeTrimmedStringList(entry.onboardingScopes).filter(
+      (scope): scope is PluginManifestOnboardingScope =>
+        scope === "text-inference" || scope === "image-generation",
+    );
+    normalized.push({
+      provider,
+      method,
+      choiceId,
+      ...(choiceLabel ? { choiceLabel } : {}),
+      ...(choiceHint ? { choiceHint } : {}),
+      ...(assistantPriority !== undefined ? { assistantPriority } : {}),
+      ...(assistantVisibility ? { assistantVisibility } : {}),
+      ...(deprecatedChoiceIds.length > 0 ? { deprecatedChoiceIds } : {}),
+      ...(groupId ? { groupId } : {}),
+      ...(groupLabel ? { groupLabel } : {}),
+      ...(groupHint ? { groupHint } : {}),
+      ...(optionKey ? { optionKey } : {}),
+      ...(cliFlag ? { cliFlag } : {}),
+      ...(cliOption ? { cliOption } : {}),
+      ...(cliDescription ? { cliDescription } : {}),
+      ...(onboardingScopes.length > 0 ? { onboardingScopes } : {}),
+    });
+  }
+  return normalized.length > 0 ? normalized : undefined;
+}
+
 function normalizeChannelConfigs(
   value: unknown,
 ): Record<string, PluginManifestChannelConfig> | undefined {
@@ -799,6 +897,97 @@ function finalizePluginManifestLoad(raw: unknown, manifestPath: string): PluginM
   };
 }
 
+async function finalizePluginManifestLoadAsync(
+  raw: unknown,
+  manifestPath: string,
+): Promise<PluginManifestLoadResult> {
+  if (!isRecord(raw)) {
+    return { ok: false, error: "plugin manifest must be an object", manifestPath };
+  }
+  const id = normalizeOptionalString(raw.id) ?? "";
+  if (!id) {
+    return { ok: false, error: "plugin manifest requires id", manifestPath };
+  }
+  const configSchema = isRecord(raw.configSchema) ? raw.configSchema : null;
+  if (!configSchema) {
+    return { ok: false, error: "plugin manifest requires configSchema", manifestPath };
+  }
+
+  const kind = parsePluginKind(raw.kind);
+  const enabledByDefault = raw.enabledByDefault === true;
+  const legacyPluginIds = normalizeTrimmedStringList(raw.legacyPluginIds);
+  const autoEnableWhenConfiguredProviders = normalizeTrimmedStringList(
+    raw.autoEnableWhenConfiguredProviders,
+  );
+  const name = normalizeOptionalString(raw.name);
+  const description = normalizeOptionalString(raw.description);
+  const version = normalizeOptionalString(raw.version);
+  const channels = normalizeTrimmedStringList(raw.channels);
+  const providers = normalizeTrimmedStringList(raw.providers);
+  const providerDiscoveryEntry = normalizeOptionalString(raw.providerDiscoveryEntry);
+  const modelSupport = normalizeManifestModelSupport(raw.modelSupport);
+  const providerEndpoints = normalizeManifestProviderEndpoints(raw.providerEndpoints);
+  const cliBackends = normalizeTrimmedStringList(raw.cliBackends);
+  const syntheticAuthRefs = normalizeTrimmedStringList(raw.syntheticAuthRefs);
+  const nonSecretAuthMarkers = normalizeTrimmedStringList(raw.nonSecretAuthMarkers);
+  const commandAliases = normalizeManifestCommandAliases(raw.commandAliases);
+  const providerAuthEnvVars = normalizeStringListRecord(raw.providerAuthEnvVars);
+  const providerAuthAliases = normalizeStringRecord(raw.providerAuthAliases);
+  const channelEnvVars = normalizeStringListRecord(raw.channelEnvVars);
+  const providerAuthChoices = await normalizeProviderAuthChoicesAsync(raw.providerAuthChoices);
+  const activation = normalizeManifestActivation(raw.activation);
+  const setup = normalizeManifestSetup(raw.setup);
+  const qaRunners = normalizeManifestQaRunners(raw.qaRunners);
+  const skills = normalizeTrimmedStringList(raw.skills);
+  const contracts = await normalizeManifestContractsAsync(raw.contracts);
+  const configContracts = normalizeManifestConfigContracts(raw.configContracts);
+  const channelConfigs = normalizeChannelConfigs(raw.channelConfigs);
+
+  let uiHints: Record<string, PluginConfigUiHint> | undefined;
+  if (isRecord(raw.uiHints)) {
+    uiHints = raw.uiHints as Record<string, PluginConfigUiHint>;
+  }
+
+  return {
+    ok: true,
+    manifest: {
+      id,
+      configSchema,
+      ...(enabledByDefault ? { enabledByDefault } : {}),
+      ...(legacyPluginIds.length > 0 ? { legacyPluginIds } : {}),
+      ...(autoEnableWhenConfiguredProviders.length > 0
+        ? { autoEnableWhenConfiguredProviders }
+        : {}),
+      kind,
+      channels,
+      providers,
+      providerDiscoveryEntry,
+      modelSupport,
+      providerEndpoints,
+      cliBackends,
+      syntheticAuthRefs,
+      nonSecretAuthMarkers,
+      commandAliases,
+      providerAuthEnvVars,
+      providerAuthAliases,
+      channelEnvVars,
+      providerAuthChoices,
+      activation,
+      setup,
+      qaRunners,
+      skills,
+      name,
+      description,
+      version,
+      uiHints,
+      contracts,
+      configContracts,
+      channelConfigs,
+    },
+    manifestPath,
+  };
+}
+
 export function loadPluginManifest(
   rootDir: string,
   rejectHardlinks = true,
@@ -876,7 +1065,7 @@ export async function loadPluginManifestAsync(
   } finally {
     await closeFileDescriptorAsync(opened.fd);
   }
-  return finalizePluginManifestLoad(raw, manifestPath);
+  return finalizePluginManifestLoadAsync(raw, manifestPath);
 }
 
 // package.json "openclaw" metadata (used for setup/catalog)

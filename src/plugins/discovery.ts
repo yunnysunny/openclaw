@@ -36,7 +36,12 @@ import {
   safeStatSync,
 } from "./path-safety.js";
 import type { PluginOrigin } from "./plugin-origin.types.js";
-import { resolvePluginCacheInputs, resolvePluginSourceRoots } from "./roots.js";
+import {
+  resolvePluginCacheInputs,
+  resolvePluginCacheInputsAsync,
+  resolvePluginSourceRoots,
+  resolvePluginSourceRootsAsync,
+} from "./roots.js";
 
 const EXTENSION_EXTS = new Set([".ts", ".js", ".mts", ".cts", ".mjs", ".cjs"]);
 const SCANNED_DIRECTORY_IGNORE_NAMES = new Set([
@@ -129,6 +134,34 @@ function buildSharedDiscoveryCacheKey(params: {
   env: NodeJS.ProcessEnv;
 }): string {
   const roots = resolvePluginSourceRoots({ env: params.env });
+  const configExtensionsRoot = roots.global ?? "";
+  const bundledRoot = roots.stock ?? "";
+  const ownershipUid = params.ownershipUid ?? currentUid();
+  return `shared::${ownershipUid ?? "none"}::${configExtensionsRoot}::${bundledRoot}`;
+}
+
+async function buildScopedDiscoveryCacheKeyAsync(params: {
+  workspaceDir?: string;
+  extraPaths?: string[];
+  ownershipUid?: number | null;
+  env: NodeJS.ProcessEnv;
+}): Promise<string> {
+  const { roots, loadPaths } = await resolvePluginCacheInputsAsync({
+    workspaceDir: params.workspaceDir,
+    loadPaths: params.extraPaths,
+    env: params.env,
+  });
+  const workspaceKey = roots.workspace ?? "";
+  const bundledRoot = roots.stock ?? "";
+  const ownershipUid = params.ownershipUid ?? currentUid();
+  return `scoped::${workspaceKey}::${bundledRoot}::${ownershipUid ?? "none"}::${JSON.stringify(loadPaths)}`;
+}
+
+async function buildSharedDiscoveryCacheKeyAsync(params: {
+  ownershipUid?: number | null;
+  env: NodeJS.ProcessEnv;
+}): Promise<string> {
+  const roots = await resolvePluginSourceRootsAsync({ env: params.env });
   const configExtensionsRoot = roots.global ?? "";
   const bundledRoot = roots.stock ?? "";
   const ownershipUid = params.ownershipUid ?? currentUid();
@@ -1739,15 +1772,20 @@ export async function discoverOpenClawPluginsAsync(params: {
   const cacheEnabled = params.cache !== false && shouldUseDiscoveryCache(env);
   const workspaceDir = normalizeOptionalString(params.workspaceDir);
   const workspaceRoot = workspaceDir ? resolveUserPath(workspaceDir, env) : undefined;
-  const roots = resolvePluginSourceRoots({ workspaceDir: workspaceRoot, env });
+  const roots = await resolvePluginSourceRootsAsync({ workspaceDir: workspaceRoot, env });
+  const scopedCacheKey = await buildScopedDiscoveryCacheKeyAsync({
+    workspaceDir: params.workspaceDir,
+    extraPaths: params.extraPaths,
+    ownershipUid: params.ownershipUid,
+    env,
+  });
+  const sharedCacheKey = await buildSharedDiscoveryCacheKeyAsync({
+    ownershipUid: params.ownershipUid,
+    env,
+  });
   const scopedResult = await getCachedDiscoveryResultAsync({
     cacheEnabled,
-    cacheKey: buildScopedDiscoveryCacheKey({
-      workspaceDir: params.workspaceDir,
-      extraPaths: params.extraPaths,
-      ownershipUid: params.ownershipUid,
-      env,
-    }),
+    cacheKey: scopedCacheKey,
     env,
     load: async () => {
       const result = createDiscoveryResult();
@@ -1789,10 +1827,7 @@ export async function discoverOpenClawPluginsAsync(params: {
   });
   const sharedResult = await getCachedDiscoveryResultAsync({
     cacheEnabled,
-    cacheKey: buildSharedDiscoveryCacheKey({
-      ownershipUid: params.ownershipUid,
-      env,
-    }),
+    cacheKey: sharedCacheKey,
     env,
     load: async () => {
       const result = createDiscoveryResult();

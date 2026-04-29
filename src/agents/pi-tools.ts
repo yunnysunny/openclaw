@@ -21,7 +21,7 @@ import { listChannelAgentTools } from "./channel-tools.js";
 import { shouldSuppressManagedWebSearchTool } from "./codex-native-web-search.js";
 import { resolveImageSanitizationLimits } from "./image-sanitization.js";
 import type { ModelAuthMode } from "./model-auth.js";
-import { createOpenClawTools } from "./openclaw-tools.js";
+import { createOpenClawTools, createOpenClawToolsAsync } from "./openclaw-tools.js";
 import { wrapToolWithAbortSignal } from "./pi-tools.abort.js";
 import { wrapToolWithBeforeToolCallHook } from "./pi-tools.before-tool-call.js";
 import { applyDeferredFollowupToolDescriptions } from "./pi-tools.deferred-followup.js";
@@ -334,6 +334,8 @@ export function createOpenClawCodingTools(options?: {
   senderIsOwner?: boolean;
   /** Callback invoked when sessions_yield tool is called. */
   onYield?: (message: string) => Promise<void> | void;
+  /** Internal: pre-resolved OpenClaw tools for async wrapper reuse. */
+  resolvedOpenClawTools?: AnyAgentTool[];
 }): AnyAgentTool[] {
   const execToolName = "exec";
   const sandbox = options?.sandbox?.enabled ? options.sandbox : undefined;
@@ -561,57 +563,58 @@ export function createOpenClawCodingTools(options?: {
     processTool as unknown as AnyAgentTool,
     // Channel docking: include channel-defined agent tools (login, etc.).
     ...listChannelAgentTools({ cfg: options?.config }),
-    ...createOpenClawTools({
-      sandboxBrowserBridgeUrl: sandbox?.browser?.bridgeUrl,
-      allowHostBrowserControl: sandbox ? sandbox.browserAllowHostControl : true,
-      agentSessionKey: options?.sessionKey,
-      agentChannel: resolveGatewayMessageChannel(options?.messageProvider),
-      agentAccountId: options?.agentAccountId,
-      agentTo: options?.messageTo,
-      agentThreadId: options?.messageThreadId,
-      agentGroupId: options?.groupId ?? null,
-      agentGroupChannel: options?.groupChannel ?? null,
-      agentGroupSpace: options?.groupSpace ?? null,
-      agentMemberRoleIds: options?.memberRoleIds,
-      agentDir: options?.agentDir,
-      sandboxRoot,
-      sandboxContainerWorkdir: sandbox?.containerWorkdir,
-      sandboxFsBridge,
-      fsPolicy,
-      workspaceDir: workspaceRoot,
-      spawnWorkspaceDir: options?.spawnWorkspaceDir
-        ? resolveWorkspaceRoot(options.spawnWorkspaceDir)
-        : undefined,
-      sandboxed: !!sandbox,
-      config: options?.config,
-      pluginToolAllowlist: collectExplicitAllowlist([
-        profilePolicy,
-        providerProfilePolicy,
-        globalPolicy,
-        globalProviderPolicy,
-        agentPolicy,
-        agentProviderPolicy,
-        groupPolicy,
-        sandboxToolPolicy,
-        subagentPolicy,
-      ]),
-      currentChannelId: options?.currentChannelId,
-      currentThreadTs: options?.currentThreadTs,
-      currentMessageId: options?.currentMessageId,
-      modelProvider: options?.modelProvider,
-      modelId: options?.modelId,
-      replyToMode: options?.replyToMode,
-      hasRepliedRef: options?.hasRepliedRef,
-      modelHasVision: options?.modelHasVision,
-      requireExplicitMessageTarget: options?.requireExplicitMessageTarget,
-      disableMessageTool: options?.disableMessageTool,
-      requesterAgentIdOverride: agentId,
-      requesterSenderId: options?.senderId,
-      senderIsOwner: options?.senderIsOwner,
-      sessionId: options?.sessionId,
-      onYield: options?.onYield,
-      allowGatewaySubagentBinding: options?.allowGatewaySubagentBinding,
-    }),
+    ...(options?.resolvedOpenClawTools ??
+      createOpenClawTools({
+        sandboxBrowserBridgeUrl: sandbox?.browser?.bridgeUrl,
+        allowHostBrowserControl: sandbox ? sandbox.browserAllowHostControl : true,
+        agentSessionKey: options?.sessionKey,
+        agentChannel: resolveGatewayMessageChannel(options?.messageProvider),
+        agentAccountId: options?.agentAccountId,
+        agentTo: options?.messageTo,
+        agentThreadId: options?.messageThreadId,
+        agentGroupId: options?.groupId ?? null,
+        agentGroupChannel: options?.groupChannel ?? null,
+        agentGroupSpace: options?.groupSpace ?? null,
+        agentMemberRoleIds: options?.memberRoleIds,
+        agentDir: options?.agentDir,
+        sandboxRoot,
+        sandboxContainerWorkdir: sandbox?.containerWorkdir,
+        sandboxFsBridge,
+        fsPolicy,
+        workspaceDir: workspaceRoot,
+        spawnWorkspaceDir: options?.spawnWorkspaceDir
+          ? resolveWorkspaceRoot(options.spawnWorkspaceDir)
+          : undefined,
+        sandboxed: !!sandbox,
+        config: options?.config,
+        pluginToolAllowlist: collectExplicitAllowlist([
+          profilePolicy,
+          providerProfilePolicy,
+          globalPolicy,
+          globalProviderPolicy,
+          agentPolicy,
+          agentProviderPolicy,
+          groupPolicy,
+          sandboxToolPolicy,
+          subagentPolicy,
+        ]),
+        currentChannelId: options?.currentChannelId,
+        currentThreadTs: options?.currentThreadTs,
+        currentMessageId: options?.currentMessageId,
+        modelProvider: options?.modelProvider,
+        modelId: options?.modelId,
+        replyToMode: options?.replyToMode,
+        hasRepliedRef: options?.hasRepliedRef,
+        modelHasVision: options?.modelHasVision,
+        requireExplicitMessageTarget: options?.requireExplicitMessageTarget,
+        disableMessageTool: options?.disableMessageTool,
+        requesterAgentIdOverride: agentId,
+        requesterSenderId: options?.senderId,
+        senderIsOwner: options?.senderIsOwner,
+        sessionId: options?.sessionId,
+        onYield: options?.onYield,
+        allowGatewaySubagentBinding: options?.allowGatewaySubagentBinding,
+      })),
   ];
   const toolsForMemoryFlush =
     isMemoryFlushRun && memoryFlushWritePath
@@ -703,4 +706,108 @@ export function createOpenClawCodingTools(options?: {
   // pi-ai's Anthropic OAuth transport remaps tool names to Claude Code-style names
   // on the wire and maps them back for tool dispatch.
   return withDeferredFollowupDescriptions;
+}
+
+export async function createOpenClawCodingToolsAsync(
+  options?: Parameters<typeof createOpenClawCodingTools>[0],
+): Promise<AnyAgentTool[]> {
+  const sandbox = options?.sandbox?.enabled ? options.sandbox : undefined;
+  const sandboxRoot = sandbox?.workspaceDir;
+  const sandboxFsBridge = sandbox?.fsBridge;
+  const workspaceRoot = resolveWorkspaceRoot(options?.workspaceDir);
+  const {
+    agentId,
+    globalPolicy,
+    globalProviderPolicy,
+    agentPolicy,
+    agentProviderPolicy,
+    profile,
+    providerProfile,
+  } = resolveEffectiveToolPolicy({
+    config: options?.config,
+    sessionKey: options?.sessionKey,
+    agentId: options?.agentId,
+    modelProvider: options?.modelProvider,
+    modelId: options?.modelId,
+  });
+  const profilePolicy = resolveToolProfilePolicy(profile);
+  const providerProfilePolicy = resolveToolProfilePolicy(providerProfile);
+  const groupPolicy = resolveGroupToolPolicy({
+    config: options?.config,
+    sessionKey: options?.sessionKey,
+    messageProvider: options?.messageProvider,
+    accountId: options?.agentAccountId ?? null,
+    groupId: options?.groupId ?? null,
+    groupChannel: options?.groupChannel ?? null,
+    groupSpace: options?.groupSpace ?? null,
+    spawnedBy: options?.spawnedBy ?? null,
+    senderId: options?.senderId ?? null,
+    senderName: options?.senderName ?? null,
+    senderUsername: options?.senderUsername ?? null,
+    senderE164: options?.senderE164 ?? null,
+  });
+  const sandboxToolPolicy = sandbox?.tools;
+  const subagentPolicy =
+    isSubagentSessionKey(options?.sessionKey) && options?.sessionKey
+      ? resolveSubagentToolPolicyForSession(options.config, options.sessionKey)
+      : undefined;
+  const fsPolicy = createToolFsPolicy(
+    resolveToolFsConfig({ cfg: options?.config, agentId: options?.agentId }),
+  );
+  const resolvedOpenClawTools = await createOpenClawToolsAsync({
+    sandboxBrowserBridgeUrl: sandbox?.browser?.bridgeUrl,
+    allowHostBrowserControl: sandbox ? sandbox.browserAllowHostControl : true,
+    agentSessionKey: options?.sessionKey,
+    agentChannel: resolveGatewayMessageChannel(options?.messageProvider),
+    agentAccountId: options?.agentAccountId,
+    agentTo: options?.messageTo,
+    agentThreadId: options?.messageThreadId,
+    agentGroupId: options?.groupId ?? null,
+    agentGroupChannel: options?.groupChannel ?? null,
+    agentGroupSpace: options?.groupSpace ?? null,
+    agentMemberRoleIds: options?.memberRoleIds,
+    agentDir: options?.agentDir,
+    sandboxRoot,
+    sandboxContainerWorkdir: sandbox?.containerWorkdir,
+    sandboxFsBridge,
+    fsPolicy,
+    workspaceDir: workspaceRoot,
+    spawnWorkspaceDir: options?.spawnWorkspaceDir
+      ? resolveWorkspaceRoot(options.spawnWorkspaceDir)
+      : undefined,
+    sandboxed: !!sandbox,
+    config: options?.config,
+    pluginToolAllowlist: collectExplicitAllowlist([
+      profilePolicy,
+      providerProfilePolicy,
+      globalPolicy,
+      globalProviderPolicy,
+      agentPolicy,
+      agentProviderPolicy,
+      groupPolicy,
+      sandboxToolPolicy,
+      subagentPolicy,
+    ]),
+    currentChannelId: options?.currentChannelId,
+    currentThreadTs: options?.currentThreadTs,
+    currentMessageId: options?.currentMessageId,
+    modelProvider: options?.modelProvider,
+    modelId: options?.modelId,
+    replyToMode: options?.replyToMode,
+    hasRepliedRef: options?.hasRepliedRef,
+    modelHasVision: options?.modelHasVision,
+    requireExplicitMessageTarget: options?.requireExplicitMessageTarget,
+    disableMessageTool: options?.disableMessageTool,
+    requesterAgentIdOverride: agentId,
+    requesterSenderId: options?.senderId,
+    senderIsOwner: options?.senderIsOwner,
+    sessionId: options?.sessionId,
+    onYield: options?.onYield,
+    allowGatewaySubagentBinding: options?.allowGatewaySubagentBinding,
+  });
+
+  return createOpenClawCodingTools({
+    ...options,
+    resolvedOpenClawTools,
+  });
 }

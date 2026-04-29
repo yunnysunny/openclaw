@@ -32,7 +32,7 @@ import { EmbeddedBlockChunker, type BlockReplyChunking } from "./pi-embedded-blo
 import { resolveModelWithRegistry } from "./pi-embedded-runner/model.js";
 import { getActiveEmbeddedRunSnapshot } from "./pi-embedded-runner/runs.js";
 import { streamWithPayloadPatch } from "./pi-embedded-runner/stream-payload-utils.js";
-import { discoverAuthStorage, discoverModels } from "./pi-model-discovery.js";
+import { discoverAuthStorageAsync, discoverModels } from "./pi-model-discovery.js";
 import { stripToolResultDetails } from "./session-transcript-repair.js";
 import { sanitizeImageBlocks } from "./tool-images.js";
 
@@ -264,7 +264,7 @@ async function resolveRuntimeModel(params: {
   authProfileIdSource?: "auto" | "user";
 }> {
   await ensureOpenClawModelsJson(params.cfg, params.agentDir);
-  const authStorage = discoverAuthStorage(params.agentDir);
+  const authStorage = await discoverAuthStorageAsync(params.agentDir);
   const modelRegistry = discoverModels(authStorage, params.agentDir);
   const model = resolveModelWithRegistry({
     provider: params.provider,

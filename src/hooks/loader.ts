@@ -5,11 +5,12 @@
  * and from directory-based discovery (bundled, managed, workspace)
  */
 
-import fs from "node:fs";
+import fsp from "node:fs/promises";
 import path from "node:path";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { openBoundaryFile } from "../infra/boundary-file-read.js";
 import { formatErrorMessage } from "../infra/errors.js";
+import { closeFileDescriptorAsync } from "../infra/fd-promise.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import { resolveGlobalSingleton } from "../shared/global-singleton.js";
 import { sanitizeForLog } from "../terminal/ansi.js";
@@ -20,7 +21,7 @@ import type { InternalHookHandler } from "./internal-hooks.js";
 import { registerInternalHook, unregisterInternalHook } from "./internal-hooks.js";
 import { getLegacyInternalHookHandlers } from "./legacy-config.js";
 import { resolveFunctionModuleExport } from "./module-loader.js";
-import { loadWorkspaceHookEntries } from "./workspace.js";
+import { loadWorkspaceHookEntriesAsync } from "./workspace.js";
 
 const log = createSubsystemLogger("hooks:loader");
 const LOADED_INTERNAL_HOOK_REGISTRATIONS_KEY = Symbol.for(
@@ -96,7 +97,7 @@ export async function loadInternalHooks(
 
   // 1. Load hooks from directories (new system)
   try {
-    const hookEntries = loadWorkspaceHookEntries(workspaceDir, {
+    const hookEntries = await loadWorkspaceHookEntriesAsync(workspaceDir, {
       config: cfg,
       managedHooksDir: opts?.managedHooksDir,
       bundledHooksDir: opts?.bundledHooksDir,
@@ -112,7 +113,7 @@ export async function loadInternalHooks(
 
     for (const entry of eligible) {
       try {
-        const hookBaseDir = resolveExistingRealpath(entry.hook.baseDir);
+        const hookBaseDir = await resolveExistingRealpathAsync(entry.hook.baseDir);
         if (!hookBaseDir) {
           log.error(
             `Hook '${safeLogValue(entry.hook.name)}' base directory is no longer readable: ${safeLogValue(entry.hook.baseDir)}`,
@@ -131,7 +132,7 @@ export async function loadInternalHooks(
           continue;
         }
         const safeHandlerPath = opened.path;
-        fs.closeSync(opened.fd);
+        await closeFileDescriptorAsync(opened.fd);
         maybeWarnTrustedHookSource(entry.hook.source);
 
         // Import handler module — only cache-bust mutable (workspace/managed) hooks
@@ -196,14 +197,14 @@ export async function loadInternalHooks(
       }
       const baseDir = path.resolve(workspaceDir);
       const modulePath = path.resolve(baseDir, rawModule);
-      const baseDirReal = resolveExistingRealpath(baseDir);
+      const baseDirReal = await resolveExistingRealpathAsync(baseDir);
       if (!baseDirReal) {
         log.error(
           `Workspace directory is no longer readable while loading hooks: ${safeLogValue(baseDir)}`,
         );
         continue;
       }
-      const modulePathSafe = resolveExistingRealpath(modulePath);
+      const modulePathSafe = await resolveExistingRealpathAsync(modulePath);
       if (!modulePathSafe) {
         log.error(
           `Handler module path could not be resolved with realpath: ${safeLogValue(rawModule)}`,
@@ -227,7 +228,7 @@ export async function loadInternalHooks(
         continue;
       }
       const safeModulePath = opened.path;
-      fs.closeSync(opened.fd);
+      await closeFileDescriptorAsync(opened.fd);
       log.warn(
         `Loading legacy internal hook module from workspace path ${safeLogValue(rawModule)}. Legacy hook modules are trusted local code.`,
       );
@@ -266,9 +267,9 @@ export async function loadInternalHooks(
   return loadedCount;
 }
 
-function resolveExistingRealpath(value: string): string | null {
+async function resolveExistingRealpathAsync(value: string): Promise<string | null> {
   try {
-    return fs.realpathSync(value);
+    return await fsp.realpath(value);
   } catch {
     return null;
   }

@@ -22,12 +22,12 @@ const mocks = vi.hoisted(() => ({
   openUrl: vi.fn(),
   isRemoteEnvironment: vi.fn(() => false),
   loadAuthProfileStoreForRuntime: vi.fn(),
-  listProfilesForProvider: vi.fn(),
+  listProfilesForProviderAsync: vi.fn(),
   clearAuthProfileCooldown: vi.fn(),
 }));
 
 vi.mock("../../agents/auth-profiles/profiles.js", () => ({
-  listProfilesForProvider: mocks.listProfilesForProvider,
+  listProfilesForProviderAsync: mocks.listProfilesForProviderAsync,
   upsertAuthProfile: mocks.upsertAuthProfile,
 }));
 
@@ -303,7 +303,7 @@ describe("modelsAuthLoginCommand", () => {
       }),
     ]);
     mocks.loadAuthProfileStoreForRuntime.mockReturnValue({ profiles: {}, usageStats: {} });
-    mocks.listProfilesForProvider.mockReturnValue([]);
+    mocks.listProfilesForProviderAsync.mockResolvedValue([]);
     mocks.clearAuthProfileCooldown.mockResolvedValue(undefined);
   });
 
@@ -330,7 +330,7 @@ describe("modelsAuthLoginCommand", () => {
       },
     };
     mocks.loadAuthProfileStoreForRuntime.mockReturnValue(fakeStore);
-    mocks.listProfilesForProvider.mockReturnValue(["openai-codex:user@example.com"]);
+    mocks.listProfilesForProviderAsync.mockResolvedValue(["openai-codex:user@example.com"]);
 
     await modelsAuthLoginCommand({ provider: "openai-codex" }, runtime);
 
@@ -508,7 +508,10 @@ describe("modelsAuthLoginCommand", () => {
       },
     };
     mocks.loadAuthProfileStoreForRuntime.mockReturnValue(fakeStore);
-    mocks.listProfilesForProvider.mockReturnValue(["anthropic:claude-cli", "anthropic:legacy"]);
+    mocks.listProfilesForProviderAsync.mockResolvedValue([
+      "anthropic:claude-cli",
+      "anthropic:legacy",
+    ]);
     mocks.resolvePluginProviders.mockReturnValue([
       {
         id: "anthropic",

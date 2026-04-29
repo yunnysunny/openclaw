@@ -1,14 +1,21 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
   applyPluginAutoEnable,
+  applyPluginAutoEnableAsync,
   detectPluginAutoEnableCandidates,
+  detectPluginAutoEnableCandidatesAsync,
+  resolveConfiguredPluginAutoEnableCandidates,
+  resolveConfiguredPluginAutoEnableCandidatesAsync,
   resolvePluginAutoEnableCandidateReason,
+  resolvePluginSetupAutoEnableReasons,
+  resolvePluginSetupAutoEnableReasonsAsync,
 } from "./plugin-auto-enable.js";
 import {
   makeIsolatedEnv,
   makeRegistry,
   resetPluginAutoEnableTestState,
 } from "./plugin-auto-enable.test-helpers.js";
+import type { OpenClawConfig } from "./types.openclaw.js";
 import { validateConfigObject } from "./validation.js";
 
 afterEach(() => {
@@ -497,5 +504,40 @@ describe("applyPluginAutoEnable core", () => {
 
     expect(result.config.plugins?.entries?.slack?.enabled).toBeUndefined();
     expect(result.changes).toEqual([]);
+  });
+
+  it("applyPluginAutoEnableAsync matches applyPluginAutoEnable", async () => {
+    const config = { channels: { slack: { botToken: "x" } } } as const;
+    const env = makeIsolatedEnv();
+    const manifestRegistry = makeRegistry([{ id: "slack", channels: ["slack"] }]);
+    const sync = applyPluginAutoEnable({ config, env, manifestRegistry });
+    const asyncResult = await applyPluginAutoEnableAsync({ config, env, manifestRegistry });
+    expect(asyncResult).toEqual(sync);
+  });
+
+  it("detectPluginAutoEnableCandidatesAsync matches detectPluginAutoEnableCandidates", async () => {
+    const config = { channels: { slack: { botToken: "x" } } } as const;
+    const env = makeIsolatedEnv();
+    const manifestRegistry = makeRegistry([{ id: "slack", channels: ["slack"] }]);
+    const sync = detectPluginAutoEnableCandidates({ config, env, manifestRegistry });
+    const asyncResult = await detectPluginAutoEnableCandidatesAsync({ config, env, manifestRegistry });
+    expect(asyncResult).toEqual(sync);
+  });
+
+  it("resolveConfiguredPluginAutoEnableCandidatesAsync matches resolveConfiguredPluginAutoEnableCandidates", async () => {
+    const config = { channels: { slack: { botToken: "x" } } } as const;
+    const env = makeIsolatedEnv();
+    const registry = makeRegistry([{ id: "slack", channels: ["slack"] }]);
+    const sync = resolveConfiguredPluginAutoEnableCandidates({ config, env, registry });
+    const asyncResult = await resolveConfiguredPluginAutoEnableCandidatesAsync({ config, env, registry });
+    expect(asyncResult).toEqual(sync);
+  });
+
+  it("resolvePluginSetupAutoEnableReasonsAsync matches resolvePluginSetupAutoEnableReasons", async () => {
+    const env = makeIsolatedEnv();
+    const config = {} as OpenClawConfig;
+    const sync = resolvePluginSetupAutoEnableReasons({ config, env, pluginIds: [] });
+    const asyncResult = await resolvePluginSetupAutoEnableReasonsAsync({ config, env, pluginIds: [] });
+    expect(asyncResult).toEqual(sync);
   });
 });

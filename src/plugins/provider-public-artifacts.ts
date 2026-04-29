@@ -17,6 +17,9 @@ export type BundledProviderPolicySurface = {
     ctx: ProviderApplyConfigDefaultsContext,
   ) => OpenClawConfig | null | undefined;
   resolveConfigApiKey?: (ctx: ProviderResolveConfigApiKeyContext) => string | null | undefined;
+  resolveConfigApiKeyAsync?: (
+    ctx: ProviderResolveConfigApiKeyContext,
+  ) => Promise<string | null | undefined> | string | null | undefined;
 };
 
 const bundledProviderPolicySurfaceCache = new Map<string, BundledProviderPolicySurface | null>();
@@ -32,7 +35,8 @@ function hasProviderPolicyHook(
   return (
     typeof mod.normalizeConfig === "function" ||
     typeof mod.applyConfigDefaults === "function" ||
-    typeof mod.resolveConfigApiKey === "function"
+    typeof mod.resolveConfigApiKey === "function" ||
+    typeof mod.resolveConfigApiKeyAsync === "function"
   );
 }
 

@@ -48,11 +48,37 @@ export type OpenBoundaryFileParams = OpenBoundaryFileSyncParams & {
   aliasPolicy?: PathAliasPolicy;
 };
 
-type ResolvedBoundaryFilePath = {
+export type ResolvedBoundaryFilePath = {
   absolutePath: string;
   resolvedPath: string;
   rootRealPath: string;
 };
+
+export type ResolveBoundaryFilePath = (
+  absolutePath: string,
+) => ResolvedBoundaryPath | Promise<ResolvedBoundaryPath>;
+
+export type ResolveBoundaryFilePathGenericParams = {
+  absolutePath: string;
+  resolve: ResolveBoundaryFilePath;
+};
+
+/**
+ * Async counterpart to the internal `resolveBoundaryFilePathGeneric` helper:
+ * `path.resolve`s the input, then `await`s `resolve` and maps the result, or
+ * a thrown/rejected error to `{ ok: false, reason: "validation" }`.
+ */
+export async function resolveBoundaryFilePathGenericAsync(
+  params: ResolveBoundaryFilePathGenericParams,
+): Promise<ResolvedBoundaryFilePath | BoundaryFileOpenResult> {
+  const absolutePath = path.resolve(params.absolutePath);
+  try {
+    const inner = await params.resolve(absolutePath);
+    return mapResolvedBoundaryPath(absolutePath, inner);
+  } catch (error) {
+    return toBoundaryValidationError(error);
+  }
+}
 
 export function canUseBoundaryFileOpen(ioFs: typeof fs): boolean {
   return (
@@ -211,7 +237,7 @@ async function finalizeBoundaryFileOpenAsync(params: {
 export async function openBoundaryFile(
   params: OpenBoundaryFileParams,
 ): Promise<BoundaryFileOpenResult> {
-  const maybeResolved = resolveBoundaryFilePathGeneric({
+  const resolved = await resolveBoundaryFilePathGenericAsync({
     absolutePath: params.absolutePath,
     resolve: (absolutePath) =>
       resolveBoundaryPath({
@@ -223,7 +249,6 @@ export async function openBoundaryFile(
         skipLexicalRootCheck: params.skipLexicalRootCheck,
       }),
   });
-  const resolved = maybeResolved instanceof Promise ? await maybeResolved : maybeResolved;
   return finalizeBoundaryFileOpenAsync({
     resolved,
     maxBytes: params.maxBytes,

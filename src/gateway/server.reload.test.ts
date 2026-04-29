@@ -49,9 +49,8 @@ const hoisted = vi.hoisted(() => {
   const startGmailWatcher = vi.fn(async () => ({ started: true }));
   const stopGmailWatcher = vi.fn(async () => {});
 
-  const providerManager = {
-    getRuntimeSnapshot: vi.fn(() => ({
-      providers: {
+  const mockChannelRuntimeSnapshot = {
+    providers: {
         whatsapp: {
           running: false,
           connected: false,
@@ -112,7 +111,11 @@ const hoisted = vi.hoisted(() => {
         imessage: {},
         msteams: {},
       },
-    })),
+  };
+
+  const providerManager = {
+    getRuntimeSnapshot: vi.fn(() => mockChannelRuntimeSnapshot),
+    getRuntimeSnapshotAsync: vi.fn(async () => mockChannelRuntimeSnapshot),
     startChannels: vi.fn(async () => {}),
     startChannel: vi.fn(async () => {}),
     stopChannel: vi.fn(async () => {}),

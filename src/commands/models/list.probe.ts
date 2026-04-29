@@ -6,7 +6,7 @@ import {
   type AuthProfileCredential,
   type AuthProfileEligibilityReasonCode,
   ensureAuthProfileStore,
-  listProfilesForProvider,
+  listProfilesForProviderAsync,
   resolveAuthProfileDisplayLabel,
   resolveAuthProfileEligibility,
   resolveAuthProfileOrder,
@@ -276,7 +276,7 @@ export async function buildProbeTargets(params: {
       catalog,
     });
 
-    const profileIds = listProfilesForProvider(store, providerKey);
+    const profileIds = await listProfilesForProviderAsync(store, providerKey);
     const explicitOrder = (() => {
       return (
         findNormalizedProviderValue(store.order, providerKey) ??

@@ -15,11 +15,20 @@ import { parseSessionThreadInfo } from "./thread-info.js";
 import { resolveMirroredTranscriptText } from "./transcript-mirror.js";
 import type { SessionEntry } from "./types.js";
 
+async function pathExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.promises.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function ensureSessionHeader(params: {
   sessionFile: string;
   sessionId: string;
 }): Promise<void> {
-  if (fs.existsSync(params.sessionFile)) {
+  if (await pathExists(params.sessionFile)) {
     return;
   }
   await fs.promises.mkdir(path.dirname(params.sessionFile), { recursive: true });

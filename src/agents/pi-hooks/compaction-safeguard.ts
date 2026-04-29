@@ -1,10 +1,10 @@
-import fs from "node:fs";
 import path from "node:path";
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import type { ExtensionAPI, ExtensionContext, FileOperations } from "@mariozechner/pi-coding-agent";
 import { extractSections } from "../../auto-reply/reply/post-compaction-context.js";
 import { openBoundaryFile } from "../../infra/boundary-file-read.js";
 import { formatErrorMessage } from "../../infra/errors.js";
+import { closeFileDescriptorAsync, readFileUtf8FromFd } from "../../infra/fd-promise.js";
 import { isAbortError } from "../../infra/unhandled-rejections.js";
 import { createSubsystemLogger } from "../../logging/subsystem.js";
 import {
@@ -691,11 +691,11 @@ async function readWorkspaceContextForSummary(): Promise<string> {
       return "";
     }
 
-    const content = (() => {
+    const content = await (async () => {
       try {
-        return fs.readFileSync(opened.fd, "utf-8");
+        return await readFileUtf8FromFd(opened.fd);
       } finally {
-        fs.closeSync(opened.fd);
+        await closeFileDescriptorAsync(opened.fd);
       }
     })();
     // Accept legacy section names ("Every Session", "Safety") as fallback

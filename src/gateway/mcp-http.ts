@@ -68,7 +68,7 @@ export async function startMcpLoopbackServer(port = 0): Promise<{
         const parsed: JsonRpcRequest | JsonRpcRequest[] = JSON.parse(body);
         const cfg = loadConfig();
         const requestContext = resolveMcpRequestContext(req, cfg);
-        const scopedTools = toolCache.resolve({
+        const scopedTools = await toolCache.resolve({
           cfg,
           sessionKey: requestContext.sessionKey,
           messageProvider: requestContext.messageProvider,

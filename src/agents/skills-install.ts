@@ -125,6 +125,15 @@ function assertSafeInstallerValue(value: string, kind: string, pattern: RegExp):
   return null;
 }
 
+async function pathExists(targetPath: string): Promise<boolean> {
+  try {
+    await fs.promises.access(targetPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function buildInstallCommand(
   spec: SkillInstallSpec,
   prefs: SkillsInstallPreferences,
@@ -206,12 +215,8 @@ async function resolveBrewBinDir(timeoutMs: number, brewExe?: string): Promise<s
   }
 
   for (const candidate of ["/opt/homebrew/bin", "/usr/local/bin"]) {
-    try {
-      if (fs.existsSync(candidate)) {
-        return candidate;
-      }
-    } catch {
-      // ignore
+    if (await pathExists(candidate)) {
+      return candidate;
     }
   }
   return undefined;

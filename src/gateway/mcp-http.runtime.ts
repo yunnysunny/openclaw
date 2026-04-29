@@ -10,7 +10,7 @@ import {
   type McpLoopbackTool,
   type McpToolSchemaEntry,
 } from "./mcp-http.schema.js";
-import { resolveGatewayScopedTools } from "./tool-resolution.js";
+import { resolveGatewayScopedToolsAsync } from "./tool-resolution.js";
 
 const TOOL_CACHE_TTL_MS = 30_000;
 const NATIVE_TOOL_EXCLUDE = new Set(["read", "write", "edit", "apply_patch", "exec", "process"]);
@@ -25,13 +25,13 @@ type CachedScopedTools = {
 export class McpLoopbackToolCache {
   #entries = new Map<string, CachedScopedTools>();
 
-  resolve(params: {
+  async resolve(params: {
     cfg: OpenClawConfig;
     sessionKey: string;
     messageProvider: string | undefined;
     accountId: string | undefined;
     senderIsOwner: boolean | undefined;
-  }): CachedScopedTools {
+  }): Promise<CachedScopedTools> {
     const cacheKey = [
       params.sessionKey,
       params.messageProvider ?? "",
@@ -44,7 +44,7 @@ export class McpLoopbackToolCache {
       return cached;
     }
 
-    const next = resolveGatewayScopedTools({
+    const next = await resolveGatewayScopedToolsAsync({
       cfg: params.cfg,
       sessionKey: params.sessionKey,
       messageProvider: params.messageProvider,

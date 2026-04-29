@@ -8,7 +8,7 @@ import type {
 import {
   MINIMAX_OAUTH_MARKER,
   ensureAuthProfileStore,
-  listProfilesForProvider,
+  listProfilesForProviderAsync,
 } from "openclaw/plugin-sdk/provider-auth";
 import { buildOauthProviderAuthResult } from "openclaw/plugin-sdk/provider-auth";
 import { createProviderApiKeyAuthMethod } from "openclaw/plugin-sdk/provider-auth-api-key";
@@ -95,7 +95,7 @@ async function resolvePortalCatalog(ctx: ProviderCatalogContext) {
   const authStore = ensureAuthProfileStore(ctx.agentDir, {
     allowKeychainPrompt: false,
   });
-  const hasProfiles = listProfilesForProvider(authStore, PORTAL_PROVIDER_ID).length > 0;
+  const hasProfiles = (await listProfilesForProviderAsync(authStore, PORTAL_PROVIDER_ID)).length > 0;
   const explicitApiKey = normalizeOptionalString(explicitProvider?.apiKey);
   const apiKey = envApiKey ?? explicitApiKey ?? (hasProfiles ? MINIMAX_OAUTH_MARKER : undefined);
   if (!apiKey) {

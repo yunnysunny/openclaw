@@ -56,6 +56,7 @@ describe("server-runtime-services", () => {
       cfgAtStart: {} as never,
       channelManager: {
         getRuntimeSnapshot: vi.fn(),
+        getRuntimeSnapshotAsync: vi.fn(async () => ({})),
         isHealthMonitorEnabled: vi.fn(),
         isManuallyStopped: vi.fn(),
       } as never,

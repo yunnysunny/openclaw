@@ -572,8 +572,14 @@ export async function startGatewayServer(
       clearSecretsRuntimeSnapshot,
       closeMcpServer: async () => await closeMcpLoopbackServer(),
     });
-  const { getRuntimeSnapshot, startChannels, startChannel, stopChannel, markChannelLoggedOut } =
-    channelManager;
+  const {
+    getRuntimeSnapshot,
+    getRuntimeSnapshotAsync,
+    startChannels,
+    startChannel,
+    stopChannel,
+    markChannelLoggedOut,
+  } = channelManager;
   const createCloseHandler = () =>
     createGatewayCloseHandler({
       bonjourStop: runtimeState.bonjourStop,
@@ -748,6 +754,7 @@ export async function startGatewayServer(
       findRunningWizard,
       purgeWizardSession,
       getRuntimeSnapshot,
+      getRuntimeSnapshotAsync,
       startChannel,
       stopChannel,
       markChannelLoggedOut,

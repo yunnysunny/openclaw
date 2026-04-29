@@ -1,7 +1,8 @@
 import type { OpenClawConfig } from "../config/types.openclaw.js";
-import { loadPluginManifestRegistrySync } from "./manifest-registry.js";
-import { resolveDiscoveredProviderPluginIds } from "./providers.js";
-import { resolvePluginProviders } from "./providers.runtime.js";
+import { loadPluginManifestRegistryAsync, loadPluginManifestRegistrySync } from "./manifest-registry.js";
+import { resolveDiscoveredProviderPluginIds, resolveDiscoveredProviderPluginIdsAsync } from "./providers.js";
+import { resolvePluginProviders, resolvePluginProvidersAsync } from "./providers.runtime.js";
+import { getCachedPluginJitiLoader, type PluginJitiLoaderCache } from "./jiti-loader-cache.js";
 import { createPluginSourceLoader } from "./source-loader.js";
 import type { ProviderPlugin } from "./types.js";
 
@@ -51,11 +52,18 @@ function resolveProviderDiscoveryEntryPlugins(params: {
   if (records.length === 0) {
     return [];
   }
-  const loadSource = createPluginSourceLoader();
+  const jitiCache: PluginJitiLoaderCache = new Map();
   const providers: ProviderPlugin[] = [];
   for (const manifest of records) {
     try {
-      const moduleExport = loadSource(manifest.providerDiscoverySource!) as ProviderDiscoveryModule;
+      const modPath = manifest.providerDiscoverySource!;
+      const jiti = getCachedPluginJitiLoader({
+        cache: jitiCache,
+        modulePath: modPath,
+        importerUrl: import.meta.url,
+        jitiFilename: import.meta.url,
+      });
+      const moduleExport = jiti(modPath) as ProviderDiscoveryModule;
       providers.push(
         ...normalizeDiscoveryModule(moduleExport).map((provider) =>
           Object.assign({}, provider, { pluginId: manifest.id }),
@@ -64,6 +72,39 @@ function resolveProviderDiscoveryEntryPlugins(params: {
     } catch {
       // Discovery fast path is optional. Fall back to the full plugin loader
       // below so existing plugin diagnostics/load behavior remains canonical.
+      return [];
+    }
+  }
+  return providers;
+}
+
+async function resolveProviderDiscoveryEntryPluginsAsync(params: {
+  config?: OpenClawConfig;
+  workspaceDir?: string;
+  env?: NodeJS.ProcessEnv;
+  onlyPluginIds?: string[];
+}): Promise<ProviderPlugin[]> {
+  const pluginIds = await resolveDiscoveredProviderPluginIdsAsync(params);
+  const pluginIdSet = new Set(pluginIds);
+  const records = (await loadPluginManifestRegistryAsync(params)).plugins.filter(
+    (plugin) => plugin.providerDiscoverySource && pluginIdSet.has(plugin.id),
+  );
+  if (records.length === 0) {
+    return [];
+  }
+  const loadSource = createPluginSourceLoader();
+  const providers: ProviderPlugin[] = [];
+  for (const manifest of records) {
+    try {
+      const moduleExport = (await loadSource(
+        manifest.providerDiscoverySource!,
+      )) as ProviderDiscoveryModule;
+      providers.push(
+        ...normalizeDiscoveryModule(moduleExport).map((provider) =>
+          Object.assign({}, provider, { pluginId: manifest.id }),
+        ),
+      );
+    } catch {
       return [];
     }
   }
@@ -81,6 +122,26 @@ export function resolvePluginDiscoveryProvidersRuntime(params: {
     return entryProviders;
   }
   return resolvePluginProviders({
+    ...params,
+    bundledProviderAllowlistCompat: true,
+  });
+}
+
+/**
+ * Async counterpart to {@link resolvePluginDiscoveryProvidersRuntime}: awaitable
+ * manifest and full provider loader paths.
+ */
+export async function resolvePluginDiscoveryProvidersRuntimeAsync(params: {
+  config?: OpenClawConfig;
+  workspaceDir?: string;
+  env?: NodeJS.ProcessEnv;
+  onlyPluginIds?: string[];
+}): Promise<ProviderPlugin[]> {
+  const entryProviders = await resolveProviderDiscoveryEntryPluginsAsync(params);
+  if (entryProviders.length > 0) {
+    return entryProviders;
+  }
+  return resolvePluginProvidersAsync({
     ...params,
     bundledProviderAllowlistCompat: true,
   });

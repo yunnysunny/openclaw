@@ -12,6 +12,9 @@ const installPluginFromNpmSpecMock = vi.fn();
 const installPluginFromMarketplaceMock = vi.fn();
 const installPluginFromClawHubMock = vi.fn();
 const resolveBundledPluginSourcesMock = vi.fn();
+const resolveBundledPluginSourcesAsyncMock = vi.fn(async (...args: unknown[]) =>
+  resolveBundledPluginSourcesMock(...args),
+);
 
 vi.mock("./install.js", () => ({
   installPluginFromNpmSpec: (...args: unknown[]) => installPluginFromNpmSpecMock(...args),
@@ -31,6 +34,8 @@ vi.mock("./clawhub.js", () => ({
 
 vi.mock("./bundled-sources.js", () => ({
   resolveBundledPluginSources: (...args: unknown[]) => resolveBundledPluginSourcesMock(...args),
+  resolveBundledPluginSourcesAsync: (...args: unknown[]) =>
+    resolveBundledPluginSourcesAsyncMock(...args),
 }));
 
 const { syncPluginsForUpdateChannel, updateNpmInstalledPlugins } = await import("./update.js");

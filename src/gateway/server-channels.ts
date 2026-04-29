@@ -170,6 +170,12 @@ type StartChannelOptions = {
 
 export type ChannelManager = {
   getRuntimeSnapshot: () => ChannelRuntimeSnapshot;
+  /**
+   * Async counterpart to {@link getRuntimeSnapshot} for gateway/async call
+   * sites. Currently returns the same snapshot; use this so future
+   * channel-account resolution can await I/O without changing every handler.
+   */
+  getRuntimeSnapshotAsync: () => Promise<ChannelRuntimeSnapshot>;
   startChannels: () => Promise<void>;
   startChannel: (channel: ChannelId, accountId?: string) => Promise<void>;
   stopChannel: (channel: ChannelId, accountId?: string) => Promise<void>;
@@ -683,6 +689,10 @@ export function createChannelManager(opts: ChannelManagerOptions): ChannelManage
     return { channels, channelAccounts };
   };
 
+  const getRuntimeSnapshotAsync = async (): Promise<ChannelRuntimeSnapshot> => {
+    return getRuntimeSnapshot();
+  };
+
   const isManuallyStopped_ = (channelId: ChannelId, accountId: string): boolean => {
     return manuallyStopped.has(restartKey(channelId, accountId));
   };
@@ -693,6 +703,7 @@ export function createChannelManager(opts: ChannelManagerOptions): ChannelManage
 
   return {
     getRuntimeSnapshot,
+    getRuntimeSnapshotAsync,
     startChannels,
     startChannel,
     stopChannel,

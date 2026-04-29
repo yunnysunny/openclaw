@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   normalizeSandboxHostPath,
   resolveSandboxHostPathViaExistingAncestor,
+  resolveSandboxHostPathViaExistingAncestorAsync,
 } from "./host-paths.js";
 
 describe("normalizeSandboxHostPath", () => {
@@ -34,5 +35,13 @@ describe("resolveSandboxHostPathViaExistingAncestor", () => {
     const unresolved = join(link, "missing-leaf");
     const resolved = resolveSandboxHostPathViaExistingAncestor(unresolved);
     expect(resolved).toBe(join(realpathSync.native(outside), "missing-leaf"));
+  });
+});
+
+describe("resolveSandboxHostPathViaExistingAncestorAsync", () => {
+  it("keeps non-absolute paths unchanged", async () => {
+    await expect(resolveSandboxHostPathViaExistingAncestorAsync("relative/path")).resolves.toBe(
+      "relative/path",
+    );
   });
 });

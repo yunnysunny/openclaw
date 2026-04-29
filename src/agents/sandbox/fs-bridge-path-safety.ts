@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { PathAliasPolicy } from "../../infra/path-alias-guards.js";
 import type { SafeOpenSyncAllowedType } from "../../infra/safe-open-sync.js";
+import { closeFileDescriptorAsync } from "../../infra/fd-promise.js";
 import { openBoundaryFile, type BoundaryFileOpenResult } from "./fs-bridge-path-safety.runtime.js";
 import type { SandboxResolvedFsPath, SandboxFsMount } from "./fs-paths.js";
 import { isPathInsideContainerRoot, normalizeContainerPath } from "./path-utils.js";
@@ -125,7 +126,7 @@ export class SandboxFsPathGuard {
         }
       }
     } else {
-      fs.closeSync(guarded.fd);
+      await closeFileDescriptorAsync(guarded.fd);
     }
 
     const canonicalContainerPath = await this.resolveCanonicalContainerPath({

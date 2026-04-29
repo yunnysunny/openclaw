@@ -8,6 +8,7 @@ import type { GatewayRequestHandler } from "./server-methods/types.js";
 import {
   createGatewaySubagentRuntime,
   loadGatewayPlugins,
+  loadGatewayPluginsAsync,
   setPluginSubagentOverridePolicies,
 } from "./server-plugins.js";
 
@@ -79,6 +80,14 @@ export function prepareGatewayPluginLoad(params: GatewayPluginBootstrapParams) {
     preferSetupRuntimeForChannelPlugins: params.preferSetupRuntimeForChannelPlugins,
     suppressPluginInfoLogs: params.suppressPluginInfoLogs,
   });
+  return finalizePrepareGatewayPluginLoad(params, resolvedConfig, loaded);
+}
+
+function finalizePrepareGatewayPluginLoad(
+  params: GatewayPluginBootstrapParams,
+  resolvedConfig: OpenClawConfig,
+  loaded: Awaited<ReturnType<typeof loadGatewayPluginsAsync>>,
+) {
   params.beforePrimeRegistry?.(loaded.pluginRegistry);
   primeConfiguredBindingRegistry({ cfg: resolvedConfig });
   if ((params.logDiagnostics ?? true) && loaded.pluginRegistry.diagnostics.length > 0) {
@@ -90,10 +99,44 @@ export function prepareGatewayPluginLoad(params: GatewayPluginBootstrapParams) {
   return loaded;
 }
 
+export async function prepareGatewayPluginLoadAsync(
+  params: GatewayPluginBootstrapParams,
+): Promise<Awaited<ReturnType<typeof loadGatewayPluginsAsync>>> {
+  const activationSourceConfig = params.activationSourceConfig ?? params.cfg;
+  const autoEnabled = applyPluginAutoEnable({
+    config: activationSourceConfig,
+    env: process.env,
+  });
+  const resolvedConfig = autoEnabled.config;
+  installGatewayPluginRuntimeEnvironment(resolvedConfig);
+  const loaded = await loadGatewayPluginsAsync({
+    cfg: resolvedConfig,
+    activationSourceConfig,
+    autoEnabledReasons: autoEnabled.autoEnabledReasons,
+    workspaceDir: params.workspaceDir,
+    log: params.log,
+    coreGatewayHandlers: params.coreGatewayHandlers,
+    baseMethods: params.baseMethods,
+    pluginIds: params.pluginIds,
+    preferSetupRuntimeForChannelPlugins: params.preferSetupRuntimeForChannelPlugins,
+    suppressPluginInfoLogs: params.suppressPluginInfoLogs,
+  });
+  return finalizePrepareGatewayPluginLoad(params, resolvedConfig, loaded);
+}
+
 export function loadGatewayStartupPlugins(
   params: Omit<GatewayPluginBootstrapParams, "beforePrimeRegistry">,
 ) {
   return prepareGatewayPluginLoad({
+    ...params,
+    beforePrimeRegistry: pinActivePluginChannelRegistry,
+  });
+}
+
+export async function loadGatewayStartupPluginsAsync(
+  params: Omit<GatewayPluginBootstrapParams, "beforePrimeRegistry">,
+) {
+  return prepareGatewayPluginLoadAsync({
     ...params,
     beforePrimeRegistry: pinActivePluginChannelRegistry,
   });
@@ -106,6 +149,18 @@ export function reloadDeferredGatewayPlugins(
   >,
 ) {
   return prepareGatewayPluginLoad({
+    ...params,
+    beforePrimeRegistry: pinActivePluginChannelRegistry,
+  });
+}
+
+export async function reloadDeferredGatewayPluginsAsync(
+  params: Omit<
+    GatewayPluginBootstrapParams,
+    "beforePrimeRegistry" | "preferSetupRuntimeForChannelPlugins"
+  >,
+) {
+  return prepareGatewayPluginLoadAsync({
     ...params,
     beforePrimeRegistry: pinActivePluginChannelRegistry,
   });

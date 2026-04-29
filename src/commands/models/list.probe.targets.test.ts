@@ -69,6 +69,13 @@ vi.mock("../../agents/auth-profiles.js", () => ({
           typeof profile.provider === "string" && profile.provider.toLowerCase() === provider,
       )
       .map(([profileId]) => profileId),
+  listProfilesForProviderAsync: async (_store: AuthProfileStore, provider: string) =>
+    Object.entries(mockStore.profiles)
+      .filter(
+        ([, profile]) =>
+          typeof profile.provider === "string" && profile.provider.toLowerCase() === provider,
+      )
+      .map(([profileId]) => profileId),
   resolveAuthProfileDisplayLabel: ({ profileId }: { profileId: string }) => profileId,
   resolveAuthProfileOrder: resolveAuthProfileOrderMock,
   resolveAuthProfileEligibility: resolveAuthProfileEligibilityMock,

@@ -27,7 +27,7 @@ import {
   resolveOpenAiCompatibleHttpOperatorScopes,
   resolveOpenAiCompatibleHttpSenderIsOwner,
 } from "./http-utils.js";
-import { resolveGatewayScopedTools } from "./tool-resolution.js";
+import { resolveGatewayScopedToolsAsync } from "./tool-resolution.js";
 
 const DEFAULT_BODY_BYTES = 2 * 1024 * 1024;
 const MEMORY_TOOL_NAMES = new Set(["memory_search", "memory_get"]);
@@ -225,7 +225,7 @@ export async function handleToolsInvokeHttpRequest(
   // with the correct owner context and channel-action gates (e.g. Matrix set-profile)
   // work correctly for both owner and non-owner callers.
   const senderIsOwner = resolveOpenAiCompatibleHttpSenderIsOwner(req, requestAuth);
-  const { agentId, tools } = resolveGatewayScopedTools({
+  const { agentId, tools } = await resolveGatewayScopedToolsAsync({
     cfg,
     sessionKey,
     messageProvider: messageChannel ?? undefined,

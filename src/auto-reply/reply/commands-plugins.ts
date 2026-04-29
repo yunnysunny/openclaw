@@ -156,6 +156,15 @@ function looksLikeLocalPluginInstallSpec(raw: string): boolean {
   );
 }
 
+async function pathExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.promises.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function installPluginFromPluginsCommand(params: {
   raw: string;
   config: OpenClawConfig;
@@ -167,7 +176,7 @@ async function installPluginFromPluginsCommand(params: {
   const normalized = fileSpec && fileSpec.ok ? fileSpec.path : params.raw;
   const resolved = resolveUserPath(normalized);
 
-  if (fs.existsSync(resolved)) {
+  if (await pathExists(resolved)) {
     const result = await installPluginFromPath({
       path: resolved,
       logger: createPluginInstallLogger(),

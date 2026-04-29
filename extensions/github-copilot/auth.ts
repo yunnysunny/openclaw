@@ -3,7 +3,7 @@ import { resolveRequiredConfiguredSecretRefInputString } from "openclaw/plugin-s
 import {
   coerceSecretRef,
   ensureAuthProfileStore,
-  listProfilesForProvider,
+  listProfilesForProviderAsync,
 } from "openclaw/plugin-sdk/provider-auth";
 import { PROVIDER_ID } from "./models.js";
 
@@ -18,7 +18,7 @@ export async function resolveFirstGithubToken(params: {
   const authStore = ensureAuthProfileStore(params.agentDir, {
     allowKeychainPrompt: false,
   });
-  const profileIds = listProfilesForProvider(authStore, PROVIDER_ID);
+  const profileIds = await listProfilesForProviderAsync(authStore, PROVIDER_ID);
   const hasProfile = profileIds.length > 0;
   const envToken =
     params.env.COPILOT_GITHUB_TOKEN ?? params.env.GH_TOKEN ?? params.env.GITHUB_TOKEN ?? "";

@@ -3,8 +3,12 @@ import { callGateway } from "../gateway/call.js";
 import { getActiveRuntimeWebToolsMetadata } from "../secrets/runtime.js";
 import { normalizeDeliveryContext } from "../utils/delivery-context.js";
 import type { GatewayMessageChannel } from "../utils/message-channel.js";
+import { resolveProviderIdForAuth, resolveProviderIdForAuthAsync } from "./provider-auth-aliases.js";
 import { resolveAgentWorkspaceDir, resolveSessionAgentIds } from "./agent-scope.js";
-import { resolveOpenClawPluginToolsForOptions } from "./openclaw-plugin-tools.js";
+import {
+  resolveOpenClawPluginToolsForOptions,
+  resolveOpenClawPluginToolsForOptionsAsync,
+} from "./openclaw-plugin-tools.js";
 import { applyNodesToolWorkspaceGuard } from "./openclaw-tools.nodes-workspace-guard.js";
 import {
   collectPresentOpenClawTools,
@@ -110,6 +114,8 @@ export function createOpenClawTools(
     onYield?: (message: string) => Promise<void> | void;
     /** Allow plugin tools for this tool set to late-bind the gateway subagent. */
     allowGatewaySubagentBinding?: boolean;
+    /** Internal: pre-resolved provider id to avoid duplicate normalization work. */
+    resolvedModelProviderForPolicy?: string;
   } & SpawnedToolContext,
 ): AnyAgentTool[] {
   const resolvedConfig = options?.config ?? openClawToolsDeps.config;
@@ -128,6 +134,25 @@ export function createOpenClawTools(
   const spawnWorkspaceDir = resolveWorkspaceRoot(
     options?.spawnWorkspaceDir ?? options?.workspaceDir ?? inferredWorkspaceDir,
   );
+  const normalizedModelProvider =
+    typeof options?.resolvedModelProviderForPolicy === "string"
+      ? options.resolvedModelProviderForPolicy
+      : typeof options?.modelProvider === "string" && options.modelProvider.trim()
+        ? resolveProviderIdForAuth(options.modelProvider, {
+            config: resolvedConfig,
+            workspaceDir,
+          })
+        : options?.modelProvider;
+  if (
+    typeof options?.resolvedModelProviderForPolicy !== "string" &&
+    typeof options?.modelProvider === "string" &&
+    options.modelProvider.trim()
+  ) {
+    void resolveProviderIdForAuthAsync(options.modelProvider, {
+      config: resolvedConfig,
+      workspaceDir,
+    });
+  }
   const deliveryContext = normalizeDeliveryContext({
     channel: options?.agentChannel,
     to: options?.agentTo,
@@ -251,7 +276,7 @@ export function createOpenClawTools(
       config: resolvedConfig,
       agentSessionKey: options?.agentSessionKey,
       agentId: options?.requesterAgentIdOverride,
-      modelProvider: options?.modelProvider,
+      modelProvider: normalizedModelProvider,
       modelId: options?.modelId,
     })
       ? [createUpdatePlanTool()]
@@ -315,6 +340,50 @@ export function createOpenClawTools(
   });
 
   return [...tools, ...wrappedPluginTools];
+}
+
+export async function createOpenClawToolsAsync(
+  options?: Parameters<typeof createOpenClawTools>[0],
+): Promise<AnyAgentTool[]> {
+  const resolvedConfig = options?.config ?? openClawToolsDeps.config;
+  const { sessionAgentId } = resolveSessionAgentIds({
+    sessionKey: options?.agentSessionKey,
+    config: resolvedConfig,
+    agentId: options?.requesterAgentIdOverride,
+  });
+  const inferredWorkspaceDir =
+    options?.workspaceDir || !resolvedConfig
+      ? undefined
+      : resolveAgentWorkspaceDir(resolvedConfig, sessionAgentId);
+  const workspaceDir = resolveWorkspaceRoot(options?.workspaceDir ?? inferredWorkspaceDir);
+  const normalizedModelProvider =
+    typeof options?.modelProvider === "string" && options.modelProvider.trim()
+      ? await resolveProviderIdForAuthAsync(options.modelProvider, {
+          config: resolvedConfig,
+          workspaceDir,
+        })
+      : options?.modelProvider;
+
+  const coreTools = createOpenClawTools({
+    ...options,
+    disablePluginTools: true,
+    modelProvider: normalizedModelProvider,
+    resolvedModelProviderForPolicy: normalizedModelProvider,
+  });
+  if (options?.disablePluginTools) {
+    return coreTools;
+  }
+
+  const wrappedPluginTools = await resolveOpenClawPluginToolsForOptionsAsync({
+    options: {
+      ...options,
+      modelProvider: normalizedModelProvider,
+    },
+    resolvedConfig,
+    existingToolNames: new Set(coreTools.map((tool) => tool.name)),
+  });
+
+  return [...coreTools, ...wrappedPluginTools];
 }
 
 export const __testing = {

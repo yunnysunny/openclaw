@@ -86,6 +86,16 @@ const mockFsModule = () => {
 const mockFsPromisesModule = () => {
   const wrapped = {
     ...actualFsPromises,
+    realpath: async (p: string) =>
+      isFixturePath(p)
+        ? (() => {
+            const resolved = abs(p);
+            if (state.realpathErrors.has(resolved)) {
+              throw new Error(`ENOENT: no such file or directory, realpath '${p}'`);
+            }
+            return state.realpaths.get(resolved) ?? resolved;
+          })()
+        : await actualFsPromises.realpath(p),
     readFile: async (p: string, encoding?: BufferEncoding) => {
       if (!isFixturePath(p)) {
         return await actualFsPromises.readFile(p, encoding);

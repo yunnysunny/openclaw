@@ -81,7 +81,7 @@ async function stubPdfToolInfra(
 ) {
   const loadSpy = vi.spyOn(webMedia, "loadWebMediaRaw").mockResolvedValue(FAKE_PDF_MEDIA as never);
 
-  vi.spyOn(modelDiscovery, "discoverAuthStorage").mockReturnValue({
+  vi.spyOn(modelDiscovery, "discoverAuthStorageAsync").mockResolvedValue({
     setRuntimeApiKey: vi.fn(),
   } as never);
   const find =

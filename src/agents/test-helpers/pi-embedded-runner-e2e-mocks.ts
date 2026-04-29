@@ -26,5 +26,6 @@ export function installEmbeddedRunnerBaseE2eMocks(options?: {
   }));
   vi.doMock("../runtime-plugins.js", () => ({
     ensureRuntimePluginsLoaded: vi.fn(),
+    ensureRuntimePluginsLoadedAsync: vi.fn(async () => undefined),
   }));
 }

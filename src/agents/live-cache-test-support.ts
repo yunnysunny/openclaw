@@ -7,7 +7,7 @@ import { isLiveTestEnabled } from "./live-test-helpers.js";
 import { getApiKeyForModel, requireApiKey } from "./model-auth.js";
 import { normalizeProviderId, parseModelRef } from "./model-selection.js";
 import { ensureOpenClawModelsJson } from "./models-config.js";
-import { discoverAuthStorage, discoverModels } from "./pi-model-discovery.js";
+import { discoverAuthStorageAsync, discoverModels } from "./pi-model-discovery.js";
 import { buildAssistantMessageWithZeroUsage } from "./stream-message-shared.js";
 
 export const LIVE_CACHE_TEST_ENABLED =
@@ -164,7 +164,7 @@ export async function resolveLiveDirectModel(params: {
   const cfg = loadConfig();
   await ensureOpenClawModelsJson(cfg);
   const agentDir = resolveOpenClawAgentDir();
-  const authStorage = discoverAuthStorage(agentDir);
+  const authStorage = await discoverAuthStorageAsync(agentDir);
   const models = discoverModels(authStorage, agentDir).getAll();
 
   const rawModel = process.env[params.envVar]?.trim();

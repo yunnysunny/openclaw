@@ -5,7 +5,7 @@ import { canExecRequestNode } from "../../agents/exec-defaults.js";
 import { resolveDefaultModelForAgent } from "../../agents/model-selection.js";
 import type { EmbeddedContextFile } from "../../agents/pi-embedded-helpers.js";
 import { resolveEmbeddedFullAccessState } from "../../agents/pi-embedded-runner/sandbox-info.js";
-import { createOpenClawCodingTools } from "../../agents/pi-tools.js";
+import { createOpenClawCodingToolsAsync } from "../../agents/pi-tools.js";
 import { resolveSandboxRuntimeStatus } from "../../agents/sandbox.js";
 import { buildWorkspaceSkillSnapshot } from "../../agents/skills.js";
 import { getSkillsSnapshotVersion } from "../../agents/skills/refresh-state.js";
@@ -67,9 +67,9 @@ export async function resolveCommandsSystemPromptBundle(
     }
   })();
   const skillsPrompt = skillsSnapshot.prompt ?? "";
-  const tools = (() => {
+  const tools = await (async () => {
     try {
-      return createOpenClawCodingTools({
+      return await createOpenClawCodingToolsAsync({
         config: params.cfg,
         agentId: sessionAgentId,
         workspaceDir,

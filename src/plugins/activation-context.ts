@@ -1,4 +1,4 @@
-import { applyPluginAutoEnable } from "../config/plugin-auto-enable.js";
+import { applyPluginAutoEnable, applyPluginAutoEnableAsync } from "../config/plugin-auto-enable.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import {
   withBundledPluginAllowlistCompat,
@@ -67,6 +67,23 @@ type BundledPluginCompatibleActivationParams = {
     env?: NodeJS.ProcessEnv;
     onlyPluginIds?: readonly string[];
   }) => string[];
+};
+
+export type BundledPluginCompatibleActivationParamsAsync = {
+  rawConfig?: OpenClawConfig;
+  resolvedConfig?: OpenClawConfig;
+  autoEnabledReasons?: Record<string, string[]>;
+  env?: NodeJS.ProcessEnv;
+  workspaceDir?: string;
+  onlyPluginIds?: readonly string[];
+  applyAutoEnable?: boolean;
+  compatMode: PluginActivationBundledCompatMode;
+  resolveCompatPluginIds: (params: {
+    config?: OpenClawConfig;
+    workspaceDir?: string;
+    env?: NodeJS.ProcessEnv;
+    onlyPluginIds?: readonly string[];
+  }) => string[] | Promise<string[]>;
 };
 
 export function withActivatedPluginIds(params: {
@@ -195,6 +212,44 @@ export function resolvePluginActivationSnapshot(params: {
   };
 }
 
+/**
+ * Async counterpart to {@link resolvePluginActivationSnapshot} for call sites
+ * on async plugin/config boundaries. Uses {@link applyPluginAutoEnableAsync}
+ * when `applyAutoEnable` is true; otherwise matches the sync snapshot shape.
+ */
+export async function resolvePluginActivationSnapshotAsync(params: {
+  rawConfig?: OpenClawConfig;
+  resolvedConfig?: OpenClawConfig;
+  autoEnabledReasons?: Record<string, string[]>;
+  env?: NodeJS.ProcessEnv;
+  applyAutoEnable?: boolean;
+}): Promise<PluginActivationSnapshot> {
+  const env = params.env ?? process.env;
+  const rawConfig = params.rawConfig ?? params.resolvedConfig;
+  let resolvedConfig = params.resolvedConfig ?? params.rawConfig;
+  let autoEnabledReasons = params.autoEnabledReasons;
+
+  if (params.applyAutoEnable && rawConfig !== undefined) {
+    const autoEnabled = await applyPluginAutoEnableAsync({
+      config: rawConfig,
+      env,
+    });
+    resolvedConfig = autoEnabled.config;
+    autoEnabledReasons = autoEnabled.autoEnabledReasons;
+  }
+
+  return {
+    rawConfig,
+    config: resolvedConfig,
+    normalized: normalizePluginsConfig(resolvedConfig?.plugins),
+    activationSourceConfig: rawConfig,
+    activationSource: createPluginActivationSource({
+      config: rawConfig,
+    }),
+    autoEnabledReasons: autoEnabledReasons ?? {},
+  };
+}
+
 export function resolvePluginActivationInputs(params: {
   rawConfig?: OpenClawConfig;
   resolvedConfig?: OpenClawConfig;
@@ -249,6 +304,49 @@ export function resolveBundledPluginCompatibleActivationInputs(
         env: params.env,
         onlyPluginIds: params.onlyPluginIds,
       })
+    : [];
+  const activation = resolvePluginActivationInputs({
+    rawConfig: snapshot.rawConfig,
+    resolvedConfig: snapshot.config,
+    autoEnabledReasons: snapshot.autoEnabledReasons,
+    env: params.env,
+    compat: createBundledPluginCompatConfig({
+      compatMode: params.compatMode,
+      allowlistCompatEnabled,
+      compatPluginIds,
+    }),
+  });
+
+  return {
+    ...activation,
+    compatPluginIds,
+  };
+}
+
+export async function resolveBundledPluginCompatibleActivationInputsAsync(
+  params: BundledPluginCompatibleActivationParamsAsync,
+): Promise<BundledPluginCompatibleActivationInputs> {
+  const snapshot = await resolvePluginActivationSnapshotAsync({
+    rawConfig: params.rawConfig,
+    resolvedConfig: params.resolvedConfig,
+    autoEnabledReasons: params.autoEnabledReasons,
+    env: params.env,
+    applyAutoEnable: params.applyAutoEnable,
+  });
+  const allowlistCompatEnabled = params.compatMode.allowlist === true;
+  const shouldResolveCompatPluginIds = shouldResolveBundledCompatPluginIds({
+    compatMode: params.compatMode,
+    allowlistCompatEnabled,
+  });
+  const compatPluginIds = shouldResolveCompatPluginIds
+    ? await Promise.resolve(
+        params.resolveCompatPluginIds({
+          config: snapshot.config,
+          workspaceDir: params.workspaceDir,
+          env: params.env,
+          onlyPluginIds: params.onlyPluginIds,
+        }),
+      )
     : [];
   const activation = resolvePluginActivationInputs({
     rawConfig: snapshot.rawConfig,

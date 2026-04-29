@@ -37,6 +37,7 @@ vi.mock("../model-suppression.js", () => ({
 
 vi.mock("../pi-model-discovery.js", () => ({
   discoverAuthStorage: vi.fn(() => ({ mocked: true })),
+  discoverAuthStorageAsync: vi.fn(async () => ({ mocked: true })),
   discoverModels: vi.fn(() => ({ find: vi.fn(() => null) })),
 }));
 

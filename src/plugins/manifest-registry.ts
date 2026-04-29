@@ -47,7 +47,7 @@ import { checkMinHostVersion } from "./min-host-version.js";
 import { isPathInside, safeRealpath, safeRealpathSync } from "./path-safety.js";
 import type { PluginKind } from "./plugin-kind.types.js";
 import type { PluginOrigin } from "./plugin-origin.types.js";
-import { resolvePluginCacheInputs } from "./roots.js";
+import { resolvePluginCacheInputs, resolvePluginCacheInputsAsync } from "./roots.js";
 
 type PluginManifestContractListKey =
   | "speechProviders"
@@ -174,6 +174,32 @@ export function resolveManifestContractPluginIds(params: {
     .toSorted((left, right) => left.localeCompare(right));
 }
 
+export async function resolveManifestContractPluginIdsAsync(params: {
+  contract: PluginManifestContractListKey;
+  origin?: PluginOrigin;
+  config?: OpenClawConfig;
+  workspaceDir?: string;
+  env?: NodeJS.ProcessEnv;
+  onlyPluginIds?: readonly string[];
+}): Promise<string[]> {
+  const onlyPluginIdSet =
+    params.onlyPluginIds && params.onlyPluginIds.length > 0 ? new Set(params.onlyPluginIds) : null;
+  const registry = await loadPluginManifestRegistryAsync({
+    config: params.config,
+    workspaceDir: params.workspaceDir,
+    env: params.env,
+  });
+  return registry.plugins
+    .filter(
+      (plugin) =>
+        (!params.origin || plugin.origin === params.origin) &&
+        (!onlyPluginIdSet || onlyPluginIdSet.has(plugin.id)) &&
+        listContractValues(plugin, params.contract).length > 0,
+    )
+    .map((plugin) => plugin.id)
+    .toSorted((left, right) => left.localeCompare(right));
+}
+
 export function resolveManifestContractPluginIdsByCompatibilityRuntimePath(params: {
   contract: PluginManifestContractListKey;
   path: string | undefined;
@@ -265,6 +291,23 @@ function buildCacheKey(params: {
   const runtimeServiceVersion = resolveCompatibilityHostVersion(params.env);
   // The manifest registry only depends on where plugins are discovered from (workspace + load paths).
   // It does not depend on allow/deny/entries enable-state, so exclude those for higher cache hit rates.
+  return `${workspaceKey}::${configExtensionsRoot}::${bundledRoot}::${runtimeServiceVersion}::${JSON.stringify(loadPaths)}`;
+}
+
+async function buildCacheKeyAsync(params: {
+  workspaceDir?: string;
+  plugins: NormalizedPluginsConfig;
+  env: NodeJS.ProcessEnv;
+}): Promise<string> {
+  const { roots, loadPaths } = await resolvePluginCacheInputsAsync({
+    workspaceDir: params.workspaceDir,
+    loadPaths: params.plugins.loadPaths,
+    env: params.env,
+  });
+  const workspaceKey = roots.workspace ?? "";
+  const configExtensionsRoot = roots.global;
+  const bundledRoot = roots.stock ?? "";
+  const runtimeServiceVersion = resolveCompatibilityHostVersion(params.env);
   return `${workspaceKey}::${configExtensionsRoot}::${bundledRoot}::${runtimeServiceVersion}::${JSON.stringify(loadPaths)}`;
 }
 
@@ -685,7 +728,11 @@ export async function loadPluginManifestRegistryAsync(
   const config = params.config ?? {};
   const normalized = normalizePluginsConfigWithResolver(config.plugins);
   const env = params.env ?? process.env;
-  const cacheKey = buildCacheKey({ workspaceDir: params.workspaceDir, plugins: normalized, env });
+  const cacheKey = await buildCacheKeyAsync({
+    workspaceDir: params.workspaceDir,
+    plugins: normalized,
+    env,
+  });
   const cacheEnabled = params.cache !== false && shouldUseManifestCache(env);
   if (cacheEnabled) {
     const cached = registryCache.get(cacheKey);

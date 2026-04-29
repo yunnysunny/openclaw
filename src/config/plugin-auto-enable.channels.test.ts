@@ -173,7 +173,7 @@ describe("applyPluginAutoEnable channels", () => {
 
       expect(
         readFileSpy.mock.calls.filter(([filePath]) =>
-          String(filePath).endsWith("plugins/catalog.json"),
+          String(filePath).replace(/\\/g, "/").endsWith("plugins/catalog.json"),
         ),
       ).toHaveLength(2);
     } finally {

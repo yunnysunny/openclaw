@@ -1,5 +1,7 @@
+import fsp from "node:fs/promises";
 import fs from "node:fs";
-import { loadJsonFile, saveJsonFile } from "../../infra/json-file.js";
+import { loadJsonFile, saveJsonFile, saveJsonFileAsync } from "../../infra/json-file.js";
+import { readJsonFile } from "../../infra/json-files.js";
 import { normalizeOptionalString } from "../../shared/string-coerce.js";
 import { AUTH_STORE_VERSION } from "./constants.js";
 import { resolveAuthStatePath } from "./paths.js";
@@ -71,6 +73,13 @@ export function loadPersistedAuthProfileState(agentDir?: string): AuthProfileSta
   return coerceAuthProfileState(loadJsonFile(resolveAuthStatePath(agentDir)));
 }
 
+export async function loadPersistedAuthProfileStateAsync(
+  agentDir?: string,
+): Promise<AuthProfileState> {
+  const raw = await readJsonFile<unknown>(resolveAuthStatePath(agentDir));
+  return coerceAuthProfileState(raw);
+}
+
 export function buildPersistedAuthProfileState(
   store: AuthProfileState,
 ): AuthProfileStateStore | null {
@@ -103,5 +112,25 @@ export function savePersistedAuthProfileState(
     return null;
   }
   saveJsonFile(statePath, payload);
+  return payload;
+}
+
+export async function savePersistedAuthProfileStateAsync(
+  store: AuthProfileState,
+  agentDir?: string,
+): Promise<AuthProfileStateStore | null> {
+  const payload = buildPersistedAuthProfileState(store);
+  const statePath = resolveAuthStatePath(agentDir);
+  if (!payload) {
+    try {
+      await fsp.unlink(statePath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException)?.code !== "ENOENT") {
+        throw error;
+      }
+    }
+    return null;
+  }
+  await saveJsonFileAsync(statePath, payload);
   return payload;
 }

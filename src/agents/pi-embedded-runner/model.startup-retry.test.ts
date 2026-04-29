@@ -31,6 +31,7 @@ const runProviderDynamicModelMock = vi.fn<(params: unknown) => unknown>(() =>
 
 vi.mock("../pi-model-discovery.js", () => ({
   discoverAuthStorage: discoverAuthStorageMock,
+  discoverAuthStorageAsync: async (agentDir: string) => discoverAuthStorageMock(agentDir),
   discoverModels: discoverModelsMock,
 }));
 
@@ -40,8 +41,10 @@ vi.mock("../../plugins/provider-runtime.js", () => ({
   buildProviderUnknownModelHintWithPlugin: () => undefined,
   clearProviderRuntimeHookCache: () => {},
   normalizeProviderResolvedModelWithPlugin: () => undefined,
+  normalizeProviderResolvedModelWithPluginAsync: async () => undefined,
   normalizeProviderTransportWithPlugin: () => undefined,
   prepareProviderDynamicModel: async () => {},
+  resolveProviderBuiltInModelSuppressionAsync: async () => undefined,
   resolveProviderBuiltInModelSuppression: () => undefined,
   runProviderDynamicModel: () => undefined,
   shouldPreferProviderRuntimeResolvedModel: () => false,

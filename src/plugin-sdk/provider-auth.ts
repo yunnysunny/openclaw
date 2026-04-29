@@ -14,10 +14,12 @@ export type { AuthProfileStore, OAuthCredential } from "../agents/auth-profiles/
 export { CLAUDE_CLI_PROFILE_ID, CODEX_CLI_PROFILE_ID } from "../agents/auth-profiles/constants.js";
 export {
   ensureAuthProfileStore,
+  ensureAuthProfileStoreAsync,
   ensureAuthProfileStoreForLocalUpdate,
 } from "../agents/auth-profiles/store.js";
 export {
   listProfilesForProvider,
+  listProfilesForProviderAsync,
   removeProviderAuthProfilesWithLock,
   upsertAuthProfile,
   upsertAuthProfileWithLock,

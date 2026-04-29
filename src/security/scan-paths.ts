@@ -16,6 +16,14 @@ function safeRealpathSync(filePath: string): string | null {
   }
 }
 
+async function safeRealpath(filePath: string): Promise<string | null> {
+  try {
+    return await fs.promises.realpath(filePath);
+  } catch {
+    return null;
+  }
+}
+
 export function isPathInsideWithRealpath(
   basePath: string,
   candidatePath: string,
@@ -30,6 +38,22 @@ export function isPathInsideWithRealpath(
     // Default to false (safe): only bypass the realpath check when the caller
     // explicitly opts out with requireRealpath: false. All production callers
     // already pass requireRealpath: true; this change makes the default secure.
+    return opts?.requireRealpath === false;
+  }
+  return isPathInside(baseReal, candidateReal);
+}
+
+export async function isPathInsideWithRealpathAsync(
+  basePath: string,
+  candidatePath: string,
+  opts?: { requireRealpath?: boolean },
+): Promise<boolean> {
+  if (!isPathInside(basePath, candidatePath)) {
+    return false;
+  }
+  const baseReal = await safeRealpath(basePath);
+  const candidateReal = await safeRealpath(candidatePath);
+  if (!baseReal || !candidateReal) {
     return opts?.requireRealpath === false;
   }
   return isPathInside(baseReal, candidateReal);

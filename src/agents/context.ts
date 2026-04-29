@@ -213,10 +213,10 @@ function ensureContextWindowCacheLoaded(): Promise<void> {
     }
 
     try {
-      const { discoverAuthStorage, discoverModels } =
+      const { discoverAuthStorageAsync, discoverModels } =
         await import("./pi-model-discovery-runtime.js");
       const agentDir = resolveOpenClawAgentDir();
-      const authStorage = discoverAuthStorage(agentDir);
+      const authStorage = await discoverAuthStorageAsync(agentDir);
       const modelRegistry = discoverModels(authStorage, agentDir) as unknown as ModelRegistryLike;
       const models =
         typeof modelRegistry.getAvailable === "function"

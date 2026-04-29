@@ -8,6 +8,7 @@ import { agentCommand } from "../agents/agent-command.js";
 import { resolveAgentDir, resolveDefaultAgentId } from "../agents/agent-scope.js";
 import {
   listProfilesForProvider,
+  listProfilesForProviderAsync,
   loadAuthProfileStoreForRuntime,
 } from "../agents/auth-profiles.js";
 import { updateAuthProfileStoreWithLock } from "../agents/auth-profiles/store.js";
@@ -642,7 +643,7 @@ async function runModelAuthLogout(provider: string) {
   const cfg = loadConfig();
   const agentDir = resolveAgentDir(cfg, resolveDefaultAgentId(cfg));
   const store = loadAuthProfileStoreForRuntime(agentDir);
-  const profileIds = listProfilesForProvider(store, provider);
+  const profileIds = await listProfilesForProviderAsync(store, provider);
   const updated = await updateAuthProfileStoreWithLock({
     agentDir,
     updater: (nextStore) => {

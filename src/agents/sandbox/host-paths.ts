@@ -1,5 +1,8 @@
 import { posix } from "node:path";
-import { resolvePathViaExistingAncestorSync } from "../../infra/boundary-path.js";
+import {
+  resolvePathViaExistingAncestor,
+  resolvePathViaExistingAncestorSync,
+} from "../../infra/boundary-path.js";
 
 function stripWindowsNamespacePrefix(input: string): string {
   if (input.startsWith("\\\\?\\")) {
@@ -40,4 +43,13 @@ export function resolveSandboxHostPathViaExistingAncestor(sourcePath: string): s
     return sourcePath;
   }
   return normalizeSandboxHostPath(resolvePathViaExistingAncestorSync(sourcePath));
+}
+
+export async function resolveSandboxHostPathViaExistingAncestorAsync(
+  sourcePath: string,
+): Promise<string> {
+  if (!sourcePath.startsWith("/")) {
+    return sourcePath;
+  }
+  return normalizeSandboxHostPath(await resolvePathViaExistingAncestor(sourcePath));
 }

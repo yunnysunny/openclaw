@@ -15,12 +15,18 @@ vi.mock("../discovery.js", () => ({
   discoverOpenClawPlugins: (
     ...args: Parameters<typeof registryJitiMocks.discoverOpenClawPlugins>
   ) => registryJitiMocks.discoverOpenClawPlugins(...args),
+  discoverOpenClawPluginsAsync: (
+    ...args: Parameters<typeof registryJitiMocks.discoverOpenClawPlugins>
+  ) => Promise.resolve(registryJitiMocks.discoverOpenClawPlugins(...args)),
 }));
 
 vi.mock("../manifest-registry.js", () => ({
   loadPluginManifestRegistrySync: (
     ...args: Parameters<typeof registryJitiMocks.loadPluginManifestRegistrySync>
   ) => registryJitiMocks.loadPluginManifestRegistrySync(...args),
+  loadPluginManifestRegistryAsync: (
+    ...args: Parameters<typeof registryJitiMocks.loadPluginManifestRegistrySync>
+  ) => Promise.resolve(registryJitiMocks.loadPluginManifestRegistrySync(...args)),
 }));
 
 export function resetRegistryJitiMocks(): void {

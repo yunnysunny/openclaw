@@ -1,9 +1,9 @@
-import syncFs from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { Type } from "@sinclair/typebox";
 import { openBoundaryFile, type BoundaryFileOpenResult } from "../infra/boundary-file-read.js";
+import { closeFileDescriptorAsync, readFileUtf8FromFd } from "../infra/fd-promise.js";
 import {
   mkdirPathWithinRoot,
   removePathWithinRoot,
@@ -256,9 +256,9 @@ function resolvePatchFileOps(options: ApplyPatchOptions): PatchFileOps {
       });
       assertBoundaryRead(opened, filePath);
       try {
-        return syncFs.readFileSync(opened.fd, "utf8");
+        return await readFileUtf8FromFd(opened.fd);
       } finally {
-        syncFs.closeSync(opened.fd);
+        await closeFileDescriptorAsync(opened.fd);
       }
     },
     writeFile: async (filePath, content) => {

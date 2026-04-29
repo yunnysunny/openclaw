@@ -1,6 +1,6 @@
 import { normalizeOptionalString } from "../shared/string-coerce.js";
-import { discoverOpenClawPlugins } from "./discovery.js";
-import { loadPluginManifest } from "./manifest.js";
+import { discoverOpenClawPlugins, discoverOpenClawPluginsAsync } from "./discovery.js";
+import { loadPluginManifest, loadPluginManifestAsync } from "./manifest.js";
 
 export type BundledPluginSource = {
   pluginId: string;
@@ -70,6 +70,45 @@ export function resolveBundledPluginSources(params: {
   return bundled;
 }
 
+export async function resolveBundledPluginSourcesAsync(params: {
+  workspaceDir?: string;
+  /** Use an explicit env when bundled roots should resolve independently from process.env. */
+  env?: NodeJS.ProcessEnv;
+}): Promise<Map<string, BundledPluginSource>> {
+  const discovery = await discoverOpenClawPluginsAsync({
+    workspaceDir: params.workspaceDir,
+    env: params.env,
+  });
+  const bundled = new Map<string, BundledPluginSource>();
+
+  for (const candidate of discovery.candidates) {
+    if (candidate.origin !== "bundled") {
+      continue;
+    }
+    const manifest = await loadPluginManifestAsync(candidate.rootDir, false);
+    if (!manifest.ok) {
+      continue;
+    }
+    const pluginId = manifest.manifest.id;
+    if (bundled.has(pluginId)) {
+      continue;
+    }
+
+    const npmSpec =
+      normalizeOptionalString(candidate.packageManifest?.install?.npmSpec) ||
+      normalizeOptionalString(candidate.packageName) ||
+      undefined;
+
+    bundled.set(pluginId, {
+      pluginId,
+      localPath: candidate.rootDir,
+      npmSpec,
+    });
+  }
+
+  return bundled;
+}
+
 export function findBundledPluginSource(params: {
   lookup: BundledPluginLookup;
   workspaceDir?: string;
@@ -77,6 +116,22 @@ export function findBundledPluginSource(params: {
   env?: NodeJS.ProcessEnv;
 }): BundledPluginSource | undefined {
   const bundled = resolveBundledPluginSources({
+    workspaceDir: params.workspaceDir,
+    env: params.env,
+  });
+  return findBundledPluginSourceInMap({
+    bundled,
+    lookup: params.lookup,
+  });
+}
+
+export async function findBundledPluginSourceAsync(params: {
+  lookup: BundledPluginLookup;
+  workspaceDir?: string;
+  /** Use an explicit env when bundled roots should resolve independently from process.env. */
+  env?: NodeJS.ProcessEnv;
+}): Promise<BundledPluginSource | undefined> {
+  const bundled = await resolveBundledPluginSourcesAsync({
     workspaceDir: params.workspaceDir,
     env: params.env,
   });

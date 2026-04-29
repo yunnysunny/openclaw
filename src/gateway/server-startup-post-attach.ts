@@ -60,7 +60,7 @@ async function prewarmConfiguredPrimaryModel(params: {
     { selectAgentHarness },
     { isCliProvider, resolveConfiguredModelRef },
     { ensureOpenClawModelsJson },
-    { resolveModel },
+    { resolveModelAsync },
     { resolveEmbeddedAgentRuntime },
   ] = await Promise.all([
     import("../agents/agent-paths.js"),
@@ -89,7 +89,7 @@ async function prewarmConfiguredPrimaryModel(params: {
   const agentDir = resolveOpenClawAgentDir();
   try {
     await ensureOpenClawModelsJson(params.cfg, agentDir);
-    const resolved = resolveModel(provider, model, agentDir, params.cfg, {
+    const resolved = await resolveModelAsync(provider, model, agentDir, params.cfg, {
       skipProviderRuntimeHooks: true,
     });
     if (!resolved.model) {
@@ -345,7 +345,7 @@ const defaultGatewayPostAttachRuntimeDeps: GatewayPostAttachRuntimeDeps = {
   getGlobalHookRunner: async () =>
     (await import("../plugins/hook-runner-global.js")).getGlobalHookRunner(),
   logGatewayStartup: async (params) =>
-    (await import("./server-startup-log.js")).logGatewayStartup(params),
+    (await import("./server-startup-log.js")).logGatewayStartupAsync(params),
   scheduleGatewayUpdateCheck: async (...args) =>
     (await import("../infra/update-startup.js")).scheduleGatewayUpdateCheck(...args),
   startGatewaySidecars,

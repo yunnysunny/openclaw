@@ -1,5 +1,6 @@
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { resolveUserPath } from "../../utils.js";
 import {
   applyExtraParamsToAgentMock,
   contextEngineCompactMock,
@@ -32,6 +33,7 @@ const TEST_SESSION_ID = "session-1";
 const TEST_SESSION_KEY = "agent:main:session-1";
 const TEST_SESSION_FILE = "/tmp/session.jsonl";
 const TEST_WORKSPACE_DIR = "/tmp";
+const TEST_BOOTSTRAP_WORKSPACE_DIR = "/tmp/workspace";
 const TEST_CUSTOM_INSTRUCTIONS = "focus on decisions";
 type SessionHookEvent = {
   type?: string;
@@ -177,12 +179,13 @@ describe("compactEmbeddedPiSessionDirect hooks", () => {
     await compactEmbeddedPiSessionDirect({
       sessionId: "session-1",
       sessionFile: "/tmp/session.jsonl",
-      workspaceDir: "/tmp/workspace",
+      workspaceDir: TEST_BOOTSTRAP_WORKSPACE_DIR,
     });
 
     expect(ensureRuntimePluginsLoaded).toHaveBeenCalledWith({
       config: undefined,
-      workspaceDir: "/tmp/workspace",
+      workspaceDir: resolveUserPath(TEST_BOOTSTRAP_WORKSPACE_DIR),
+      allowGatewaySubagentBinding: undefined,
     });
   });
 
@@ -199,13 +202,13 @@ describe("compactEmbeddedPiSessionDirect hooks", () => {
     await compactEmbeddedPiSessionDirect({
       sessionId: "session-1",
       sessionFile: "/tmp/session.jsonl",
-      workspaceDir: "/tmp/workspace",
+      workspaceDir: TEST_BOOTSTRAP_WORKSPACE_DIR,
       allowGatewaySubagentBinding: true,
     });
 
     expect(ensureRuntimePluginsLoaded).toHaveBeenCalledWith({
       config: undefined,
-      workspaceDir: "/tmp/workspace",
+      workspaceDir: resolveUserPath(TEST_BOOTSTRAP_WORKSPACE_DIR),
       allowGatewaySubagentBinding: true,
     });
   });

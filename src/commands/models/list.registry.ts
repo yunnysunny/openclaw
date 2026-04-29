@@ -1,7 +1,7 @@
 import type { Api, Model } from "@mariozechner/pi-ai";
 import type { ModelRegistry } from "@mariozechner/pi-coding-agent";
 import type { AuthProfileStore } from "../../agents/auth-profiles/types.js";
-import { shouldSuppressBuiltInModel } from "../../agents/model-suppression.js";
+import { shouldSuppressBuiltInModelAsync } from "../../agents/model-suppression.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import {
   formatErrorWithStack,
@@ -10,7 +10,7 @@ import {
 } from "./list.errors.js";
 import { toModelRow as toModelRowBase } from "./list.model-row.js";
 import {
-  discoverAuthStorage,
+  discoverAuthStorageAsync,
   discoverModels,
   hasUsableCustomProviderApiKey,
   listProfilesForProvider,
@@ -82,7 +82,7 @@ function validateAvailableModels(availableModels: unknown): Model<Api>[] {
   return availableModels as Model<Api>[];
 }
 
-function loadAvailableModels(registry: ModelRegistry, cfg: OpenClawConfig): Model<Api>[] {
+async function loadAvailableModels(registry: ModelRegistry, cfg: OpenClawConfig): Promise<Model<Api>[]> {
   let availableModels: unknown;
   try {
     availableModels = registry.getAvailable();
@@ -90,15 +90,21 @@ function loadAvailableModels(registry: ModelRegistry, cfg: OpenClawConfig): Mode
     throw normalizeAvailabilityError(err);
   }
   try {
-    return validateAvailableModels(availableModels).filter(
-      (model) =>
-        !shouldSuppressBuiltInModel({
+    const validated = validateAvailableModels(availableModels);
+    const filtered: Model<Api>[] = [];
+    for (const model of validated) {
+      if (
+        !(await shouldSuppressBuiltInModelAsync({
           provider: model.provider,
           id: model.id,
           baseUrl: model.baseUrl,
           config: cfg,
-        }),
-    );
+        }))
+      ) {
+        filtered.push(model);
+      }
+    }
+    return filtered;
   } catch (err) {
     throw normalizeAvailabilityError(err);
   }
@@ -109,22 +115,27 @@ export async function loadModelRegistry(
   _opts?: { sourceConfig?: OpenClawConfig },
 ) {
   const agentDir = resolveOpenClawAgentDir();
-  const authStorage = discoverAuthStorage(agentDir);
+  const authStorage = await discoverAuthStorageAsync(agentDir);
   const registry = discoverModels(authStorage, agentDir);
-  const models = registry.getAll().filter(
-    (model) =>
-      !shouldSuppressBuiltInModel({
-        provider: model.provider,
-        id: model.id,
-        baseUrl: model.baseUrl,
-        config: cfg,
-      }),
-  );
+  const models = (
+    await Promise.all(
+      registry.getAll().map(async (model) =>
+        (await shouldSuppressBuiltInModelAsync({
+          provider: model.provider,
+          id: model.id,
+          baseUrl: model.baseUrl,
+          config: cfg,
+        }))
+          ? null
+          : model,
+      ),
+    )
+  ).filter((model): model is Model<Api> => model !== null);
   let availableKeys: Set<string> | undefined;
   let availabilityErrorMessage: string | undefined;
 
   try {
-    const availableModels = loadAvailableModels(registry, cfg);
+    const availableModels = await loadAvailableModels(registry, cfg);
     availableKeys = new Set(availableModels.map((model) => modelKey(model.provider, model.id)));
   } catch (err) {
     if (!shouldFallbackToAuthHeuristics(err)) {

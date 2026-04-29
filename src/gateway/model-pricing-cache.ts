@@ -10,7 +10,10 @@ import {
 import { resolvePluginWebSearchConfig } from "../config/plugin-web-search-config.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
-import { resolveManifestContractPluginIds } from "../plugins/manifest-registry.js";
+import {
+  resolveManifestContractPluginIds,
+  resolveManifestContractPluginIdsAsync,
+} from "../plugins/manifest-registry.js";
 import { normalizeProviderModelIdWithPluginAsync } from "../plugins/provider-runtime.js";
 import { normalizeOptionalString, resolvePrimaryStringValue } from "../shared/string-coerce.js";
 import {
@@ -402,6 +405,23 @@ function addConfiguredWebSearchPluginModels(params: {
   }
 }
 
+export async function addConfiguredWebSearchPluginModelsAsync(params: {
+  config: OpenClawConfig;
+  aliasIndex: ReturnType<typeof buildModelAliasIndex>;
+  refs: Map<string, ModelRef>;
+}): Promise<void> {
+  for (const pluginId of await resolveManifestContractPluginIdsAsync({
+    contract: "webSearchProviders",
+    config: params.config,
+  })) {
+    addResolvedModelRef({
+      raw: resolvePluginWebSearchConfig(params.config, pluginId)?.model as string | undefined,
+      aliasIndex: params.aliasIndex,
+      refs: params.refs,
+    });
+  }
+}
+
 export function collectConfiguredModelPricingRefs(config: OpenClawConfig): ModelRef[] {
   const refs = new Map<string, ModelRef>();
   const aliasIndex = buildModelAliasIndex({
@@ -442,6 +462,65 @@ export function collectConfiguredModelPricingRefs(config: OpenClawConfig): Model
   }
 
   addConfiguredWebSearchPluginModels({ config, aliasIndex, refs });
+
+  for (const entry of config.tools?.media?.models ?? []) {
+    addProviderModelPair({ provider: entry.provider, model: entry.model, refs });
+  }
+  for (const entry of config.tools?.media?.image?.models ?? []) {
+    addProviderModelPair({ provider: entry.provider, model: entry.model, refs });
+  }
+  for (const entry of config.tools?.media?.audio?.models ?? []) {
+    addProviderModelPair({ provider: entry.provider, model: entry.model, refs });
+  }
+  for (const entry of config.tools?.media?.video?.models ?? []) {
+    addProviderModelPair({ provider: entry.provider, model: entry.model, refs });
+  }
+
+  return Array.from(refs.values());
+}
+
+export async function collectConfiguredModelPricingRefsAsync(
+  config: OpenClawConfig,
+): Promise<ModelRef[]> {
+  const refs = new Map<string, ModelRef>();
+  const aliasIndex = buildModelAliasIndex({
+    cfg: config,
+    defaultProvider: DEFAULT_PROVIDER,
+  });
+
+  addModelListLike({ value: config.agents?.defaults?.model, aliasIndex, refs });
+  addModelListLike({ value: config.agents?.defaults?.imageModel, aliasIndex, refs });
+  addModelListLike({ value: config.agents?.defaults?.pdfModel, aliasIndex, refs });
+  addResolvedModelRef({ raw: config.agents?.defaults?.compaction?.model, aliasIndex, refs });
+  addResolvedModelRef({ raw: config.agents?.defaults?.heartbeat?.model, aliasIndex, refs });
+  addModelListLike({ value: config.tools?.subagents?.model, aliasIndex, refs });
+  addResolvedModelRef({ raw: config.messages?.tts?.summaryModel, aliasIndex, refs });
+  addResolvedModelRef({ raw: config.hooks?.gmail?.model, aliasIndex, refs });
+
+  for (const agent of config.agents?.list ?? []) {
+    addModelListLike({ value: agent.model, aliasIndex, refs });
+    addModelListLike({ value: agent.subagents?.model, aliasIndex, refs });
+    addResolvedModelRef({ raw: agent.heartbeat?.model, aliasIndex, refs });
+  }
+
+  for (const mapping of config.hooks?.mappings ?? []) {
+    addResolvedModelRef({ raw: mapping.model, aliasIndex, refs });
+  }
+
+  for (const channelMap of Object.values(config.channels?.modelByChannel ?? {})) {
+    if (!channelMap || typeof channelMap !== "object") {
+      continue;
+    }
+    for (const raw of Object.values(channelMap)) {
+      addResolvedModelRef({
+        raw: typeof raw === "string" ? raw : undefined,
+        aliasIndex,
+        refs,
+      });
+    }
+  }
+
+  await addConfiguredWebSearchPluginModelsAsync({ config, aliasIndex, refs });
 
   for (const entry of config.tools?.media?.models ?? []) {
     addProviderModelPair({ provider: entry.provider, model: entry.model, refs });
@@ -528,7 +607,7 @@ export async function refreshGatewayModelPricingCache(params: {
   }
   const fetchImpl = params.fetchImpl ?? fetch;
   inFlightRefresh = (async () => {
-    const refs = collectConfiguredModelPricingRefs(params.config);
+    const refs = await collectConfiguredModelPricingRefsAsync(params.config);
     if (refs.length === 0) {
       replaceGatewayModelPricingCache(new Map());
       clearRefreshTimer();

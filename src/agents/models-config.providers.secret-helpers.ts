@@ -11,7 +11,11 @@ import {
   resolveNonEnvSecretRefHeaderValueMarker,
 } from "./model-auth-markers.js";
 import { resolveAwsSdkEnvVarName } from "./model-auth-runtime-shared.js";
-import { resolveProviderIdForAuth } from "./provider-auth-aliases.js";
+import {
+  type ProviderAuthAliasLookupParams,
+  resolveProviderIdForAuth,
+  resolveProviderIdForAuthAsync,
+} from "./provider-auth-aliases.js";
 
 type ModelsConfig = NonNullable<OpenClawConfig["models"]>;
 export type ProviderConfig = NonNullable<ModelsConfig["providers"]>[string];
@@ -194,6 +198,25 @@ export function listAuthProfilesForProvider(store: AuthProfileStore, provider: s
     .map(([id]) => id);
 }
 
+/**
+ * Async counterpart to {@link listAuthProfilesForProvider}: same matching rules with
+ * {@link resolveProviderIdForAuthAsync} (async manifest-backed alias resolution).
+ */
+export async function listAuthProfilesForProviderAsync(
+  store: AuthProfileStore,
+  provider: string,
+  params?: ProviderAuthAliasLookupParams,
+): Promise<string[]> {
+  const providerKey = await resolveProviderIdForAuthAsync(provider, params);
+  const ids: string[] = [];
+  for (const [id, cred] of Object.entries(store.profiles)) {
+    if ((await resolveProviderIdForAuthAsync(cred.provider, params)) === providerKey) {
+      ids.push(id);
+    }
+  }
+  return ids;
+}
+
 export function resolveApiKeyFromProfiles(params: {
   provider: string;
   store: AuthProfileStore;
@@ -214,7 +237,7 @@ export async function resolveApiKeyFromProfilesAsync(params: {
   store: AuthProfileStore;
   env?: NodeJS.ProcessEnv;
 }): Promise<ProfileApiKeyResolution | undefined> {
-  const ids = listAuthProfilesForProvider(params.store, params.provider);
+  const ids = await listAuthProfilesForProviderAsync(params.store, params.provider);
   for (const id of ids) {
     const resolved = await resolveApiKeyFromCredentialAsync(params.store.profiles[id], params.env);
     if (resolved) {
@@ -302,6 +325,32 @@ export function normalizeResolvedEnvApiKey(params: {
   };
 }
 
+export async function normalizeResolvedEnvApiKeyAsync(params: {
+  providerKey: string;
+  provider: ProviderConfig;
+  env: NodeJS.ProcessEnv;
+  secretRefManagedProviders?: Set<string>;
+}): Promise<ProviderConfig> {
+  const currentApiKey = params.provider.apiKey;
+  if (
+    typeof currentApiKey !== "string" ||
+    !currentApiKey.trim() ||
+    ENV_VAR_NAME_RE.test(currentApiKey.trim())
+  ) {
+    return params.provider;
+  }
+
+  const envVarName = await resolveEnvApiKeyVarNameAsync(params.providerKey, params.env);
+  if (!envVarName || params.env[envVarName] !== currentApiKey) {
+    return params.provider;
+  }
+  params.secretRefManagedProviders?.add(params.providerKey);
+  return {
+    ...params.provider,
+    apiKey: envVarName,
+  };
+}
+
 export function resolveMissingProviderApiKey(params: {
   providerKey: string;
   provider: ProviderConfig;
@@ -340,6 +389,59 @@ export function resolveMissingProviderApiKey(params: {
   }
 
   const fromEnv = resolveEnvApiKeyVarName(params.providerKey, params.env);
+  const apiKey = fromEnv ?? params.profileApiKey?.apiKey;
+  if (!apiKey?.trim()) {
+    return params.provider;
+  }
+  if (params.profileApiKey && params.profileApiKey.source !== "plaintext") {
+    params.secretRefManagedProviders?.add(params.providerKey);
+  }
+  return {
+    ...params.provider,
+    apiKey,
+  };
+}
+
+export async function resolveMissingProviderApiKeyAsync(params: {
+  providerKey: string;
+  provider: ProviderConfig;
+  env: NodeJS.ProcessEnv;
+  profileApiKey: ProfileApiKeyResolution | undefined;
+  secretRefManagedProviders?: Set<string>;
+  providerApiKeyResolver?: (
+    env: NodeJS.ProcessEnv,
+  ) => string | undefined | Promise<string | undefined>;
+}): Promise<ProviderConfig> {
+  const hasModels = Array.isArray(params.provider.models) && params.provider.models.length > 0;
+  const normalizedApiKey = normalizeOptionalSecretInput(params.provider.apiKey);
+  const hasConfiguredApiKey = Boolean(normalizedApiKey || params.provider.apiKey);
+  if (!hasModels || hasConfiguredApiKey) {
+    return params.provider;
+  }
+
+  const authMode = params.provider.auth;
+  if (params.providerApiKeyResolver && (!authMode || authMode === "aws-sdk")) {
+    const resolvedApiKey = await Promise.resolve(params.providerApiKeyResolver(params.env));
+    if (!resolvedApiKey) {
+      return params.provider;
+    }
+    return {
+      ...params.provider,
+      apiKey: resolvedApiKey,
+    };
+  }
+  if (authMode === "aws-sdk") {
+    const awsEnvVar = resolveAwsSdkApiKeyVarName(params.env);
+    if (!awsEnvVar) {
+      return params.provider;
+    }
+    return {
+      ...params.provider,
+      apiKey: awsEnvVar,
+    };
+  }
+
+  const fromEnv = await resolveEnvApiKeyVarNameAsync(params.providerKey, params.env);
   const apiKey = fromEnv ?? params.profileApiKey?.apiKey;
   if (!apiKey?.trim()) {
     return params.provider;

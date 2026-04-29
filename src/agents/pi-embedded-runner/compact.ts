@@ -72,7 +72,7 @@ import {
 } from "../pi-hooks/compaction-safeguard-runtime.js";
 import { applyPiCompactionSettingsFromConfig } from "../pi-settings.js";
 import { createPreparedEmbeddedPiSettingsManager } from "../pi-project-settings.js";
-import { createOpenClawCodingTools } from "../pi-tools.js";
+import { createOpenClawCodingToolsAsync } from "../pi-tools.js";
 import { wrapStreamFnTextTransforms } from "../plugin-text-transforms.js";
 import { registerProviderStreamForModel } from "../provider-stream.js";
 import { ensureRuntimePluginsLoaded } from "../runtime-plugins.js";
@@ -497,7 +497,7 @@ export async function compactEmbeddedPiSessionDirect(
     );
 
     const runAbortController = new AbortController();
-    const toolsRaw = createOpenClawCodingTools({
+    const toolsRaw = await createOpenClawCodingToolsAsync({
       exec: {
         elevated: params.bashElevated,
       },

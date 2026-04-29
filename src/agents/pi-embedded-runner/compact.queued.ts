@@ -18,7 +18,7 @@ import { resolveSessionAgentIds } from "../agent-scope.js";
 import { resolveContextWindowInfo } from "../context-window-guard.js";
 import { DEFAULT_CONTEXT_TOKENS, DEFAULT_MODEL, DEFAULT_PROVIDER } from "../defaults.js";
 import { maybeCompactAgentHarnessSession } from "../harness/selection.js";
-import { ensureRuntimePluginsLoaded } from "../runtime-plugins.js";
+import { ensureRuntimePluginsLoadedAsync } from "../runtime-plugins.js";
 import type { CompactEmbeddedPiSessionParams } from "./compact.types.js";
 import { asCompactionHookRunner, runPostCompactionSideEffects } from "./compaction-hooks.js";
 import {
@@ -50,7 +50,7 @@ export async function compactEmbeddedPiSession(
     params.enqueue ?? ((task, opts) => enqueueCommandInLane(globalLane, task, opts));
   return enqueueCommandInLane(sessionLane, () =>
     enqueueGlobal(async () => {
-      ensureRuntimePluginsLoaded({
+      await ensureRuntimePluginsLoadedAsync({
         config: params.config,
         workspaceDir: params.workspaceDir,
         allowGatewaySubagentBinding: params.allowGatewaySubagentBinding,

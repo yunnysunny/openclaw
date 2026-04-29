@@ -13,6 +13,7 @@ const mocks = getRegistryJitiMocks();
 let clearPluginSetupRegistryCache: typeof import("./setup-registry.js").clearPluginSetupRegistryCache;
 let setupRegistryTesting: typeof import("./setup-registry.js").__testing;
 let resolvePluginSetupRegistry: typeof import("./setup-registry.js").resolvePluginSetupRegistry;
+let resolvePluginSetupRegistryAsync: typeof import("./setup-registry.js").resolvePluginSetupRegistryAsync;
 let resolvePluginSetupProvider: typeof import("./setup-registry.js").resolvePluginSetupProvider;
 let resolvePluginSetupCliBackend: typeof import("./setup-registry.js").resolvePluginSetupCliBackend;
 let runPluginSetupConfigMigrations: typeof import("./setup-registry.js").runPluginSetupConfigMigrations;
@@ -151,6 +152,7 @@ describe("setup-registry getJiti", () => {
       __testing: setupRegistryTesting,
       clearPluginSetupRegistryCache,
       resolvePluginSetupRegistry,
+      resolvePluginSetupRegistryAsync,
       resolvePluginSetupProvider,
       resolvePluginSetupCliBackend,
       runPluginSetupConfigMigrations,
@@ -492,6 +494,14 @@ describe("setup-registry getJiti", () => {
     await expectNoUnhandledRejection(() => {
       expect(resolvePluginSetupRegistry({ env: {} }).configMigrations).toHaveLength(1);
     });
+  });
+
+  it("resolvePluginSetupRegistryAsync matches resolvePluginSetupRegistry", async () => {
+    mockVoiceCallConfigMigrationRegistration();
+    clearPluginSetupRegistryCache();
+    const fromAsync = await resolvePluginSetupRegistryAsync({ env: {} });
+    const fromSync = resolvePluginSetupRegistry({ env: {} });
+    expect(fromSync).toBe(fromAsync);
   });
 
   it("fails closed when multiple plugins claim the same setup provider id", () => {

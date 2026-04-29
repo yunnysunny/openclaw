@@ -7,7 +7,10 @@ import {
   resolveMemoryDreamingPluginId,
 } from "../memory-host-sdk/dreaming.js";
 import { normalizeOptionalLowercaseString } from "../shared/string-coerce.js";
-import { resolveManifestActivationPluginIds } from "./activation-planner.js";
+import {
+  resolveManifestActivationPluginIds,
+  resolveManifestActivationPluginIdsAsync,
+} from "./activation-planner.js";
 import {
   createPluginActivationSource,
   normalizePluginId,
@@ -20,7 +23,11 @@ import {
   isBundledManifestOwner,
   passesManifestOwnerBasePolicy,
 } from "./manifest-owner-policy.js";
-import { loadPluginManifestRegistrySync, type PluginManifestRecord } from "./manifest-registry.js";
+import {
+  loadPluginManifestRegistryAsync,
+  loadPluginManifestRegistrySync,
+  type PluginManifestRecord,
+} from "./manifest-registry.js";
 import { hasKind } from "./slots.js";
 
 function hasRuntimeContractSurface(plugin: PluginManifestRecord): boolean {
@@ -257,6 +264,60 @@ export function resolveConfiguredDeferredChannelPluginIds(params: {
     .map((plugin) => plugin.id);
 }
 
+function listGatewayStartupPluginIdsFromManifestPlugins(params: {
+  rootConfig: OpenClawConfig;
+  manifestPlugins: readonly PluginManifestRecord[];
+  configuredChannelIds: Set<string>;
+  pluginsConfig: ReturnType<typeof normalizePluginsConfig>;
+  activationSource: ReturnType<typeof createPluginActivationSource>;
+  requiredAgentHarnessPluginIds: Set<string>;
+  startupDreamingPluginIds: ReadonlySet<string>;
+  explicitMemorySlotStartupPluginId: string | undefined;
+}): string[] {
+  return params.manifestPlugins
+    .filter((plugin) => {
+      if (plugin.channels.some((channelId) => params.configuredChannelIds.has(channelId))) {
+        return true;
+      }
+      if (params.requiredAgentHarnessPluginIds.has(plugin.id)) {
+        const activationState = resolveEffectivePluginActivationState({
+          id: plugin.id,
+          origin: plugin.origin,
+          config: params.pluginsConfig,
+          rootConfig: params.rootConfig,
+          enabledByDefault: plugin.enabledByDefault,
+          activationSource: params.activationSource,
+        });
+        return activationState.enabled;
+      }
+      if (
+        !shouldConsiderForGatewayStartup({
+          plugin,
+          startupDreamingPluginIds: params.startupDreamingPluginIds,
+          explicitMemorySlotStartupPluginId: params.explicitMemorySlotStartupPluginId,
+        })
+      ) {
+        return false;
+      }
+      const activationState = resolveEffectivePluginActivationState({
+        id: plugin.id,
+        origin: plugin.origin,
+        config: params.pluginsConfig,
+        rootConfig: params.rootConfig,
+        enabledByDefault: plugin.enabledByDefault,
+        activationSource: params.activationSource,
+      });
+      if (!activationState.enabled) {
+        return false;
+      }
+      if (plugin.origin !== "bundled") {
+        return activationState.explicitlyEnabled;
+      }
+      return activationState.source === "explicit" || activationState.source === "default";
+    })
+    .map((plugin) => plugin.id);
+}
+
 export function resolveGatewayStartupPluginIds(params: {
   config: OpenClawConfig;
   activationSourceConfig?: OpenClawConfig;
@@ -294,50 +355,72 @@ export function resolveGatewayStartupPluginIds(params: {
   const explicitMemorySlotStartupPluginId = resolveExplicitMemorySlotStartupPluginId(
     params.activationSourceConfig ?? params.config,
   );
-  return loadPluginManifestRegistrySync({
+  const manifestRegistry = loadPluginManifestRegistrySync({
     config: params.config,
     workspaceDir: params.workspaceDir,
     env: params.env,
-  })
-    .plugins.filter((plugin) => {
-      if (plugin.channels.some((channelId) => configuredChannelIds.has(channelId))) {
-        return true;
-      }
-      if (requiredAgentHarnessPluginIds.has(plugin.id)) {
-        const activationState = resolveEffectivePluginActivationState({
-          id: plugin.id,
-          origin: plugin.origin,
-          config: pluginsConfig,
-          rootConfig: params.config,
-          enabledByDefault: plugin.enabledByDefault,
-          activationSource,
-        });
-        return activationState.enabled;
-      }
-      if (
-        !shouldConsiderForGatewayStartup({
-          plugin,
-          startupDreamingPluginIds,
-          explicitMemorySlotStartupPluginId,
-        })
-      ) {
-        return false;
-      }
-      const activationState = resolveEffectivePluginActivationState({
-        id: plugin.id,
-        origin: plugin.origin,
-        config: pluginsConfig,
-        rootConfig: params.config,
-        enabledByDefault: plugin.enabledByDefault,
-        activationSource,
-      });
-      if (!activationState.enabled) {
-        return false;
-      }
-      if (plugin.origin !== "bundled") {
-        return activationState.explicitlyEnabled;
-      }
-      return activationState.source === "explicit" || activationState.source === "default";
-    })
-    .map((plugin) => plugin.id);
+  });
+  return listGatewayStartupPluginIdsFromManifestPlugins({
+    rootConfig: params.config,
+    manifestPlugins: manifestRegistry.plugins,
+    configuredChannelIds,
+    pluginsConfig,
+    activationSource,
+    requiredAgentHarnessPluginIds,
+    startupDreamingPluginIds,
+    explicitMemorySlotStartupPluginId,
+  });
+}
+
+export async function resolveGatewayStartupPluginIdsAsync(params: {
+  config: OpenClawConfig;
+  activationSourceConfig?: OpenClawConfig;
+  workspaceDir?: string;
+  env: NodeJS.ProcessEnv;
+}): Promise<string[]> {
+  const configuredChannelIds = new Set(
+    listPotentialConfiguredChannelIds(params.config, params.env).map((id) => id.trim()),
+  );
+  const pluginsConfig = normalizePluginsConfig(params.config.plugins);
+  const activationSource = createPluginActivationSource({
+    config: params.activationSourceConfig ?? params.config,
+  });
+  const harnessRuntimes = collectConfiguredAgentHarnessRuntimes(
+    params.activationSourceConfig ?? params.config,
+    params.env,
+  );
+  const harnessIdLists = await Promise.all(
+    harnessRuntimes.map((runtime) =>
+      resolveManifestActivationPluginIdsAsync({
+        trigger: {
+          kind: "agentHarness",
+          runtime,
+        },
+        config: params.config,
+        workspaceDir: params.workspaceDir,
+        env: params.env,
+        cache: true,
+      }),
+    ),
+  );
+  const requiredAgentHarnessPluginIds = new Set(harnessIdLists.flat());
+  const startupDreamingPluginIds = resolveGatewayStartupDreamingPluginIds(params.config);
+  const explicitMemorySlotStartupPluginId = resolveExplicitMemorySlotStartupPluginId(
+    params.activationSourceConfig ?? params.config,
+  );
+  const manifestRegistry = await loadPluginManifestRegistryAsync({
+    config: params.config,
+    workspaceDir: params.workspaceDir,
+    env: params.env,
+  });
+  return listGatewayStartupPluginIdsFromManifestPlugins({
+    rootConfig: params.config,
+    manifestPlugins: manifestRegistry.plugins,
+    configuredChannelIds,
+    pluginsConfig,
+    activationSource,
+    requiredAgentHarnessPluginIds,
+    startupDreamingPluginIds,
+    explicitMemorySlotStartupPluginId,
+  });
 }

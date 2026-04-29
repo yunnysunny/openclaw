@@ -54,6 +54,9 @@ vi.mock("../agents/pi-model-discovery-runtime.js", () => ({
   discoverAuthStorage: () => ({
     setRuntimeApiKey: setRuntimeApiKeyMock,
   }),
+  discoverAuthStorageAsync: async () => ({
+    setRuntimeApiKey: setRuntimeApiKeyMock,
+  }),
   discoverModels: discoverModelsMock,
 }));
 

@@ -37,11 +37,11 @@ function makeModelProviderConfig(overrides?: Partial<ModelProviderConfig>): Mode
   };
 }
 
-function expectGroupedProviderIds(
+async function expectGroupedProviderIds(
   providers: readonly ProviderPlugin[],
   expected: Record<ProviderDiscoveryOrder | "late", readonly string[]>,
 ) {
-  const grouped = groupPluginDiscoveryProvidersByOrder([...providers]);
+  const grouped = await groupPluginDiscoveryProvidersByOrder([...providers]);
   const actual = {
     simple: grouped.simple.map((provider) => provider.id),
     profile: grouped.profile.map((provider) => provider.id),
@@ -79,13 +79,13 @@ function createCatalogProvider(params: {
   };
 }
 
-function expectNormalizedDiscoveryResult(params: {
+async function expectNormalizedDiscoveryResult(params: {
   provider: ProviderPlugin;
   result: Parameters<typeof normalizePluginDiscoveryResult>[0]["result"];
   expected: Record<string, unknown>;
 }) {
   expect(
-    normalizePluginDiscoveryResult({
+    await normalizePluginDiscoveryResult({
       provider: params.provider,
       result: params.result,
     }),
@@ -134,8 +134,8 @@ describe("groupPluginDiscoveryProvidersByOrder", () => {
         late: [],
       },
     },
-  ] as const)("$name", ({ providers, expected }) => {
-    expectGroupedProviderIds(providers, expected);
+  ] as const)("$name", async ({ providers, expected }) => {
+    await expectGroupedProviderIds(providers, expected);
   });
 });
 
@@ -205,8 +205,8 @@ describe("normalizePluginDiscoveryResult", () => {
         },
       },
     },
-  ] as const)("$name", ({ provider, result, expected }) => {
-    expectNormalizedDiscoveryResult({ provider, result, expected });
+  ] as const)("$name", async ({ provider, result, expected }) => {
+    await expectNormalizedDiscoveryResult({ provider, result, expected });
   });
 });
 

@@ -366,7 +366,7 @@ function loadApprovalsFromDisk(): PluginBindingApprovalsFile {
 
 async function saveApprovals(file: PluginBindingApprovalsFile): Promise<void> {
   const filePath = resolveApprovalsPath();
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
   const state = getPluginBindingGlobalState();
   state.approvalsCache = file;
   state.approvalsLoaded = true;

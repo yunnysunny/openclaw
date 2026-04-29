@@ -23,6 +23,7 @@ let canUseBoundaryFileOpen: typeof import("./boundary-file-read.js").canUseBound
 let matchBoundaryFileOpenFailure: typeof import("./boundary-file-read.js").matchBoundaryFileOpenFailure;
 let openBoundaryFile: typeof import("./boundary-file-read.js").openBoundaryFile;
 let openBoundaryFileSync: typeof import("./boundary-file-read.js").openBoundaryFileSync;
+let resolveBoundaryFilePathGenericAsync: typeof import("./boundary-file-read.js").resolveBoundaryFilePathGenericAsync;
 
 describe("boundary-file-read", () => {
   beforeEach(async () => {
@@ -32,6 +33,7 @@ describe("boundary-file-read", () => {
       matchBoundaryFileOpenFailure,
       openBoundaryFile,
       openBoundaryFileSync,
+      resolveBoundaryFilePathGenericAsync,
     } = await import("./boundary-file-read.js"));
     resolveBoundaryPathSyncMock.mockReset();
     resolveBoundaryPathMock.mockReset();
@@ -193,6 +195,41 @@ describe("boundary-file-read", () => {
       ok: false,
       reason: "validation",
       error: expect.any(Error),
+    });
+  });
+
+  it("resolveBoundaryFilePathGenericAsync maps resolved paths and await sync resolves", async () => {
+    const absolutePath = path.resolve("a.txt");
+    const result = await resolveBoundaryFilePathGenericAsync({
+      absolutePath: "a.txt",
+      resolve: () =>
+        Promise.resolve({
+          absolutePath: "ignored by mapper",
+          canonicalPath: "/x/a.txt",
+          rootPath: "/x",
+          rootCanonicalPath: "/x/r",
+          relativePath: "a.txt",
+          exists: true,
+          kind: "file",
+        } as never),
+    });
+    expect(result).toEqual({
+      absolutePath,
+      resolvedPath: "/x/a.txt",
+      rootRealPath: "/x/r",
+    });
+  });
+
+  it("resolveBoundaryFilePathGenericAsync maps validation errors from rejections", async () => {
+    const err = new Error("boom");
+    const result = await resolveBoundaryFilePathGenericAsync({
+      absolutePath: "a.txt",
+      resolve: () => Promise.reject(err),
+    });
+    expect(result).toEqual({
+      ok: false,
+      reason: "validation",
+      error: err,
     });
   });
 

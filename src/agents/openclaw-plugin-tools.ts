@@ -1,5 +1,5 @@
 import type { OpenClawConfig } from "../config/types.openclaw.js";
-import { resolvePluginTools } from "../plugins/tools.js";
+import { resolvePluginTools, resolvePluginToolsAsync } from "../plugins/tools.js";
 import { getActiveSecretsRuntimeSnapshot } from "../secrets/runtime.js";
 import { normalizeDeliveryContext } from "../utils/delivery-context.js";
 import {
@@ -42,6 +42,39 @@ export function resolveOpenClawPluginToolsForOptions(params: {
   });
 
   const pluginTools = resolvePluginTools({
+    ...resolveOpenClawPluginToolInputs({
+      options: params.options,
+      resolvedConfig: params.resolvedConfig,
+      runtimeConfig: runtimeSnapshot?.config,
+    }),
+    existingToolNames: params.existingToolNames ?? new Set<string>(),
+    toolAllowlist: params.options?.pluginToolAllowlist,
+  });
+
+  return applyPluginToolDeliveryDefaults({
+    tools: pluginTools,
+    deliveryContext,
+  });
+}
+
+export async function resolveOpenClawPluginToolsForOptionsAsync(params: {
+  options?: ResolveOpenClawPluginToolsOptions;
+  resolvedConfig?: OpenClawConfig;
+  existingToolNames?: Set<string>;
+}): Promise<AnyAgentTool[]> {
+  if (params.options?.disablePluginTools) {
+    return [];
+  }
+
+  const runtimeSnapshot = getActiveSecretsRuntimeSnapshot();
+  const deliveryContext = normalizeDeliveryContext({
+    channel: params.options?.agentChannel,
+    to: params.options?.agentTo,
+    accountId: params.options?.agentAccountId,
+    threadId: params.options?.agentThreadId,
+  });
+
+  const pluginTools = await resolvePluginToolsAsync({
     ...resolveOpenClawPluginToolInputs({
       options: params.options,
       resolvedConfig: params.resolvedConfig,

@@ -11,7 +11,7 @@ import { createEmptyPluginRegistry } from "../plugins/registry.js";
 import { getActivePluginRegistry, setActivePluginRegistry } from "../plugins/runtime.js";
 import { listGatewayMethods } from "./server-methods-list.js";
 import { coreGatewayHandlers } from "./server-methods.js";
-import { loadGatewayStartupPlugins } from "./server-plugin-bootstrap.js";
+import { loadGatewayStartupPluginsAsync } from "./server-plugin-bootstrap.js";
 import { runStartupSessionMigration } from "./server-startup-session-migration.js";
 
 type GatewayPluginBootstrapLog = {
@@ -82,7 +82,7 @@ export async function prepareGatewayPluginBootstrap(params: {
   let baseGatewayMethods = baseMethods;
 
   if (!params.minimalTestGateway) {
-    ({ pluginRegistry, gatewayMethods: baseGatewayMethods } = loadGatewayStartupPlugins({
+    ({ pluginRegistry, gatewayMethods: baseGatewayMethods } = await loadGatewayStartupPluginsAsync({
       cfg: gatewayPluginConfigAtStart,
       activationSourceConfig: params.cfgAtStart,
       workspaceDir: defaultWorkspaceDir,

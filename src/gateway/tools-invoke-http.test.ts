@@ -183,6 +183,10 @@ vi.mock("../agents/openclaw-tools.js", () => {
       lastCreateOpenClawToolsContext = ctx;
       return tools;
     },
+    createOpenClawToolsAsync: async (ctx: Record<string, unknown>) => {
+      lastCreateOpenClawToolsContext = ctx;
+      return tools;
+    },
   };
 });
 

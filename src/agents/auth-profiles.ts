@@ -15,6 +15,7 @@ export {
 export {
   dedupeProfileIds,
   listProfilesForProvider,
+  listProfilesForProviderAsync,
   markAuthProfileGood,
   setAuthProfileOrder,
   upsertAuthProfile,
@@ -27,6 +28,7 @@ export {
 export {
   clearRuntimeAuthProfileStoreSnapshots,
   ensureAuthProfileStore,
+  ensureAuthProfileStoreAsync,
   hasAnyAuthProfileStoreSource,
   loadAuthProfileStoreForSecretsRuntime,
   loadAuthProfileStoreWithoutExternalProfiles,
@@ -34,6 +36,7 @@ export {
   replaceRuntimeAuthProfileStoreSnapshots,
   loadAuthProfileStore,
   saveAuthProfileStore,
+  saveAuthProfileStoreAsync,
 } from "./auth-profiles/store.js";
 export type {
   ApiKeyCredential,
@@ -58,3 +61,13 @@ export {
   resolveProfilesUnavailableReason,
   resolveProfileUnusableUntilForDisplay,
 } from "./auth-profiles/usage.js";
+export type { ExternalAuthProfileMap } from "./auth-profiles/external-auth.js";
+export {
+  listRuntimeExternalAuthProfileMap,
+  listRuntimeExternalAuthProfileMapAsync,
+  listRuntimeExternalAuthProfilesAsync,
+  overlayExternalAuthProfilesAsync,
+  resolveExternalAuthProfileMap,
+  resolveExternalAuthProfileMapAsync,
+  shouldPersistExternalAuthProfileAsync,
+} from "./auth-profiles/external-auth.js";

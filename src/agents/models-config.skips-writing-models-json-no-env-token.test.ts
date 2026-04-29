@@ -45,6 +45,11 @@ vi.mock("./models-config.providers.js", async () => {
     }) => providers,
     normalizeProviders: ({ providers }: { providers: Record<string, ModelsProviderConfig> }) =>
       providers,
+    normalizeProvidersAsync: async ({
+      providers,
+    }: {
+      providers: Record<string, ModelsProviderConfig>;
+    }) => providers,
     resolveImplicitProviders: async ({ env }: { env?: NodeJS.ProcessEnv }) => {
       const providers: Record<string, ModelsProviderConfig> = {
         chutes: {

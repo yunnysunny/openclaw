@@ -10,6 +10,11 @@ export type PluginJitiLoader = ReturnType<typeof createJiti>;
 export type PluginJitiLoaderFactory = typeof createJiti;
 export type PluginJitiLoaderCache = Map<string, PluginJitiLoader>;
 
+/** Preferred over deprecated callable `jiti(resolvedPath)`; use in async call sites. */
+export async function importWithPluginJiti(loader: PluginJitiLoader, id: string): Promise<unknown> {
+  return loader.import(id);
+}
+
 export function getCachedPluginJitiLoader(params: {
   cache: PluginJitiLoaderCache;
   modulePath: string;

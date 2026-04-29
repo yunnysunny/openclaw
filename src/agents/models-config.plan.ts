@@ -8,7 +8,7 @@ import {
 import {
   applyNativeStreamingUsageCompat,
   enforceSourceManagedProviderSecrets,
-  normalizeProviders,
+  normalizeProvidersAsync,
   resolveImplicitProviders,
   type ProviderConfig,
 } from "./models-config.providers.js";
@@ -105,7 +105,7 @@ export async function planOpenClawModelsJsonWithDeps(
   const mode = cfg.models?.mode ?? "merge";
   const secretRefManagedProviders = new Set<string>();
   const normalizedProviders =
-    normalizeProviders({
+    (await normalizeProvidersAsync({
       providers,
       agentDir,
       env,
@@ -113,7 +113,7 @@ export async function planOpenClawModelsJsonWithDeps(
       sourceProviders: params.sourceConfigForSecrets?.models?.providers,
       sourceSecretDefaults: params.sourceConfigForSecrets?.secrets?.defaults,
       secretRefManagedProviders,
-    }) ?? providers;
+    })) ?? providers;
   const mergedProviders = resolveProvidersForMode({
     mode,
     existingParsed: params.existingParsed,

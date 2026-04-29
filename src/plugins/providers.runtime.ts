@@ -1,5 +1,8 @@
-import { withActivatedPluginIds } from "./activation-context.js";
-import { resolveBundledPluginCompatibleActivationInputs } from "./activation-context.js";
+import {
+  resolveBundledPluginCompatibleActivationInputs,
+  resolveBundledPluginCompatibleActivationInputsAsync,
+  withActivatedPluginIds,
+} from "./activation-context.js";
 import {
   resolveManifestActivationPluginIds,
   resolveManifestActivationPluginIdsAsync,
@@ -8,16 +11,23 @@ import { loadPluginManifestRegistryAsync } from "./manifest-registry.js";
 import {
   isPluginRegistryLoadInFlight,
   loadOpenClawPlugins,
+  loadOpenClawPluginsAsync,
   resolveRuntimePluginRegistry,
+  resolveRuntimePluginRegistryAsync,
   type PluginLoadOptions,
 } from "./loader.js";
 import { hasExplicitPluginIdScope } from "./plugin-scope.js";
 import {
   resolveActivatableProviderOwnerPluginIds,
+  resolveActivatableProviderOwnerPluginIdsAsync,
   resolveDiscoverableProviderOwnerPluginIds,
+  resolveDiscoverableProviderOwnerPluginIdsAsync,
   resolveDiscoveredProviderPluginIds,
+  resolveDiscoveredProviderPluginIdsAsync,
   resolveEnabledProviderPluginIds,
+  resolveEnabledProviderPluginIdsAsync,
   resolveBundledProviderCompatPluginIds,
+  resolveBundledProviderCompatPluginIdsAsync,
   resolveOwningPluginIdsForProvider,
   resolveOwningPluginIdsForModelRefs,
   withBundledProviderVitestCompat,
@@ -254,6 +264,21 @@ function resolveSetupProviderPluginLoadState(
     env: base.env,
     includeUntrustedWorkspacePlugins: params.includeUntrustedWorkspacePlugins,
   });
+  return finalizeSetupProviderPluginLoadState(params, base, {
+    providerPluginIds,
+    explicitOwnerPluginIds,
+  });
+}
+
+function finalizeSetupProviderPluginLoadState(
+  params: ResolvePluginProvidersParams,
+  base: Pick<
+    ReturnType<typeof resolvePluginProviderLoadBase>,
+    "workspaceDir" | "env" | "rawConfig"
+  >,
+  ownerIds: { providerPluginIds: string[]; explicitOwnerPluginIds: string[] },
+) {
+  const { providerPluginIds, explicitOwnerPluginIds } = ownerIds;
   const setupPluginIds = mergeExplicitOwnerPluginIds(providerPluginIds, explicitOwnerPluginIds);
   if (setupPluginIds.length === 0) {
     return undefined;
@@ -279,6 +304,36 @@ function resolveSetupProviderPluginLoadState(
     },
   );
   return { loadOptions };
+}
+
+/**
+ * Like {@link resolveSetupProviderPluginLoadState}, but uses async manifest
+ * resolution so I/O is awaitable.
+ */
+export async function resolveSetupProviderPluginLoadStateAsync(
+  params: ResolvePluginProvidersParams,
+  base: Awaited<ReturnType<typeof resolvePluginProviderLoadBaseAsync>>,
+): Promise<ReturnType<typeof resolveSetupProviderPluginLoadState>> {
+  const [providerPluginIds, explicitOwnerPluginIds] = await Promise.all([
+    resolveDiscoveredProviderPluginIdsAsync({
+      config: params.config,
+      workspaceDir: base.workspaceDir,
+      env: base.env,
+      onlyPluginIds: base.requestedPluginIds,
+      includeUntrustedWorkspacePlugins: params.includeUntrustedWorkspacePlugins,
+    }),
+    resolveDiscoverableProviderOwnerPluginIdsAsync({
+      pluginIds: base.explicitOwnerPluginIds,
+      config: params.config,
+      workspaceDir: base.workspaceDir,
+      env: base.env,
+      includeUntrustedWorkspacePlugins: params.includeUntrustedWorkspacePlugins,
+    }),
+  ]);
+  return finalizeSetupProviderPluginLoadState(params, base, {
+    providerPluginIds,
+    explicitOwnerPluginIds,
+  });
 }
 
 function resolveRuntimeProviderPluginLoadState(
@@ -348,6 +403,77 @@ function resolveRuntimeProviderPluginLoadState(
   return { loadOptions };
 }
 
+/**
+ * Full async parallel to {@link resolveRuntimeProviderPluginLoadState}: same control flow
+ * and outputs, with owner/enabled id resolution on async manifest load paths.
+ */
+export async function resolveRuntimeProviderPluginLoadStateAsync(
+  params: ResolvePluginProvidersParams,
+  base: Awaited<ReturnType<typeof resolvePluginProviderLoadBaseAsync>>,
+): Promise<ReturnType<typeof resolveRuntimeProviderPluginLoadState>> {
+  const explicitOwnerPluginIds = await resolveActivatableProviderOwnerPluginIdsAsync({
+    pluginIds: base.explicitOwnerPluginIds,
+    config: base.rawConfig,
+    workspaceDir: base.workspaceDir,
+    env: base.env,
+    includeUntrustedWorkspacePlugins: params.includeUntrustedWorkspacePlugins,
+  });
+  const runtimeRequestedPluginIds =
+    base.requestedPluginIds !== undefined
+      ? dedupeSortedPluginIds([...(params.onlyPluginIds ?? []), ...explicitOwnerPluginIds])
+      : undefined;
+  const requestConfig = withActivatedPluginIds({
+    config: base.rawConfig,
+    pluginIds: explicitOwnerPluginIds,
+  });
+  const activation = await resolveBundledPluginCompatibleActivationInputsAsync({
+    rawConfig: requestConfig,
+    env: base.env,
+    workspaceDir: base.workspaceDir,
+    onlyPluginIds: runtimeRequestedPluginIds,
+    applyAutoEnable: true,
+    compatMode: {
+      allowlist: params.bundledProviderAllowlistCompat,
+      enablement: "allowlist",
+      vitest: params.bundledProviderVitestCompat,
+    },
+    resolveCompatPluginIds: resolveBundledProviderCompatPluginIdsAsync,
+  });
+  const config = params.bundledProviderVitestCompat
+    ? withBundledProviderVitestCompat({
+        config: activation.config,
+        pluginIds: activation.compatPluginIds,
+        env: base.env,
+      })
+    : activation.config;
+  const providerPluginIds = mergeExplicitOwnerPluginIds(
+    await resolveEnabledProviderPluginIdsAsync({
+      config,
+      workspaceDir: base.workspaceDir,
+      env: base.env,
+      onlyPluginIds: runtimeRequestedPluginIds,
+    }),
+    explicitOwnerPluginIds,
+  );
+  const loadOptions = buildPluginRuntimeLoadOptionsFromValues(
+    {
+      config,
+      activationSourceConfig: activation.activationSourceConfig,
+      autoEnabledReasons: activation.autoEnabledReasons,
+      workspaceDir: base.workspaceDir,
+      env: base.env,
+      logger: createPluginRuntimeLoaderLogger(),
+    },
+    {
+      onlyPluginIds: providerPluginIds,
+      pluginSdkResolution: params.pluginSdkResolution,
+      cache: params.cache ?? false,
+      activate: params.activate ?? false,
+    },
+  );
+  return { loadOptions };
+}
+
 export function isPluginProvidersLoadInFlight(params: ResolvePluginProvidersParams): boolean {
   const base = resolvePluginProviderLoadBase(params);
   const loadState =
@@ -388,17 +514,17 @@ export async function resolvePluginProvidersAsync(
 ): Promise<ProviderPlugin[]> {
   const base = await resolvePluginProviderLoadBaseAsync(params);
   if (params.mode === "setup") {
-    const loadState = resolveSetupProviderPluginLoadState(params, base);
+    const loadState = await resolveSetupProviderPluginLoadStateAsync(params, base);
     if (!loadState) {
       return [];
     }
-    const registry = loadOpenClawPlugins(loadState.loadOptions);
+    const registry = await loadOpenClawPluginsAsync(loadState.loadOptions);
     return registry.providers.map((entry) =>
       Object.assign({}, entry.provider, { pluginId: entry.pluginId }),
     );
   }
-  const loadState = resolveRuntimeProviderPluginLoadState(params, base);
-  const registry = resolveRuntimePluginRegistry(loadState.loadOptions);
+  const loadState = await resolveRuntimeProviderPluginLoadStateAsync(params, base);
+  const registry = await resolveRuntimePluginRegistryAsync(loadState.loadOptions);
   if (!registry) {
     return [];
   }
@@ -414,8 +540,8 @@ export async function isPluginProvidersLoadInFlightAsync(
   const base = await resolvePluginProviderLoadBaseAsync(params);
   const loadState =
     params.mode === "setup"
-      ? resolveSetupProviderPluginLoadState(params, base)
-      : resolveRuntimeProviderPluginLoadState(params, base);
+      ? await resolveSetupProviderPluginLoadStateAsync(params, base)
+      : await resolveRuntimeProviderPluginLoadStateAsync(params, base);
   if (!loadState) {
     return false;
   }

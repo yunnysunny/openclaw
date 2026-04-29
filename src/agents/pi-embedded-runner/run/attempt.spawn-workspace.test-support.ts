@@ -417,6 +417,29 @@ vi.mock("../../pi-tools.js", () => ({
         ),
     },
   ],
+  createOpenClawCodingToolsAsync: async (options?: {
+    workspaceDir?: string;
+    spawnWorkspaceDir?: string;
+  }) => [
+    {
+      name: "sessions_spawn",
+      execute: async (
+        _callId: string,
+        input: { task?: string },
+        _session?: unknown,
+        _abortSignal?: unknown,
+        _ctx?: unknown,
+      ) =>
+        await hoisted.spawnSubagentDirectMock(
+          {
+            task: input.task ?? "",
+          },
+          {
+            workspaceDir: options?.spawnWorkspaceDir ?? options?.workspaceDir,
+          },
+        ),
+    },
+  ],
   resolveToolLoopDetectionConfig: () => undefined,
 }));
 

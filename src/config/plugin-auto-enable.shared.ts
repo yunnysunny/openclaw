@@ -6,13 +6,17 @@ import {
 } from "../channels/config-presence.js";
 import { getChatChannelMeta, normalizeChatChannelId } from "../channels/registry.js";
 import {
+  loadPluginManifestRegistryAsync,
   loadPluginManifestRegistrySync,
   resolveManifestContractOwnerPluginId,
   type PluginManifestRecord,
   type PluginManifestRegistry,
 } from "../plugins/manifest-registry.js";
 import { resolveOwningPluginIdsForModelRef } from "../plugins/providers.js";
-import { resolvePluginSetupAutoEnableReasons } from "../plugins/setup-registry.js";
+import {
+  resolvePluginSetupAutoEnableReasons,
+  resolvePluginSetupAutoEnableReasonsAsync,
+} from "../plugins/setup-registry.js";
 import { normalizeOptionalLowercaseString } from "../shared/string-coerce.js";
 import { isRecord } from "../utils.js";
 import { isChannelConfigured } from "./channel-configured.js";
@@ -453,7 +457,7 @@ export function resolvePluginAutoEnableCandidateReason(
   throw new Error("Unsupported plugin auto-enable candidate");
 }
 
-export function resolveConfiguredPluginAutoEnableCandidates(params: {
+function collectBaseConfiguredPluginAutoEnableCandidates(params: {
   config: OpenClawConfig;
   env: NodeJS.ProcessEnv;
   registry: PluginManifestRegistry;
@@ -539,20 +543,62 @@ export function resolveConfiguredPluginAutoEnableCandidates(params: {
     }
   }
 
-  if (hasSetupAutoEnableRelevantConfig(params.config)) {
-    for (const entry of resolvePluginSetupAutoEnableReasons({
-      config: params.config,
-      env: params.env,
-      pluginIds: resolveRelevantSetupAutoEnablePluginIds(params.config),
-    })) {
-      changes.push({
-        pluginId: entry.pluginId,
-        kind: "setup-auto-enable",
-        reason: entry.reason,
-      });
-    }
-  }
+  return changes;
+}
 
+function appendPluginSetupAutoEnableCandidates(
+  changes: PluginAutoEnableCandidate[],
+  reasons: ReadonlyArray<{ pluginId: string; reason: string }>,
+) {
+  for (const entry of reasons) {
+    changes.push({
+      pluginId: entry.pluginId,
+      kind: "setup-auto-enable",
+      reason: entry.reason,
+    });
+  }
+}
+
+export function resolveConfiguredPluginAutoEnableCandidates(params: {
+  config: OpenClawConfig;
+  env: NodeJS.ProcessEnv;
+  registry: PluginManifestRegistry;
+}): PluginAutoEnableCandidate[] {
+  const changes = collectBaseConfiguredPluginAutoEnableCandidates(params);
+  if (hasSetupAutoEnableRelevantConfig(params.config)) {
+    appendPluginSetupAutoEnableCandidates(
+      changes,
+      resolvePluginSetupAutoEnableReasons({
+        config: params.config,
+        env: params.env,
+        pluginIds: resolveRelevantSetupAutoEnablePluginIds(params.config),
+      }),
+    );
+  }
+  return changes;
+}
+
+/**
+ * Async counterpart to {@link resolveConfiguredPluginAutoEnableCandidates}. Uses
+ * {@link resolvePluginSetupAutoEnableReasonsAsync} for setup probes when
+ * relevant config is present.
+ */
+export async function resolveConfiguredPluginAutoEnableCandidatesAsync(params: {
+  config: OpenClawConfig;
+  env: NodeJS.ProcessEnv;
+  registry: PluginManifestRegistry;
+}): Promise<PluginAutoEnableCandidate[]> {
+  const changes = collectBaseConfiguredPluginAutoEnableCandidates(params);
+  if (hasSetupAutoEnableRelevantConfig(params.config)) {
+    appendPluginSetupAutoEnableCandidates(
+      changes,
+      await resolvePluginSetupAutoEnableReasonsAsync({
+        config: params.config,
+        env: params.env,
+        pluginIds: resolveRelevantSetupAutoEnablePluginIds(params.config),
+      }),
+    );
+  }
   return changes;
 }
 
@@ -712,6 +758,23 @@ export function resolvePluginAutoEnableManifestRegistry(params: {
     params.manifestRegistry ??
     (configMayNeedPluginManifestRegistry(params.config, params.env)
       ? loadPluginManifestRegistrySync({ config: params.config, env: params.env })
+      : EMPTY_PLUGIN_MANIFEST_REGISTRY)
+  );
+}
+
+/**
+ * Async counterpart to {@link resolvePluginAutoEnableManifestRegistry} using
+ * {@link loadPluginManifestRegistryAsync} when a registry must be loaded.
+ */
+export async function resolvePluginAutoEnableManifestRegistryAsync(params: {
+  config: OpenClawConfig;
+  env: NodeJS.ProcessEnv;
+  manifestRegistry?: PluginManifestRegistry;
+}): Promise<PluginManifestRegistry> {
+  return (
+    params.manifestRegistry ??
+    (configMayNeedPluginManifestRegistry(params.config, params.env)
+      ? await loadPluginManifestRegistryAsync({ config: params.config, env: params.env })
       : EMPTY_PLUGIN_MANIFEST_REGISTRY)
   );
 }

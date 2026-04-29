@@ -30,6 +30,7 @@ vi.mock("./agent-paths.js", () => ({
 
 vi.mock("./pi-model-discovery-runtime.js", () => ({
   discoverAuthStorage: contextTestState.discoverAuthStorage,
+  discoverAuthStorageAsync: async () => contextTestState.discoverAuthStorage(),
   discoverModels: contextTestState.discoverModels,
 }));
 

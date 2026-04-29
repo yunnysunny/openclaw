@@ -1,7 +1,9 @@
 import {
   applyProviderNativeStreamingUsageCompatWithPlugin,
   normalizeProviderConfigWithPlugin,
+  normalizeProviderConfigWithPluginAsync,
   resolveProviderConfigApiKeyWithPlugin,
+  resolveProviderConfigApiKeyWithPluginAsync,
 } from "../plugins/provider-runtime.js";
 import { resolveProviderPluginLookupKey } from "./models-config.providers.policy.lookup.js";
 import type { ProviderConfig } from "./models-config.providers.secrets.js";
@@ -38,6 +40,26 @@ export function normalizeProviderConfigPolicy(
   );
 }
 
+/**
+ * Async counterpart to {@link normalizeProviderConfigPolicy} using
+ * {@link normalizeProviderConfigWithPluginAsync}.
+ */
+export async function normalizeProviderConfigPolicyAsync(
+  providerKey: string,
+  provider: ProviderConfig,
+): Promise<ProviderConfig> {
+  const runtimeProviderKey = resolveProviderPluginLookupKey(providerKey, provider);
+  return (
+    (await normalizeProviderConfigWithPluginAsync({
+      provider: runtimeProviderKey,
+      context: {
+        provider: providerKey,
+        providerConfig: provider,
+      },
+    })) ?? provider
+  );
+}
+
 export function resolveProviderConfigApiKeyPolicy(
   providerKey: string,
   provider?: ProviderConfig,
@@ -45,6 +67,26 @@ export function resolveProviderConfigApiKeyPolicy(
   const runtimeProviderKey = resolveProviderPluginLookupKey(providerKey, provider).trim();
   return (env) =>
     resolveProviderConfigApiKeyWithPlugin({
+      provider: runtimeProviderKey,
+      context: {
+        provider: providerKey,
+        env,
+      },
+    });
+}
+
+export async function resolveProviderConfigApiKeyPolicyAsync(
+  providerKey: string,
+  provider?: ProviderConfig,
+): Promise<
+  | ((
+      env: NodeJS.ProcessEnv,
+    ) => string | undefined | Promise<string | undefined>)
+  | undefined
+> {
+  const runtimeProviderKey = resolveProviderPluginLookupKey(providerKey, provider).trim();
+  return async (env) =>
+    resolveProviderConfigApiKeyWithPluginAsync({
       provider: runtimeProviderKey,
       context: {
         provider: providerKey,

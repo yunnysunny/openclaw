@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { openBoundaryFile } from "../infra/boundary-file-read.js";
+import { closeFileDescriptorAsync, readFileUtf8FromFd } from "../infra/fd-promise.js";
 import { resolveRequiredHomeDir } from "../infra/home-dir.js";
 import { runCommandWithTimeout } from "../process/exec.js";
 import { isCronSessionKey, isSubagentSessionKey } from "../routing/session-key.js";
@@ -72,19 +73,19 @@ async function readWorkspaceFileWithGuards(params: {
   const identity = workspaceFileIdentity(opened.stat, opened.path);
   const cached = workspaceFileCache.get(params.filePath);
   if (cached && cached.identity === identity) {
-    syncFs.closeSync(opened.fd);
+    await closeFileDescriptorAsync(opened.fd);
     return { ok: true, content: cached.content };
   }
 
   try {
-    const content = syncFs.readFileSync(opened.fd, "utf-8");
+    const content = await readFileUtf8FromFd(opened.fd);
     workspaceFileCache.set(params.filePath, { content, identity });
     return { ok: true, content };
   } catch (error) {
     workspaceFileCache.delete(params.filePath);
     return { ok: false, reason: "io", error };
   } finally {
-    syncFs.closeSync(opened.fd);
+    await closeFileDescriptorAsync(opened.fd);
   }
 }
 

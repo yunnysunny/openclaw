@@ -266,8 +266,8 @@ export async function handleInlineActions(params: {
         resolveGatewayMessageChannel(ctx.Provider) ??
         undefined;
 
-      const { createOpenClawTools } = await loadOpenClawToolsRuntime();
-      const tools = createOpenClawTools({
+      const { createOpenClawToolsAsync } = await loadOpenClawToolsRuntime();
+      const tools = await createOpenClawToolsAsync({
         agentSessionKey: sessionKey,
         agentChannel: channel,
         agentAccountId: (ctx as { AccountId?: string }).AccountId,

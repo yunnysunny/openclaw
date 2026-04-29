@@ -46,8 +46,8 @@ async function resolveImageRuntime(params: {
   authStore?: ImageDescriptionRequest["authStore"];
 }): Promise<{ apiKey: string; model: Model<Api> }> {
   await ensureOpenClawModelsJson(params.cfg, params.agentDir);
-  const { discoverAuthStorage, discoverModels } = await loadPiModelDiscoveryRuntime();
-  const authStorage = discoverAuthStorage(params.agentDir);
+  const { discoverAuthStorageAsync, discoverModels } = await loadPiModelDiscoveryRuntime();
+  const authStorage = await discoverAuthStorageAsync(params.agentDir);
   const modelRegistry = discoverModels(authStorage, params.agentDir);
   const resolvedRef = normalizeModelRef(params.provider, params.model);
   const model = modelRegistry.find(resolvedRef.provider, resolvedRef.model) as Model<Api> | null;

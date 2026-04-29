@@ -8,7 +8,7 @@ import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { createSubsystemLogger } from "../../logging/subsystem.js";
 import {
   findBundledPluginSourceInMap,
-  resolveBundledPluginSources,
+  resolveBundledPluginSourcesAsync,
 } from "../../plugins/bundled-sources.js";
 import { resolveDiscoverableScopedChannelPluginIds } from "../../plugins/channel-plugin-ids.js";
 import { clearPluginDiscoveryCache } from "../../plugins/discovery.js";
@@ -152,7 +152,7 @@ export async function ensureChannelSetupPluginInstalled(params: {
   const { entry, prompter, runtime, workspaceDir } = params;
   let next = params.cfg;
   const allowLocal = hasGitWorkspace(workspaceDir);
-  const bundledSources = resolveBundledPluginSources({ workspaceDir });
+  const bundledSources = await resolveBundledPluginSourcesAsync({ workspaceDir });
   const bundledLocalPath =
     resolveBundledInstallPlanForCatalogEntry({
       pluginId: entry.id,

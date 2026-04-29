@@ -27,6 +27,15 @@ interface SessionData {
   tools?: Array<{ name: string; description?: string; parameters?: unknown }>;
 }
 
+async function pathExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.promises.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function loadTemplate(fileName: string): string {
   return fs.readFileSync(path.join(EXPORT_HTML_DIR, fileName), "utf-8");
 }
@@ -136,7 +145,7 @@ export async function buildExportSessionReply(params: HandleCommandsParams): Pro
     };
   }
 
-  if (!fs.existsSync(sessionFile)) {
+  if (!(await pathExists(sessionFile))) {
     return { text: `❌ Session file not found: ${sessionFile}` };
   }
 
@@ -181,12 +190,12 @@ export async function buildExportSessionReply(params: HandleCommandsParams): Pro
 
   // Ensure directory exists
   const outputDir = path.dirname(outputPath);
-  if (!fs.existsSync(outputDir)) {
-    fs.mkdirSync(outputDir, { recursive: true });
+  if (!(await pathExists(outputDir))) {
+    await fs.promises.mkdir(outputDir, { recursive: true });
   }
 
   // 7. Write file
-  fs.writeFileSync(outputPath, html, "utf-8");
+  await fs.promises.writeFile(outputPath, html, "utf-8");
 
   const relativePath = path.relative(params.workspaceDir, outputPath);
   const displayPath = relativePath.startsWith("..") ? outputPath : relativePath;

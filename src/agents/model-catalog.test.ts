@@ -14,6 +14,9 @@ vi.mock("./model-suppression.runtime.js", () => ({
   shouldSuppressBuiltInModel: (params: { provider?: string; id?: string }) =>
     (params.provider === "openai" || params.provider === "azure-openai-responses") &&
     params.id === "gpt-5.3-codex-spark",
+  shouldSuppressBuiltInModelAsync: async (params: { provider?: string; id?: string }) =>
+    (params.provider === "openai" || params.provider === "azure-openai-responses") &&
+    params.id === "gpt-5.3-codex-spark",
 }));
 
 function mockCatalogImportFailThenRecover() {
@@ -25,6 +28,7 @@ function mockCatalogImportFailThenRecover() {
     }
     return {
       discoverAuthStorage: () => ({}),
+      discoverAuthStorageAsync: async () => ({}),
       AuthStorage: function AuthStorage() {},
       ModelRegistry: class {
         getAll() {
@@ -41,6 +45,7 @@ function mockPiDiscoveryModels(models: unknown[]) {
     async () =>
       ({
         discoverAuthStorage: () => ({}),
+        discoverAuthStorageAsync: async () => ({}),
         AuthStorage: function AuthStorage() {},
         ModelRegistry: class {
           getAll() {
@@ -118,6 +123,7 @@ describe("loadModelCatalog", () => {
         async () =>
           ({
             discoverAuthStorage: () => ({}),
+            discoverAuthStorageAsync: async () => ({}),
             AuthStorage: function AuthStorage() {},
             ModelRegistry: class {
               getAll() {

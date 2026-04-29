@@ -3,7 +3,7 @@ import fsPromises from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { getShellEnvAppliedKeys } from "../infra/shell-env.js";
-import { resolvePluginSetupProvider } from "../plugins/setup-registry.js";
+import { resolvePluginSetupProvider, resolvePluginSetupProviderAsync } from "../plugins/setup-registry.js";
 import { normalizeOptionalSecretInput } from "../utils/normalize-secret-input.js";
 import { resolveProviderEnvApiKeyCandidates } from "./model-auth-env-vars.js";
 import { GCP_VERTEX_CREDENTIALS_MARKER } from "./model-auth-markers.js";
@@ -159,7 +159,7 @@ export async function resolveEnvApiKeyAsync(
     return { apiKey: envKey, source: "gcloud adc" };
   }
 
-  const setupProvider = resolvePluginSetupProvider({
+  const setupProvider = await resolvePluginSetupProviderAsync({
     provider: normalized,
     env,
   });

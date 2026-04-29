@@ -7,7 +7,7 @@ import {
   resolvePluginProviders,
   resolvePluginProvidersAsync,
 } from "./providers.runtime.js";
-import { resolvePluginCacheInputs } from "./roots.js";
+import { resolvePluginCacheInputs, resolvePluginCacheInputsAsync } from "./roots.js";
 import { getActivePluginRegistryWorkspaceDirFromState } from "./runtime-state.js";
 import type {
   ProviderPlugin,
@@ -78,6 +78,21 @@ function buildHookProviderCacheKey(params: {
   return `${roots.workspace ?? ""}::${roots.global}::${roots.stock ?? ""}::${JSON.stringify(params.config ?? null)}::${serializePluginIdScope(onlyPluginIds)}::${JSON.stringify(params.providerRefs ?? [])}`;
 }
 
+async function buildHookProviderCacheKeyAsync(params: {
+  config?: OpenClawConfig;
+  workspaceDir?: string;
+  onlyPluginIds?: string[];
+  providerRefs?: string[];
+  env?: NodeJS.ProcessEnv;
+}): Promise<string> {
+  const { roots } = await resolvePluginCacheInputsAsync({
+    workspaceDir: params.workspaceDir,
+    env: params.env,
+  });
+  const onlyPluginIds = normalizePluginIdScope(params.onlyPluginIds);
+  return `${roots.workspace ?? ""}::${roots.global}::${roots.stock ?? ""}::${JSON.stringify(params.config ?? null)}::${serializePluginIdScope(onlyPluginIds)}::${JSON.stringify(params.providerRefs ?? [])}`;
+}
+
 export function clearProviderRuntimeHookCache(): void {
   cachedHookProvidersWithoutConfig = new WeakMap<
     NodeJS.ProcessEnv,
@@ -95,6 +110,7 @@ export function resetProviderRuntimeHookCacheForTest(): void {
 
 export const __testing = {
   buildHookProviderCacheKey,
+  buildHookProviderCacheKeyAsync,
 } as const;
 
 export function resolveProviderPluginsForHooks(params: {
@@ -160,7 +176,7 @@ export async function resolveProviderPluginsForHooksAsync(params: {
     config: params.config,
     env,
   });
-  const cacheKey = buildHookProviderCacheKey({
+  const cacheKey = await buildHookProviderCacheKeyAsync({
     config: params.config,
     workspaceDir,
     onlyPluginIds: params.onlyPluginIds,

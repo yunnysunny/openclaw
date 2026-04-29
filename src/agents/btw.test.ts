@@ -46,6 +46,7 @@ vi.mock("./models-config.js", () => ({
 
 vi.mock("./pi-model-discovery.js", () => ({
   discoverAuthStorage: (...args: unknown[]) => discoverAuthStorageMock(...args),
+  discoverAuthStorageAsync: async (...args: unknown[]) => discoverAuthStorageMock(...args),
   discoverModels: (...args: unknown[]) => discoverModelsMock(...args),
 }));
 

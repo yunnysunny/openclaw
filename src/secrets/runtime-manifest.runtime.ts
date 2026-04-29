@@ -1,1 +1,4 @@
-export { loadPluginManifestRegistrySync } from "../plugins/manifest-registry.js";
+export {
+  loadPluginManifestRegistryAsync,
+  loadPluginManifestRegistrySync,
+} from "../plugins/manifest-registry.js";

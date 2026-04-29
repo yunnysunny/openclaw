@@ -29,7 +29,7 @@ import {
 import { resolvePdfModelConfigForTool } from "./pdf-tool.model-config.js";
 import {
   createSandboxBridgeReadFile,
-  discoverAuthStorage,
+  discoverAuthStorageAsync,
   discoverModels,
   ensureOpenClawModelsJson,
   resolveSandboxedBridgeMediaPath,
@@ -128,7 +128,7 @@ async function runPdfPrompt(params: {
   const effectiveCfg = applyImageModelConfigDefaults(params.cfg, params.pdfModelConfig);
 
   await ensureOpenClawModelsJson(effectiveCfg, params.agentDir);
-  const authStorage = discoverAuthStorage(params.agentDir);
+  const authStorage = await discoverAuthStorageAsync(params.agentDir);
   const modelRegistry = discoverModels(authStorage, params.agentDir);
 
   let extractionCache: PdfExtractedContent[] | null = null;

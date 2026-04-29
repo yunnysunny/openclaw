@@ -18,6 +18,21 @@ export function readFileUtf8FromFd(fd: number): Promise<string> {
 }
 
 /**
+ * Read raw bytes from a verified numeric file descriptor.
+ */
+export function readFileBufferFromFd(fd: number): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    fs.readFile(fd, (err, data) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+      resolve(data);
+    });
+  });
+}
+
+/**
  * `fs.promises` does not expose `close` for raw fds; use the callback API.
  */
 export function closeFileDescriptorAsync(fd: number): Promise<void> {

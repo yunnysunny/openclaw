@@ -194,6 +194,7 @@ export async function loadCompactHooksHarness(): Promise<{
 
   vi.doMock("../runtime-plugins.js", () => ({
     ensureRuntimePluginsLoaded,
+    ensureRuntimePluginsLoadedAsync: ensureRuntimePluginsLoaded,
   }));
 
   vi.doMock("../harness/selection.js", () => ({
@@ -361,6 +362,7 @@ export async function loadCompactHooksHarness(): Promise<{
 
   vi.doMock("../pi-tools.js", () => ({
     createOpenClawCodingTools: createOpenClawCodingToolsMock,
+    createOpenClawCodingToolsAsync: createOpenClawCodingToolsMock,
   }));
 
   vi.doMock("./replay-history.js", () => ({

@@ -104,6 +104,9 @@ vi.mock("./server-startup-memory.js", () => ({
 
 vi.mock("./server-startup-log.js", () => ({
   logGatewayStartup: hoisted.logGatewayStartup,
+  logGatewayStartupAsync: async (params: unknown) => {
+    hoisted.logGatewayStartup(params);
+  },
 }));
 
 vi.mock("../infra/update-startup.js", () => ({

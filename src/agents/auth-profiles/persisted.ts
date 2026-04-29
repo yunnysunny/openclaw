@@ -1,11 +1,13 @@
 import { resolveOAuthPath } from "../../config/paths.js";
 import { coerceSecretRef } from "../../config/types.secrets.js";
 import { loadJsonFile } from "../../infra/json-file.js";
+import { readJsonFile } from "../../infra/json-files.js";
 import { AUTH_STORE_VERSION, log } from "./constants.js";
 import { resolveAuthStorePath, resolveLegacyAuthStorePath } from "./paths.js";
 import {
   coerceAuthProfileState,
   loadPersistedAuthProfileState,
+  loadPersistedAuthProfileStateAsync,
   mergeAuthProfileState,
 } from "./state.js";
 import type {
@@ -275,6 +277,32 @@ export function mergeOAuthFileIntoStore(store: AuthProfileStore): boolean {
   return mutated;
 }
 
+export async function mergeOAuthFileIntoStoreAsync(store: AuthProfileStore): Promise<boolean> {
+  const oauthPath = resolveOAuthPath();
+  const oauthRaw = await readJsonFile<Record<string, OAuthCredentials>>(oauthPath);
+  if (!oauthRaw || typeof oauthRaw !== "object") {
+    return false;
+  }
+  const oauthEntries = oauthRaw as Record<string, OAuthCredentials>;
+  let mutated = false;
+  for (const [provider, creds] of Object.entries(oauthEntries)) {
+    if (!creds || typeof creds !== "object") {
+      continue;
+    }
+    const profileId = `${provider}:default`;
+    if (store.profiles[profileId]) {
+      continue;
+    }
+    store.profiles[profileId] = {
+      type: "oauth",
+      provider,
+      ...creds,
+    };
+    mutated = true;
+  }
+  return mutated;
+}
+
 export function loadPersistedAuthProfileStore(agentDir?: string): AuthProfileStore | null {
   const authPath = resolveAuthStorePath(agentDir);
   const raw = loadJsonFile(authPath);
@@ -288,6 +316,32 @@ export function loadPersistedAuthProfileStore(agentDir?: string): AuthProfileSto
   };
 }
 
+export async function loadPersistedAuthProfileStoreAsync(
+  agentDir?: string,
+): Promise<AuthProfileStore | null> {
+  const authPath = resolveAuthStorePath(agentDir);
+  const raw = await readJsonFile<unknown>(authPath);
+  if (raw == null) {
+    return null;
+  }
+  const store = coercePersistedAuthProfileStore(raw);
+  if (!store) {
+    return null;
+  }
+  const stateFromFile = await loadPersistedAuthProfileStateAsync(agentDir);
+  return {
+    ...store,
+    ...mergeAuthProfileState(coerceAuthProfileState(raw), stateFromFile),
+  };
+}
+
 export function loadLegacyAuthProfileStore(agentDir?: string): LegacyAuthStore | null {
   return coerceLegacyAuthStore(loadJsonFile(resolveLegacyAuthStorePath(agentDir)));
+}
+
+export async function loadLegacyAuthProfileStoreAsync(
+  agentDir?: string,
+): Promise<LegacyAuthStore | null> {
+  const raw = await readJsonFile<unknown>(resolveLegacyAuthStorePath(agentDir));
+  return coerceLegacyAuthStore(raw);
 }

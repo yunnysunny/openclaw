@@ -1,7 +1,11 @@
 import { normalizeToolName } from "../agents/tool-policy.js";
 import type { AnyAgentTool } from "../agents/tools/common.js";
 import { applyTestPluginDefaults, normalizePluginsConfig } from "./config-state.js";
-import { resolveRuntimePluginRegistry, type PluginLoadOptions } from "./loader.js";
+import {
+  resolveRuntimePluginRegistry,
+  resolveRuntimePluginRegistryAsync,
+  type PluginLoadOptions,
+} from "./loader.js";
 import {
   getActivePluginRegistry,
   getActivePluginRegistryKey,
@@ -68,6 +72,20 @@ function resolvePluginToolRegistry(params: {
   return resolveRuntimePluginRegistry(params.loadOptions);
 }
 
+async function resolvePluginToolRegistryAsync(params: {
+  loadOptions: PluginLoadOptions;
+  allowGatewaySubagentBinding?: boolean;
+}) {
+  if (
+    params.allowGatewaySubagentBinding &&
+    getActivePluginRegistryKey() &&
+    getActivePluginRuntimeSubagentMode() === "gateway-bindable"
+  ) {
+    return getActivePluginRegistry() ?? (await resolveRuntimePluginRegistryAsync(params.loadOptions));
+  }
+  return await resolveRuntimePluginRegistryAsync(params.loadOptions);
+}
+
 export function resolvePluginTools(params: {
   context: OpenClawPluginToolContext;
   existingToolNames?: Set<string>;
@@ -95,6 +113,119 @@ export function resolvePluginTools(params: {
     : undefined;
   const loadOptions = buildPluginRuntimeLoadOptions(context, { runtimeOptions });
   const registry = resolvePluginToolRegistry({
+    loadOptions,
+    allowGatewaySubagentBinding: params.allowGatewaySubagentBinding,
+  });
+  if (!registry) {
+    return [];
+  }
+
+  const tools: AnyAgentTool[] = [];
+  const existing = params.existingToolNames ?? new Set<string>();
+  const existingNormalized = new Set(Array.from(existing, (tool) => normalizeToolName(tool)));
+  const allowlist = normalizeAllowlist(params.toolAllowlist);
+  const blockedPlugins = new Set<string>();
+
+  for (const entry of registry.tools) {
+    if (blockedPlugins.has(entry.pluginId)) {
+      continue;
+    }
+    const pluginIdKey = normalizeToolName(entry.pluginId);
+    if (existingNormalized.has(pluginIdKey)) {
+      const message = `plugin id conflicts with core tool name (${entry.pluginId})`;
+      if (!params.suppressNameConflicts) {
+        context.logger.error(message);
+        registry.diagnostics.push({
+          level: "error",
+          pluginId: entry.pluginId,
+          source: entry.source,
+          message,
+        });
+      }
+      blockedPlugins.add(entry.pluginId);
+      continue;
+    }
+    let resolved: AnyAgentTool | AnyAgentTool[] | null | undefined = null;
+    try {
+      resolved = entry.factory(params.context);
+    } catch (err) {
+      context.logger.error(`plugin tool failed (${entry.pluginId}): ${String(err)}`);
+      continue;
+    }
+    if (!resolved) {
+      if (entry.names.length > 0) {
+        context.logger.debug?.(
+          `plugin tool factory returned null (${entry.pluginId}): [${entry.names.join(", ")}]`,
+        );
+      }
+      continue;
+    }
+    const listRaw = Array.isArray(resolved) ? resolved : [resolved];
+    const list = entry.optional
+      ? listRaw.filter((tool) =>
+          isOptionalToolAllowed({
+            toolName: tool.name,
+            pluginId: entry.pluginId,
+            allowlist,
+          }),
+        )
+      : listRaw;
+    if (list.length === 0) {
+      continue;
+    }
+    const nameSet = new Set<string>();
+    for (const tool of list) {
+      if (nameSet.has(tool.name) || existing.has(tool.name)) {
+        const message = `plugin tool name conflict (${entry.pluginId}): ${tool.name}`;
+        if (!params.suppressNameConflicts) {
+          context.logger.error(message);
+          registry.diagnostics.push({
+            level: "error",
+            pluginId: entry.pluginId,
+            source: entry.source,
+            message,
+          });
+        }
+        continue;
+      }
+      nameSet.add(tool.name);
+      existing.add(tool.name);
+      pluginToolMeta.set(tool, {
+        pluginId: entry.pluginId,
+        optional: entry.optional,
+      });
+      tools.push(tool);
+    }
+  }
+
+  return tools;
+}
+
+export async function resolvePluginToolsAsync(params: {
+  context: OpenClawPluginToolContext;
+  existingToolNames?: Set<string>;
+  toolAllowlist?: string[];
+  suppressNameConflicts?: boolean;
+  allowGatewaySubagentBinding?: boolean;
+  env?: NodeJS.ProcessEnv;
+}): Promise<AnyAgentTool[]> {
+  const env = params.env ?? process.env;
+  const baseConfig = applyTestPluginDefaults(params.context.config ?? {}, env);
+  const context = resolvePluginRuntimeLoadContext({
+    config: baseConfig,
+    env,
+    workspaceDir: params.context.workspaceDir,
+  });
+  const normalized = normalizePluginsConfig(context.config.plugins);
+  if (!normalized.enabled) {
+    return [];
+  }
+
+  const runtimeOptions = params.allowGatewaySubagentBinding
+    ? { allowGatewaySubagentBinding: true as const }
+    : undefined;
+  const loadOptions = buildPluginRuntimeLoadOptions(context, { runtimeOptions });
+  const registry = await resolvePluginToolRegistryAsync({
     loadOptions,
     allowGatewaySubagentBinding: params.allowGatewaySubagentBinding,
   });

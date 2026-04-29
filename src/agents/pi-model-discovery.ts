@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import fsp from "node:fs/promises";
 import path from "node:path";
 import type { Api, Model } from "@mariozechner/pi-ai";
 import * as PiCodingAgent from "@mariozechner/pi-coding-agent";
@@ -13,9 +14,12 @@ import {
   normalizeProviderResolvedModelWithPlugin,
   resolveProviderSyntheticAuthWithPlugin,
 } from "../plugins/provider-runtime.js";
-import { resolveRuntimeSyntheticAuthProviderRefs } from "../plugins/synthetic-auth.runtime.js";
+import {
+  resolveRuntimeSyntheticAuthProviderRefs,
+  resolveRuntimeSyntheticAuthProviderRefsAsync,
+} from "../plugins/synthetic-auth.runtime.js";
 import { isRecord } from "../utils.js";
-import { ensureAuthProfileStore } from "./auth-profiles/store.js";
+import { ensureAuthProfileStore, ensureAuthProfileStoreAsync } from "./auth-profiles/store.js";
 import { resolveProviderEnvApiKeyCandidates } from "./model-auth-env-vars.js";
 import { resolveEnvApiKey } from "./model-auth-env.js";
 import { resolvePiCredentialMapFromStore, type PiCredentialMap } from "./pi-auth-credentials.js";
@@ -195,6 +199,54 @@ export function scrubLegacyStaticAuthJsonEntriesForDiscovery(pathname: string): 
   fs.chmodSync(pathname, 0o600);
 }
 
+export async function scrubLegacyStaticAuthJsonEntriesForDiscoveryAsync(
+  pathname: string,
+): Promise<void> {
+  if (process.env.OPENCLAW_AUTH_STORE_READONLY === "1") {
+    return;
+  }
+  try {
+    await fsp.access(pathname);
+  } catch {
+    return;
+  }
+
+  let parsed: unknown;
+  try {
+    const raw = await fsp.readFile(pathname, "utf8");
+    parsed = JSON.parse(raw) as unknown;
+  } catch {
+    return;
+  }
+  if (!isRecord(parsed)) {
+    return;
+  }
+
+  let changed = false;
+  for (const [provider, value] of Object.entries(parsed)) {
+    if (!isRecord(value)) {
+      continue;
+    }
+    if (value.type !== "api_key") {
+      continue;
+    }
+    delete parsed[provider];
+    changed = true;
+  }
+
+  if (!changed) {
+    return;
+  }
+
+  if (Object.keys(parsed).length === 0) {
+    await fsp.rm(pathname, { force: true });
+    return;
+  }
+
+  await fsp.writeFile(pathname, `${JSON.stringify(parsed, null, 2)}\n`, "utf8");
+  await fsp.chmod(pathname, 0o600);
+}
+
 function createAuthStorage(AuthStorageLike: unknown, path: string, creds: PiCredentialMap) {
   const withInMemory = AuthStorageLike as { inMemory?: (data?: unknown) => unknown };
   if (typeof withInMemory.inMemory === "function") {
@@ -291,11 +343,45 @@ export function resolvePiCredentialsForDiscovery(agentDir: string): PiCredential
   return credentials;
 }
 
+export async function resolvePiCredentialsForDiscoveryAsync(agentDir: string): Promise<PiCredentialMap> {
+  const store = await ensureAuthProfileStoreAsync(agentDir, { allowKeychainPrompt: false });
+  const credentials = addEnvBackedPiCredentials(resolvePiCredentialMapFromStore(store));
+  for (const provider of await resolveRuntimeSyntheticAuthProviderRefsAsync()) {
+    if (credentials[provider]) {
+      continue;
+    }
+    const resolved = resolveProviderSyntheticAuthWithPlugin({
+      provider,
+      context: {
+        config: undefined,
+        provider,
+        providerConfig: undefined,
+      },
+    });
+    const apiKey = resolved?.apiKey?.trim();
+    if (!apiKey) {
+      continue;
+    }
+    credentials[provider] = {
+      type: "api_key",
+      key: apiKey,
+    };
+  }
+  return credentials;
+}
+
 // Compatibility helpers for pi-coding-agent 0.50+ (discover* helpers removed).
 export function discoverAuthStorage(agentDir: string): PiAuthStorage {
   const credentials = resolvePiCredentialsForDiscovery(agentDir);
   const authPath = path.join(agentDir, "auth.json");
   scrubLegacyStaticAuthJsonEntriesForDiscovery(authPath);
+  return createAuthStorage(PiAuthStorageClass, authPath, credentials);
+}
+
+export async function discoverAuthStorageAsync(agentDir: string): Promise<PiAuthStorage> {
+  const credentials = await resolvePiCredentialsForDiscoveryAsync(agentDir);
+  const authPath = path.join(agentDir, "auth.json");
+  await scrubLegacyStaticAuthJsonEntriesForDiscoveryAsync(authPath);
   return createAuthStorage(PiAuthStorageClass, authPath, credentials);
 }
 

@@ -2,6 +2,15 @@ import fs from "node:fs";
 import path from "node:path";
 import { resolveOpenClawPackageRoot } from "../infra/openclaw-root.js";
 
+async function pathExists(targetPath: string): Promise<boolean> {
+  try {
+    await fs.promises.access(targetPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function resolveOpenClawDocsPath(params: {
   workspaceDir?: string;
   argv1?: string;
@@ -11,7 +20,7 @@ export async function resolveOpenClawDocsPath(params: {
   const workspaceDir = params.workspaceDir?.trim();
   if (workspaceDir) {
     const workspaceDocs = path.join(workspaceDir, "docs");
-    if (fs.existsSync(workspaceDocs)) {
+    if (await pathExists(workspaceDocs)) {
       return workspaceDocs;
     }
   }
@@ -26,5 +35,5 @@ export async function resolveOpenClawDocsPath(params: {
   }
 
   const packageDocs = path.join(packageRoot, "docs");
-  return fs.existsSync(packageDocs) ? packageDocs : null;
+  return (await pathExists(packageDocs)) ? packageDocs : null;
 }

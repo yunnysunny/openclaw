@@ -33,9 +33,22 @@ vi.mock("./control-ui-assets.fs.runtime.js", async () => {
   const wrapped = {
     existsSync: (p: string) =>
       isFixturePath(p) ? state.entries.has(absInMock(p)) : actual.existsSync(p),
+    exists: async (p: string) =>
+      isFixturePath(p) ? state.entries.has(absInMock(p)) : actual.existsSync(p),
     readFileSync: (p: string, encoding?: BufferEncoding) => {
       if (!isFixturePath(p)) {
         return actual.readFileSync(p, encoding);
+      }
+      const entry = readFixtureEntry(p);
+      if (entry?.kind === "file") {
+        return entry.content;
+      }
+      throw new Error(`ENOENT: no such file, open '${p}'`);
+    },
+    readFile: async (p: string, encoding?: BufferEncoding) => {
+      if (!isFixturePath(p)) {
+        const value = actual.readFileSync(p, encoding);
+        return typeof value === "string" ? value : value.toString(encoding ?? "utf-8");
       }
       const entry = readFixtureEntry(p);
       if (entry?.kind === "file") {
@@ -57,6 +70,10 @@ vi.mock("./control-ui-assets.fs.runtime.js", async () => {
       throw new Error(`ENOENT: no such file or directory, stat '${p}'`);
     },
     realpathSync: (p: string) =>
+      isFixturePath(p)
+        ? (state.realpaths.get(absInMock(p)) ?? absInMock(p))
+        : actual.realpathSync(p),
+    realpath: async (p: string) =>
       isFixturePath(p)
         ? (state.realpaths.get(absInMock(p)) ?? absInMock(p))
         : actual.realpathSync(p),

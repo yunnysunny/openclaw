@@ -551,6 +551,12 @@ describe("server-channels auto restart", () => {
     expect(manager.isHealthMonitorEnabled("discord", DEFAULT_ACCOUNT_ID)).toBe(false);
   });
 
+  it("getRuntimeSnapshotAsync matches getRuntimeSnapshot", async () => {
+    installTestRegistry(createTestPlugin());
+    const manager = createManager();
+    await expect(manager.getRuntimeSnapshotAsync()).resolves.toEqual(manager.getRuntimeSnapshot());
+  });
+
   it("does not treat an empty account id as the default account when matching raw overrides", () => {
     installTestRegistry(
       createTestPlugin({

@@ -9,9 +9,13 @@ import {
 } from "./setup.plugin-config.js";
 
 const loadPluginManifestRegistrySync = vi.fn();
+const loadPluginManifestRegistryAsync = vi.fn(async (...args: unknown[]) =>
+  loadPluginManifestRegistrySync(...args),
+);
 
 vi.mock("../plugins/manifest-registry.js", () => ({
   loadPluginManifestRegistrySync,
+  loadPluginManifestRegistryAsync,
 }));
 
 function makeManifestPlugin(

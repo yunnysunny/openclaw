@@ -7,6 +7,7 @@ import type { ChannelManager, ChannelRuntimeSnapshot } from "./server-channels.j
 function createMockChannelManager(overrides?: Partial<ChannelManager>): ChannelManager {
   return {
     getRuntimeSnapshot: vi.fn(() => ({ channels: {}, channelAccounts: {} })),
+    getRuntimeSnapshotAsync: vi.fn(async () => ({ channels: {}, channelAccounts: {} })),
     startChannels: vi.fn(async () => {}),
     startChannel: vi.fn(async () => {}),
     stopChannel: vi.fn(async () => {}),
@@ -43,8 +44,10 @@ function createSnapshotManager(
   accounts: Record<string, Record<string, Partial<ChannelAccountSnapshot>>>,
   overrides?: Partial<ChannelManager>,
 ): ChannelManager {
+  const snapshot = snapshotWith(accounts);
   return createMockChannelManager({
-    getRuntimeSnapshot: vi.fn(() => snapshotWith(accounts)),
+    getRuntimeSnapshot: vi.fn(() => snapshot),
+    getRuntimeSnapshotAsync: vi.fn(async () => snapshot),
     ...overrides,
   });
 }
