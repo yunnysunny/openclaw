@@ -244,7 +244,8 @@ describe("provider-runtime", () => {
     }));
     vi.doMock("./providers.runtime.js", () => ({
       resolvePluginProviders: (params: unknown) => resolvePluginProvidersMock(params as never),
-      resolvePluginProvidersAsync: async (params: unknown) => resolvePluginProvidersMock(params as never),
+      resolvePluginProvidersAsync: async (params: unknown) =>
+        resolvePluginProvidersMock(params as never),
       isPluginProvidersLoadInFlight: (params: unknown) =>
         isPluginProvidersLoadInFlightMock(params as never),
       isPluginProvidersLoadInFlightAsync: async (params: unknown) =>

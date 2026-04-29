@@ -240,7 +240,7 @@ async function safeRealpath(dir: string): Promise<string | null> {
   }
 }
 
-function resolveSiblingAgentDirs(primaryAgentDir: string): string[] {
+function _resolveSiblingAgentDirs(primaryAgentDir: string): string[] {
   const normalized = path.resolve(primaryAgentDir);
   const parentOfAgent = path.dirname(normalized);
   const candidateAgentsRoot = path.dirname(parentOfAgent);

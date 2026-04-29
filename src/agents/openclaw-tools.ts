@@ -3,7 +3,6 @@ import { callGateway } from "../gateway/call.js";
 import { getActiveRuntimeWebToolsMetadata } from "../secrets/runtime.js";
 import { normalizeDeliveryContext } from "../utils/delivery-context.js";
 import type { GatewayMessageChannel } from "../utils/message-channel.js";
-import { resolveProviderIdForAuth, resolveProviderIdForAuthAsync } from "./provider-auth-aliases.js";
 import { resolveAgentWorkspaceDir, resolveSessionAgentIds } from "./agent-scope.js";
 import {
   resolveOpenClawPluginToolsForOptions,
@@ -14,6 +13,10 @@ import {
   collectPresentOpenClawTools,
   isUpdatePlanToolEnabledForOpenClawTools,
 } from "./openclaw-tools.registration.js";
+import {
+  resolveProviderIdForAuth,
+  resolveProviderIdForAuthAsync,
+} from "./provider-auth-aliases.js";
 import type { SandboxFsBridge } from "./sandbox/fs-bridge.js";
 import type { SpawnedToolContext } from "./spawned-context.js";
 import type { ToolFsPolicy } from "./tool-fs-policy.js";

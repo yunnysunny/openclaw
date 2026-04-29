@@ -95,7 +95,8 @@ async function resolvePortalCatalog(ctx: ProviderCatalogContext) {
   const authStore = ensureAuthProfileStore(ctx.agentDir, {
     allowKeychainPrompt: false,
   });
-  const hasProfiles = (await listProfilesForProviderAsync(authStore, PORTAL_PROVIDER_ID)).length > 0;
+  const hasProfiles =
+    (await listProfilesForProviderAsync(authStore, PORTAL_PROVIDER_ID)).length > 0;
   const explicitApiKey = normalizeOptionalString(explicitProvider?.apiKey);
   const apiKey = envApiKey ?? explicitApiKey ?? (hasProfiles ? MINIMAX_OAUTH_MARKER : undefined);
   if (!apiKey) {

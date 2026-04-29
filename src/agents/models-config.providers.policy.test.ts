@@ -16,10 +16,7 @@ let resolveProviderConfigApiKeyResolver: ResolveProviderConfigApiKeyResolver;
 let resolveProviderConfigApiKeyResolverAsync: ResolveProviderConfigApiKeyResolverAsync;
 
 const mockNormalizeProviderConfigWithPlugin = vi.hoisted(() => {
-  return (params: {
-    provider: string;
-    context: { providerConfig?: { baseUrl?: string } };
-  }) => {
+  return (params: { provider: string; context: { providerConfig?: { baseUrl?: string } } }) => {
     if (params.provider !== "google") {
       return undefined;
     }

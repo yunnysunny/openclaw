@@ -7,7 +7,6 @@ import {
   resolveManifestActivationPluginIds,
   resolveManifestActivationPluginIdsAsync,
 } from "./activation-planner.js";
-import { loadPluginManifestRegistryAsync } from "./manifest-registry.js";
 import {
   isPluginRegistryLoadInFlight,
   loadOpenClawPlugins,
@@ -16,6 +15,7 @@ import {
   resolveRuntimePluginRegistryAsync,
   type PluginLoadOptions,
 } from "./loader.js";
+import { loadPluginManifestRegistryAsync } from "./manifest-registry.js";
 import { hasExplicitPluginIdScope } from "./plugin-scope.js";
 import {
   resolveActivatableProviderOwnerPluginIds,
@@ -50,7 +50,9 @@ export type ResolveExplicitProviderOwnerPluginIdsParams = {
   env?: PluginLoadOptions["env"];
 };
 
-function resolveExplicitProviderOwnerPluginIds(params: ResolveExplicitProviderOwnerPluginIdsParams): string[] {
+function resolveExplicitProviderOwnerPluginIds(
+  params: ResolveExplicitProviderOwnerPluginIdsParams,
+): string[] {
   return dedupeSortedPluginIds(
     params.providerRefs.flatMap((provider) => {
       const plannedPluginIds = resolveManifestActivationPluginIds({

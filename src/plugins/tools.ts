@@ -81,7 +81,9 @@ async function resolvePluginToolRegistryAsync(params: {
     getActivePluginRegistryKey() &&
     getActivePluginRuntimeSubagentMode() === "gateway-bindable"
   ) {
-    return getActivePluginRegistry() ?? (await resolveRuntimePluginRegistryAsync(params.loadOptions));
+    return (
+      getActivePluginRegistry() ?? (await resolveRuntimePluginRegistryAsync(params.loadOptions))
+    );
   }
   return await resolveRuntimePluginRegistryAsync(params.loadOptions);
 }

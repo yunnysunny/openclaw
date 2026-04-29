@@ -84,9 +84,15 @@ describe("gateway startup primary model warmup", () => {
     });
 
     expect(ensureOpenClawModelsJsonMock).toHaveBeenCalledWith(cfg, "/tmp/agent");
-    expect(resolveModelAsyncMock).toHaveBeenCalledWith("openai-codex", "gpt-5.4", "/tmp/agent", cfg, {
-      skipProviderRuntimeHooks: true,
-    });
+    expect(resolveModelAsyncMock).toHaveBeenCalledWith(
+      "openai-codex",
+      "gpt-5.4",
+      "/tmp/agent",
+      cfg,
+      {
+        skipProviderRuntimeHooks: true,
+      },
+    );
   });
 
   it("skips warmup when no explicit primary model is configured", async () => {

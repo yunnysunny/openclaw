@@ -2,11 +2,9 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   __testing,
   clearPluginLoaderCache,
-  inFlightPluginRegistryLoads,
   loadOpenClawPluginsAsync,
   resolveRuntimePluginRegistry,
   resolveRuntimePluginRegistryAsync,
-  waitForInFlightPluginRegistryLoad,
 } from "./loader.js";
 import { resetPluginLoaderTestStateForTest } from "./loader.test-fixtures.js";
 import {
@@ -245,9 +243,9 @@ describe("resolveRuntimePluginRegistryAsync", () => {
 
 describe("loadOpenClawPluginsAsync", () => {
   it("rejects activate:false with cache default like the sync entry", async () => {
-    await expect(
-      loadOpenClawPluginsAsync({ activate: false, cache: true }),
-    ).rejects.toThrow("loadOpenClawPlugins: activate:false requires cache:false");
+    await expect(loadOpenClawPluginsAsync({ activate: false, cache: true })).rejects.toThrow(
+      "loadOpenClawPlugins: activate:false requires cache:false",
+    );
   });
 
   it("concurrent async loads for the same cache key share one registry (in-flight + cache)", async () => {

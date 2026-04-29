@@ -58,7 +58,8 @@ export async function buildPairedProviderApiKeyCatalog(params: {
     | Record<string, ModelProviderConfig>
     | Promise<Record<string, ModelProviderConfig>>;
 }): Promise<ProviderCatalogResult> {
-  const apiKey = (await params.ctx.resolveProviderApiKey(normalizeProviderId(params.providerId))).apiKey;
+  const apiKey = (await params.ctx.resolveProviderApiKey(normalizeProviderId(params.providerId)))
+    .apiKey;
   if (!apiKey) {
     return null;
   }

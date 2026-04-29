@@ -13,13 +13,12 @@ const {
   createOpenClawToolsAsyncMock,
   getChannelPluginMock,
   handleCommandsMock,
-} =
-  vi.hoisted(() => ({
-    buildStatusReplyMock: vi.fn(),
-    createOpenClawToolsAsyncMock: vi.fn(),
-    getChannelPluginMock: vi.fn(),
-    handleCommandsMock: vi.fn(),
-  }));
+} = vi.hoisted(() => ({
+  buildStatusReplyMock: vi.fn(),
+  createOpenClawToolsAsyncMock: vi.fn(),
+  getChannelPluginMock: vi.fn(),
+  handleCommandsMock: vi.fn(),
+}));
 
 type HandleInlineActionsInput = Parameters<
   typeof import("./get-reply-inline-actions.js").handleInlineActions

@@ -18,10 +18,7 @@ vi.mock("../model-suppression.js", () => ({
     }
     return `Unknown model: ${provider}/gpt-5.3-codex-spark. gpt-5.3-codex-spark is only supported via openai-codex OAuth. Use openai-codex/gpt-5.3-codex-spark.`;
   },
-  buildSuppressedBuiltInModelErrorAsync: async (params: {
-    provider?: string;
-    id?: string;
-  }) => {
+  buildSuppressedBuiltInModelErrorAsync: async (params: { provider?: string; id?: string }) => {
     const { provider, id } = params;
     if (
       (provider !== "openai" && provider !== "azure-openai-responses") ||

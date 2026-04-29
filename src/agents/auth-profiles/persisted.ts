@@ -283,7 +283,7 @@ export async function mergeOAuthFileIntoStoreAsync(store: AuthProfileStore): Pro
   if (!oauthRaw || typeof oauthRaw !== "object") {
     return false;
   }
-  const oauthEntries = oauthRaw as Record<string, OAuthCredentials>;
+  const oauthEntries = oauthRaw;
   let mutated = false;
   for (const [provider, creds] of Object.entries(oauthEntries)) {
     if (!creds || typeof creds !== "object") {

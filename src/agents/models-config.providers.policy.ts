@@ -1,11 +1,11 @@
 import { resolveProviderConfigApiKeyWithPluginAsync } from "../plugins/provider-runtime.js";
+import { resolveProviderPluginLookupKey } from "./models-config.providers.policy.lookup.js";
 import {
   applyProviderNativeStreamingUsagePolicy,
   normalizeProviderConfigPolicy,
   normalizeProviderConfigPolicyAsync,
   resolveProviderConfigApiKeyPolicy,
 } from "./models-config.providers.policy.runtime.js";
-import { resolveProviderPluginLookupKey } from "./models-config.providers.policy.lookup.js";
 import type { ProviderConfig } from "./models-config.providers.secrets.js";
 
 export function applyNativeStreamingUsageCompat(
@@ -60,10 +60,7 @@ export async function resolveProviderConfigApiKeyResolverAsync(
   providerKey: string,
   provider?: ProviderConfig,
 ): Promise<
-  | ((
-      env: NodeJS.ProcessEnv,
-    ) => string | undefined | Promise<string | undefined>)
-  | undefined
+  ((env: NodeJS.ProcessEnv) => string | undefined | Promise<string | undefined>) | undefined
 > {
   const runtimeProviderKey = resolveProviderPluginLookupKey(providerKey, provider).trim();
   return async (env) =>

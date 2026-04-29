@@ -14,10 +14,9 @@ const normalizeProviderModelIdWithPluginMock = vi.hoisted(() =>
 vi.mock("../plugins/provider-runtime.js", () => {
   return {
     normalizeProviderModelIdWithPlugin: normalizeProviderModelIdWithPluginMock,
-    normalizeProviderModelIdWithPluginAsync: vi
-      .fn<typeof normalizeProviderModelIdWithPluginAsync>(
-        async (params) => normalizeProviderModelIdWithPluginMock(params),
-      ),
+    normalizeProviderModelIdWithPluginAsync: vi.fn<typeof normalizeProviderModelIdWithPluginAsync>(
+      async (params) => normalizeProviderModelIdWithPluginMock(params),
+    ),
   };
 });
 

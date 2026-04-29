@@ -22,9 +22,8 @@ describe("ensureRuntimePluginsLoaded", () => {
     hoisted.resolveRuntimePluginRegistry.mockReturnValue(undefined);
     hoisted.resolveRuntimePluginRegistryAsync.mockResolvedValue(undefined);
     vi.resetModules();
-    ({ ensureRuntimePluginsLoaded, ensureRuntimePluginsLoadedAsync } = await import(
-      "./runtime-plugins.js"
-    ));
+    ({ ensureRuntimePluginsLoaded, ensureRuntimePluginsLoadedAsync } =
+      await import("./runtime-plugins.js"));
   });
 
   it("does not reactivate plugins when a process already has an active registry", async () => {

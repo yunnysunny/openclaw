@@ -306,9 +306,14 @@ export async function resolveBundledPluginsDirAsync(
       await resolveOpenClawPackageRoot({ argv1: process.argv[1] }),
       await resolveOpenClawPackageRoot({ cwd: process.cwd() }),
       await resolveOpenClawPackageRoot({ moduleUrl: import.meta.url }),
-    ].filter((entry, index, all): entry is string => Boolean(entry) && all.indexOf(entry) === index);
+    ].filter(
+      (entry, index, all): entry is string => Boolean(entry) && all.indexOf(entry) === index,
+    );
     for (const packageRoot of packageRoots) {
-      const bundledDir = await resolveBundledDirFromPackageRootAsync(packageRoot, preferSourceCheckout);
+      const bundledDir = await resolveBundledDirFromPackageRootAsync(
+        packageRoot,
+        preferSourceCheckout,
+      );
       if (bundledDir) {
         return bundledDir;
       }

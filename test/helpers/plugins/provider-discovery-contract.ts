@@ -97,8 +97,7 @@ function runCatalog(
     provider: params.provider,
     config: params.config ?? {},
     env: params.env ?? ({} as NodeJS.ProcessEnv),
-    resolveProviderApiKey:
-      params.resolveProviderApiKey ?? (async () => ({ apiKey: undefined })),
+    resolveProviderApiKey: params.resolveProviderApiKey ?? (async () => ({ apiKey: undefined })),
     resolveProviderAuth:
       params.resolveProviderAuth ??
       (async (_, options) => ({

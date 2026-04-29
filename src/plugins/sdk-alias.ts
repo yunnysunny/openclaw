@@ -1,7 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolveOpenClawPackageRoot, resolveOpenClawPackageRootSync } from "../infra/openclaw-root.js";
+import {
+  resolveOpenClawPackageRoot,
+  resolveOpenClawPackageRootSync,
+} from "../infra/openclaw-root.js";
 import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 
 type PluginSdkAliasCandidateKind = "dist" | "src";

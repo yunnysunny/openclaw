@@ -9,4 +9,8 @@ export {
 } from "../../agents/model-auth.js";
 export { loadModelCatalog } from "../../agents/model-catalog.js";
 export { resolveModelWithRegistry } from "../../agents/pi-embedded-runner/model.js";
-export { discoverAuthStorage, discoverAuthStorageAsync, discoverModels } from "../../agents/pi-model-discovery.js";
+export {
+  discoverAuthStorage,
+  discoverAuthStorageAsync,
+  discoverModels,
+} from "../../agents/pi-model-discovery.js";

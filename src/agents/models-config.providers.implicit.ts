@@ -290,7 +290,9 @@ async function resolvePluginImplicitProviders(
   return Object.keys(discovered).length > 0 ? discovered : undefined;
 }
 
-async function buildPluginCatalogConfig(ctx: ImplicitProviderResolutionContext): Promise<OpenClawConfig> {
+async function buildPluginCatalogConfig(
+  ctx: ImplicitProviderResolutionContext,
+): Promise<OpenClawConfig> {
   if (!ctx.explicitProviders || Object.keys(ctx.explicitProviders).length === 0) {
     return ctx.config ?? {};
   }

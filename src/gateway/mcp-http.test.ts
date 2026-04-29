@@ -28,8 +28,9 @@ vi.mock("../config/sessions.js", () => ({
 vi.mock("./tool-resolution.js", () => ({
   resolveGatewayScopedTools: (...args: Parameters<typeof resolveGatewayScopedToolsMock>) =>
     resolveGatewayScopedToolsMock(...args),
-  resolveGatewayScopedToolsAsync: async (...args: Parameters<typeof resolveGatewayScopedToolsMock>) =>
-    resolveGatewayScopedToolsMock(...args),
+  resolveGatewayScopedToolsAsync: async (
+    ...args: Parameters<typeof resolveGatewayScopedToolsMock>
+  ) => resolveGatewayScopedToolsMock(...args),
 }));
 
 import {

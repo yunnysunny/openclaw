@@ -1,5 +1,5 @@
-import fsp from "node:fs/promises";
 import fs from "node:fs";
+import fsp from "node:fs/promises";
 import { loadJsonFile, saveJsonFile, saveJsonFileAsync } from "../../infra/json-file.js";
 import { readJsonFile } from "../../infra/json-files.js";
 import { normalizeOptionalString } from "../../shared/string-coerce.js";

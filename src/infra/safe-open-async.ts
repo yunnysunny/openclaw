@@ -76,11 +76,7 @@ export async function openVerifiedFileAsync(params: {
     if (params.rejectHardlinks && openedStat.isFile() && openedStat.nlink > 1) {
       return { ok: false, reason: "validation" };
     }
-    if (
-      params.maxBytes !== undefined &&
-      openedStat.isFile() &&
-      openedStat.size > params.maxBytes
-    ) {
+    if (params.maxBytes !== undefined && openedStat.isFile() && openedStat.size > params.maxBytes) {
       return { ok: false, reason: "validation" };
     }
     if (!sameFileIdentity(preOpenStat, openedStat)) {

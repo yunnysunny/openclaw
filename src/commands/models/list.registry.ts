@@ -82,7 +82,10 @@ function validateAvailableModels(availableModels: unknown): Model<Api>[] {
   return availableModels as Model<Api>[];
 }
 
-async function loadAvailableModels(registry: ModelRegistry, cfg: OpenClawConfig): Promise<Model<Api>[]> {
+async function loadAvailableModels(
+  registry: ModelRegistry,
+  cfg: OpenClawConfig,
+): Promise<Model<Api>[]> {
   let availableModels: unknown;
   try {
     availableModels = registry.getAvailable();

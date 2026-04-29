@@ -18,8 +18,9 @@ vi.mock("../plugins/loader.js", () => ({
 }));
 
 vi.mock("../plugins/manifest-registry.js", () => ({
-  loadPluginManifestRegistrySync: (...args: Parameters<typeof loadPluginManifestRegistrySyncMock>) =>
-    loadPluginManifestRegistrySyncMock(...args),
+  loadPluginManifestRegistrySync: (
+    ...args: Parameters<typeof loadPluginManifestRegistrySyncMock>
+  ) => loadPluginManifestRegistrySyncMock(...args),
 }));
 
 let getSpeechProvider: typeof import("./provider-registry.js").getSpeechProvider;

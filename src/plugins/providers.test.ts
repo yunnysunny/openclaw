@@ -6,7 +6,8 @@ import { createEmptyPluginRegistry } from "./registry-empty.js";
 import type { ProviderPlugin } from "./types.js";
 
 type ResolveRuntimePluginRegistry = typeof import("./loader.js").resolveRuntimePluginRegistry;
-type ResolveRuntimePluginRegistryAsync = typeof import("./loader.js").resolveRuntimePluginRegistryAsync;
+type ResolveRuntimePluginRegistryAsync =
+  typeof import("./loader.js").resolveRuntimePluginRegistryAsync;
 type LoadOpenClawPlugins = typeof import("./loader.js").loadOpenClawPlugins;
 type LoadOpenClawPluginsAsync = typeof import("./loader.js").loadOpenClawPluginsAsync;
 type IsPluginRegistryLoadInFlight = typeof import("./loader.js").isPluginRegistryLoadInFlight;
@@ -31,7 +32,6 @@ let resolveEnabledProviderPluginIds: typeof import("./providers.js").resolveEnab
 let resolveDiscoveredProviderPluginIds: typeof import("./providers.js").resolveDiscoveredProviderPluginIds;
 let resolveDiscoveredProviderPluginIdsAsync: typeof import("./providers.js").resolveDiscoveredProviderPluginIdsAsync;
 let resolveDiscoverableProviderOwnerPluginIds: typeof import("./providers.js").resolveDiscoverableProviderOwnerPluginIds;
-let resolveDiscoverableProviderOwnerPluginIdsAsync: typeof import("./providers.js").resolveDiscoverableProviderOwnerPluginIdsAsync;
 let resolvePluginProviders: typeof import("./providers.runtime.js").resolvePluginProviders;
 let setActivePluginRegistry: SetActivePluginRegistry;
 
@@ -295,7 +295,8 @@ describe("resolvePluginProviders", () => {
         applyPluginAutoEnableMock(...args),
     }));
     loadPluginManifestRegistryAsyncMock.mockImplementation(
-      async (...args: Parameters<LoadPluginManifestRegistryAsync>) => loadPluginManifestRegistrySyncMock(...args),
+      async (...args: Parameters<LoadPluginManifestRegistryAsync>) =>
+        loadPluginManifestRegistrySyncMock(...args),
     );
     vi.doMock("./manifest-registry.js", () => ({
       loadPluginManifestRegistrySync: (...args: Parameters<LoadPluginManifestRegistry>) =>

@@ -1,5 +1,8 @@
 import type { OpenClawConfig } from "../config/types.openclaw.js";
-import { resolveRuntimePluginRegistry, resolveRuntimePluginRegistryAsync } from "../plugins/loader.js";
+import {
+  resolveRuntimePluginRegistry,
+  resolveRuntimePluginRegistryAsync,
+} from "../plugins/loader.js";
 import { resolveUserPath } from "../utils.js";
 
 export function ensureRuntimePluginsLoaded(params: {

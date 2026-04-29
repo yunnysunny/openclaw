@@ -3162,7 +3162,10 @@ export async function loadOpenClawPluginsAsync(
           pluginId: record.id,
           source: safeSource,
           run: async () =>
-            (await importWithPluginJiti(getJiti(safeSource), safeImportSource)) as OpenClawPluginModule,
+            (await importWithPluginJiti(
+              getJiti(safeSource),
+              safeImportSource,
+            )) as OpenClawPluginModule,
         });
       } catch (err) {
         recordPluginError({

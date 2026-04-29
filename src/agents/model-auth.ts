@@ -41,7 +41,11 @@ import {
 } from "./model-auth-runtime-shared.js";
 import { normalizeProviderId } from "./model-selection.js";
 
-export { ensureAuthProfileStore, ensureAuthProfileStoreAsync, resolveAuthProfileOrder } from "./auth-profiles.js";
+export {
+  ensureAuthProfileStore,
+  ensureAuthProfileStoreAsync,
+  resolveAuthProfileOrder,
+} from "./auth-profiles.js";
 export { requireApiKey, resolveAwsSdkEnvVarName } from "./model-auth-runtime-shared.js";
 export type { ResolvedProviderAuth } from "./model-auth-runtime-shared.js";
 export type ProviderCredentialPrecedence = "profile-first" | "env-first";

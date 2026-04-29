@@ -1,8 +1,14 @@
 import type { OpenClawConfig } from "../config/types.openclaw.js";
-import { loadPluginManifestRegistryAsync, loadPluginManifestRegistrySync } from "./manifest-registry.js";
-import { resolveDiscoveredProviderPluginIds, resolveDiscoveredProviderPluginIdsAsync } from "./providers.js";
-import { resolvePluginProviders, resolvePluginProvidersAsync } from "./providers.runtime.js";
 import { getCachedPluginJitiLoader, type PluginJitiLoaderCache } from "./jiti-loader-cache.js";
+import {
+  loadPluginManifestRegistryAsync,
+  loadPluginManifestRegistrySync,
+} from "./manifest-registry.js";
+import {
+  resolveDiscoveredProviderPluginIds,
+  resolveDiscoveredProviderPluginIdsAsync,
+} from "./providers.js";
+import { resolvePluginProviders, resolvePluginProvidersAsync } from "./providers.runtime.js";
 import { createPluginSourceLoader } from "./source-loader.js";
 import type { ProviderPlugin } from "./types.js";
 

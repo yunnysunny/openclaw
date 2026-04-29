@@ -1810,7 +1810,10 @@ export async function discoverOpenClawPluginsAsync(params: {
           seen,
         });
       }
-      const workspaceMatchesBundledRoot = await resolvesToSameDirectoryAsync(workspaceRoot, roots.stock);
+      const workspaceMatchesBundledRoot = await resolvesToSameDirectoryAsync(
+        workspaceRoot,
+        roots.stock,
+      );
       if (roots.workspace && workspaceRoot && !workspaceMatchesBundledRoot) {
         await discoverInDirectoryAsync({
           dir: roots.workspace,

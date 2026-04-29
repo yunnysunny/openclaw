@@ -17,10 +17,9 @@ async function loadCachedPluginJitiLoader(scope: string) {
     createJiti,
   }));
 
-  const { getCachedPluginJitiLoader } = await importFreshModule<typeof import("./jiti-loader-cache.js")>(
-    import.meta.url,
-    `./jiti-loader-cache.js?scope=${scope}`,
-  );
+  const { getCachedPluginJitiLoader } = await importFreshModule<
+    typeof import("./jiti-loader-cache.js")
+  >(import.meta.url, `./jiti-loader-cache.js?scope=${scope}`);
 
   return { createJiti, getCachedPluginJitiLoader };
 }

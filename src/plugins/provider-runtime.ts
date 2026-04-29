@@ -22,7 +22,10 @@ import {
 } from "./provider-hook-runtime.js";
 import { resolveBundledProviderPolicySurface } from "./provider-public-artifacts.js";
 import type { ProviderRuntimeModel } from "./provider-runtime-model.types.js";
-import { resolveCatalogHookProviderPluginIds, resolveCatalogHookProviderPluginIdsAsync } from "./providers.js";
+import {
+  resolveCatalogHookProviderPluginIds,
+  resolveCatalogHookProviderPluginIdsAsync,
+} from "./providers.js";
 import { getActivePluginRegistryWorkspaceDirFromState } from "./runtime-state.js";
 import { resolveRuntimeTextTransforms } from "./text-transforms.runtime.js";
 import type {
@@ -518,9 +521,7 @@ export async function resolveProviderConfigApiKeyWithPluginAsync(params: {
 }): Promise<string | undefined> {
   const bundledSurface = resolveBundledProviderPolicySurface(params.provider);
   if (bundledSurface?.resolveConfigApiKeyAsync) {
-    return normalizeOptionalString(
-      await bundledSurface.resolveConfigApiKeyAsync(params.context),
-    );
+    return normalizeOptionalString(await bundledSurface.resolveConfigApiKeyAsync(params.context));
   }
   if (bundledSurface?.resolveConfigApiKey) {
     return normalizeOptionalString(bundledSurface.resolveConfigApiKey(params.context));

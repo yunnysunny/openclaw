@@ -375,7 +375,9 @@ function resolveSetupRegistrationSync(record: PluginManifestRecord): SetupRegist
   };
 }
 
-async function resolveSetupRegistrationAsync(record: PluginManifestRecord): Promise<SetupRegistration | null> {
+async function resolveSetupRegistrationAsync(
+  record: PluginManifestRecord,
+): Promise<SetupRegistration | null> {
   const setupSource = record.setupSource ?? (await resolveSetupApiPathAsync(record.rootDir));
   if (!setupSource) {
     return null;

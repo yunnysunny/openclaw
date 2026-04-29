@@ -778,7 +778,10 @@ describe("capability cli", () => {
         "anthropic:default": { errorCount: 3 },
       },
     } as never);
-    mocks.listProfilesForProviderAsync.mockResolvedValue(["openai:default", "openai:secondary"] as never);
+    mocks.listProfilesForProviderAsync.mockResolvedValue([
+      "openai:default",
+      "openai:secondary",
+    ] as never);
 
     let updatedStore: Record<string, any> | null = null;
     mocks.updateAuthProfileStoreWithLock.mockImplementationOnce(

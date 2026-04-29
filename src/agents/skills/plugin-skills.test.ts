@@ -10,7 +10,8 @@ const hoisted = vi.hoisted(() => ({
 }));
 
 vi.mock("../../plugins/manifest-registry.js", () => ({
-  loadPluginManifestRegistrySync: (...args: unknown[]) => hoisted.loadPluginManifestRegistrySync(...args),
+  loadPluginManifestRegistrySync: (...args: unknown[]) =>
+    hoisted.loadPluginManifestRegistrySync(...args),
 }));
 
 let resolvePluginSkillDirs: typeof import("./plugin-skills.js").resolvePluginSkillDirs;

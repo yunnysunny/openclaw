@@ -343,7 +343,9 @@ export function resolvePiCredentialsForDiscovery(agentDir: string): PiCredential
   return credentials;
 }
 
-export async function resolvePiCredentialsForDiscoveryAsync(agentDir: string): Promise<PiCredentialMap> {
+export async function resolvePiCredentialsForDiscoveryAsync(
+  agentDir: string,
+): Promise<PiCredentialMap> {
   const store = await ensureAuthProfileStoreAsync(agentDir, { allowKeychainPrompt: false });
   const credentials = addEnvBackedPiCredentials(resolvePiCredentialMapFromStore(store));
   for (const provider of await resolveRuntimeSyntheticAuthProviderRefsAsync()) {

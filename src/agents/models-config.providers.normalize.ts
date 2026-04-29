@@ -169,7 +169,10 @@ export async function normalizeProvidersAsync(params: {
   }
   const env = params.env ?? process.env;
   let authStore: ReturnType<typeof ensureAuthProfileStore> | undefined;
-  const profileApiKeyCache = new Map<string, Awaited<ReturnType<typeof resolveApiKeyFromProfilesAsync>>>();
+  const profileApiKeyCache = new Map<
+    string,
+    Awaited<ReturnType<typeof resolveApiKeyFromProfilesAsync>>
+  >();
   const providerApiKeyResolverCache = new Map<
     string,
     Awaited<ReturnType<typeof resolveProviderConfigApiKeyResolverAsync>>

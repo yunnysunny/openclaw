@@ -477,9 +477,7 @@ async function hasCursorMcpCapabilityAsync(
   raw: Record<string, unknown>,
   rootDir: string,
 ): Promise<boolean> {
-  return (
-    hasInlineCapabilityValue(raw.mcpServers) || (await bundlePathExists(rootDir, ".mcp.json"))
-  );
+  return hasInlineCapabilityValue(raw.mcpServers) || (await bundlePathExists(rootDir, ".mcp.json"));
 }
 
 async function resolveClaudeComponentPathsAsync(
@@ -587,10 +585,7 @@ async function buildCodexCapabilitiesAsync(
   if ((await resolveCodexHookDirsAsync(raw, rootDir)).length > 0) {
     capabilities.push("hooks");
   }
-  if (
-    hasInlineCapabilityValue(raw.mcpServers) ||
-    (await bundlePathExists(rootDir, ".mcp.json"))
-  ) {
+  if (hasInlineCapabilityValue(raw.mcpServers) || (await bundlePathExists(rootDir, ".mcp.json"))) {
     capabilities.push("mcpServers");
   }
   if (hasInlineCapabilityValue(raw.apps) || (await bundlePathExists(rootDir, ".app.json"))) {

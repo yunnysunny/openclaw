@@ -3,11 +3,17 @@ import fsPromises from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { getShellEnvAppliedKeys } from "../infra/shell-env.js";
-import { resolvePluginSetupProvider, resolvePluginSetupProviderAsync } from "../plugins/setup-registry.js";
+import {
+  resolvePluginSetupProvider,
+  resolvePluginSetupProviderAsync,
+} from "../plugins/setup-registry.js";
 import { normalizeOptionalSecretInput } from "../utils/normalize-secret-input.js";
 import { resolveProviderEnvApiKeyCandidates } from "./model-auth-env-vars.js";
 import { GCP_VERTEX_CREDENTIALS_MARKER } from "./model-auth-markers.js";
-import { resolveProviderIdForAuth, resolveProviderIdForAuthAsync } from "./provider-auth-aliases.js";
+import {
+  resolveProviderIdForAuth,
+  resolveProviderIdForAuthAsync,
+} from "./provider-auth-aliases.js";
 
 export type EnvApiKeyResult = {
   apiKey: string;
@@ -57,7 +63,9 @@ function resolveGoogleVertexEnvApiKey(env: NodeJS.ProcessEnv): string | undefine
     : undefined;
 }
 
-async function resolveGoogleVertexEnvApiKeyAsync(env: NodeJS.ProcessEnv): Promise<string | undefined> {
+async function resolveGoogleVertexEnvApiKeyAsync(
+  env: NodeJS.ProcessEnv,
+): Promise<string | undefined> {
   const explicitApiKey = normalizeOptionalSecretInput(env.GOOGLE_CLOUD_API_KEY);
   if (explicitApiKey) {
     return explicitApiKey;

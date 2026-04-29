@@ -6,8 +6,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("./manifest-registry.js", () => ({
-  loadPluginManifestRegistrySync: (...args: unknown[]) => mocks.loadPluginManifestRegistrySync(...args),
-  loadPluginManifestRegistryAsync: (...args: unknown[]) => mocks.loadPluginManifestRegistryAsync(...args),
+  loadPluginManifestRegistrySync: (...args: unknown[]) =>
+    mocks.loadPluginManifestRegistrySync(...args),
+  loadPluginManifestRegistryAsync: (...args: unknown[]) =>
+    mocks.loadPluginManifestRegistryAsync(...args),
 }));
 
 let resolveManifestActivationPluginIds: typeof import("./activation-planner.js").resolveManifestActivationPluginIds;

@@ -5,7 +5,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("./manifest-registry.js", () => ({
-  loadPluginManifestRegistrySync: (...args: unknown[]) => mocks.loadPluginManifestRegistrySync(...args),
+  loadPluginManifestRegistrySync: (...args: unknown[]) =>
+    mocks.loadPluginManifestRegistrySync(...args),
   resolveManifestContractPluginIds: vi.fn(),
 }));
 

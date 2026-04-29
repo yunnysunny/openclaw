@@ -4,8 +4,7 @@ import { resolveBundledPluginsDir, resolveBundledPluginsDirAsync } from "./bundl
 
 describe("plugin roots resolvers", () => {
   it("resolves sync roots and cache inputs", async () => {
-    const { resolvePluginSourceRoots, resolvePluginCacheInputs } =
-      (await import("./roots.js")) as typeof import("./roots.js");
+    const { resolvePluginSourceRoots, resolvePluginCacheInputs } = await import("./roots.js");
     const env = { ...process.env };
     const roots = resolvePluginSourceRoots({
       workspaceDir: "/repo/workspace",
@@ -14,7 +13,9 @@ describe("plugin roots resolvers", () => {
     const stock = resolveBundledPluginsDir(env);
     expect(roots.stock).toBe(stock);
     expect(roots.global.endsWith(path.join(".openclaw", "extensions"))).toBe(true);
-    expect(roots.workspace).toBe(path.join(path.resolve("/repo/workspace"), ".openclaw", "extensions"));
+    expect(roots.workspace).toBe(
+      path.join(path.resolve("/repo/workspace"), ".openclaw", "extensions"),
+    );
 
     const inputs = resolvePluginCacheInputs({
       workspaceDir: "/repo/workspace",
@@ -31,7 +32,7 @@ describe("plugin roots resolvers", () => {
 
   it("resolves async roots and cache inputs", async () => {
     const { resolvePluginSourceRootsAsync, resolvePluginCacheInputsAsync } =
-      (await import("./roots.js")) as typeof import("./roots.js");
+      await import("./roots.js");
     const env = { ...process.env };
     const roots = await resolvePluginSourceRootsAsync({
       workspaceDir: "/repo/workspace",
@@ -40,7 +41,9 @@ describe("plugin roots resolvers", () => {
     const stock = await resolveBundledPluginsDirAsync(env);
     expect(roots.stock).toBe(stock);
     expect(roots.global.endsWith(path.join(".openclaw", "extensions"))).toBe(true);
-    expect(roots.workspace).toBe(path.join(path.resolve("/repo/workspace"), ".openclaw", "extensions"));
+    expect(roots.workspace).toBe(
+      path.join(path.resolve("/repo/workspace"), ".openclaw", "extensions"),
+    );
 
     const inputs = await resolvePluginCacheInputsAsync({
       workspaceDir: "/repo/workspace",

@@ -79,10 +79,7 @@ export async function resolveProviderConfigApiKeyPolicyAsync(
   providerKey: string,
   provider?: ProviderConfig,
 ): Promise<
-  | ((
-      env: NodeJS.ProcessEnv,
-    ) => string | undefined | Promise<string | undefined>)
-  | undefined
+  ((env: NodeJS.ProcessEnv) => string | undefined | Promise<string | undefined>) | undefined
 > {
   const runtimeProviderKey = resolveProviderPluginLookupKey(providerKey, provider).trim();
   return async (env) =>

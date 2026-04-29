@@ -99,7 +99,9 @@ function hermeticEnv(overrides: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
   };
 }
 
-function countDuplicateWarnings(registry: ReturnType<typeof loadPluginManifestRegistrySync>): number {
+function countDuplicateWarnings(
+  registry: ReturnType<typeof loadPluginManifestRegistrySync>,
+): number {
   return registry.diagnostics.filter(
     (diagnostic) =>
       diagnostic.level === "warn" && diagnostic.message?.includes("duplicate plugin id"),

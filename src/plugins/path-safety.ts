@@ -19,7 +19,10 @@ export function safeRealpathSync(targetPath: string, cache?: Map<string, string>
   }
 }
 
-export async function safeRealpath(targetPath: string, cache?: Map<string, string>): Promise<string | null> {
+export async function safeRealpath(
+  targetPath: string,
+  cache?: Map<string, string>,
+): Promise<string | null> {
   const cached = cache?.get(targetPath);
   if (cached) {
     return cached;

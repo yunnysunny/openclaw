@@ -1,6 +1,9 @@
 import { normalizeStringEntries } from "../../shared/string-normalization.js";
 import { normalizeSecretInput } from "../../utils/normalize-secret-input.js";
-import { resolveProviderIdForAuth, resolveProviderIdForAuthAsync } from "../provider-auth-aliases.js";
+import {
+  resolveProviderIdForAuth,
+  resolveProviderIdForAuthAsync,
+} from "../provider-auth-aliases.js";
 import { normalizeProviderId } from "../provider-id.js";
 import {
   ensureAuthProfileStoreForLocalUpdate,

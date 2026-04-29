@@ -24,7 +24,11 @@ import {
   shouldSuppressBuiltInModel,
   shouldSuppressBuiltInModelAsync,
 } from "../model-suppression.js";
-import { discoverAuthStorage, discoverAuthStorageAsync, discoverModels } from "../pi-model-discovery.js";
+import {
+  discoverAuthStorage,
+  discoverAuthStorageAsync,
+  discoverModels,
+} from "../pi-model-discovery.js";
 import {
   attachModelProviderRequestTransport,
   resolveProviderRequestConfig,
@@ -244,7 +248,7 @@ async function normalizeResolvedModelAsync(params: {
     modelId: normalizedInputModel.id,
     model: normalizedInputModel,
   };
-  const pluginNormalized = (await (runtimeHooks.normalizeProviderResolvedModelWithPluginAsync
+  const pluginNormalized = await (runtimeHooks.normalizeProviderResolvedModelWithPluginAsync
     ? runtimeHooks.normalizeProviderResolvedModelWithPluginAsync({
         provider: params.provider,
         config: params.cfg,
@@ -256,7 +260,7 @@ async function normalizeResolvedModelAsync(params: {
           config: params.cfg,
           context: ctx,
         }) as Model<Api> | undefined,
-      ))) as Model<Api> | undefined;
+      ));
   const compatNormalized = runtimeHooks.applyProviderResolvedModelCompatWithPlugins?.({
     provider: params.provider,
     config: params.cfg,
