@@ -6,18 +6,25 @@ import {
 import { resolveModelWithRegistry } from "./model.js";
 import { createProviderRuntimeTestMock } from "./model.provider-runtime.test-support.js";
 
-vi.mock("../../plugins/provider-runtime.js", () => ({
-  applyProviderResolvedModelCompatWithPlugins: () => undefined,
-  applyProviderResolvedTransportWithPlugin: () => undefined,
-  buildProviderUnknownModelHintWithPlugin: () => undefined,
-  clearProviderRuntimeHookCache: () => undefined,
-  normalizeProviderResolvedModelWithPlugin: () => undefined,
-  normalizeProviderTransportWithPlugin: () => undefined,
-  prepareProviderDynamicModel: async () => undefined,
-  resolveProviderBuiltInModelSuppression: () => undefined,
-  runProviderDynamicModel: () => undefined,
-  shouldPreferProviderRuntimeResolvedModel: () => false,
-}));
+vi.mock("../../plugins/provider-runtime.js", async () => {
+  const actual = await vi.importActual<typeof import("../../plugins/provider-runtime.js")>(
+    "../../plugins/provider-runtime.js",
+  );
+  return {
+    ...actual,
+    applyProviderResolvedModelCompatWithPlugins: () => undefined,
+    applyProviderResolvedTransportWithPlugin: () => undefined,
+    buildProviderUnknownModelHintWithPlugin: () => undefined,
+    clearProviderRuntimeHookCache: () => undefined,
+    normalizeProviderResolvedModelWithPlugin: () => undefined,
+    normalizeProviderResolvedModelWithPluginAsync: async () => undefined,
+    normalizeProviderTransportWithPlugin: () => undefined,
+    prepareProviderDynamicModel: async () => undefined,
+    resolveProviderBuiltInModelSuppression: () => undefined,
+    runProviderDynamicModel: () => undefined,
+    shouldPreferProviderRuntimeResolvedModel: () => false,
+  };
+});
 
 const ANTHROPIC_OPUS_TEMPLATE = buildForwardCompatTemplate({
   id: "claude-opus-4-5",

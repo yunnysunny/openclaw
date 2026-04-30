@@ -28,16 +28,23 @@ vi.mock("../plugins/provider-runtime.js", () => ({
   resolveProviderSyntheticAuthWithPluginAsync: async () => undefined,
 }));
 
-vi.mock("./models-config.providers.js", () => ({
-  applyNativeStreamingUsageCompat: (providers: unknown) => providers,
-  enforceSourceManagedProviderSecrets: ({ providers }: { providers: unknown }) => providers,
-  normalizeProviders: ({ providers }: { providers: unknown }) => providers,
-  resolveImplicitProviders: async ({
-    explicitProviders,
-  }: {
-    explicitProviders?: Record<string, unknown>;
-  }) => explicitProviders ?? {},
-}));
+vi.mock("./models-config.providers.js", async () => {
+  const actual = await vi.importActual<typeof import("./models-config.providers.js")>(
+    "./models-config.providers.js",
+  );
+  return {
+    ...actual,
+    applyNativeStreamingUsageCompat: (providers: unknown) => providers,
+    enforceSourceManagedProviderSecrets: ({ providers }: { providers: unknown }) => providers,
+    normalizeProviders: ({ providers }: { providers: unknown }) => providers,
+    normalizeProvidersAsync: async ({ providers }: { providers: unknown }) => providers,
+    resolveImplicitProviders: async ({
+      explicitProviders,
+    }: {
+      explicitProviders?: Record<string, unknown>;
+    }) => explicitProviders ?? {},
+  };
+});
 
 describe("models-config", () => {
   it("uses the first github-copilot profile when env tokens are missing", async () => {

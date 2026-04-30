@@ -140,10 +140,8 @@ function installDiscoveryHooks(state: DiscoveryState, options: DiscoveryContract
         ensureApiKeyFromOptionEnvOrPrompt: vi.fn(),
         ensureAuthProfileStore: ensureAuthProfileStoreMock,
         listProfilesForProvider: listProfilesForProviderMock,
-        listProfilesForProviderAsync: async (
-          authStore: AuthProfileStore,
-          providerId: string,
-        ) => listProfilesForProviderMock(authStore, providerId),
+        listProfilesForProviderAsync: async (authStore: AuthProfileStore, providerId: string) =>
+          listProfilesForProviderMock(authStore, providerId),
         normalizeApiKeyInput: (value: unknown) => (typeof value === "string" ? value.trim() : ""),
         normalizeOptionalSecretInput: (value: unknown) =>
           typeof value === "string" && value.trim() ? value.trim() : undefined,

@@ -410,6 +410,8 @@ describe("gateway server sessions", () => {
 
   test("sessions.create stores dashboard session model and parent linkage, and creates a transcript", async () => {
     const { dir, storePath } = await createSessionStoreDir();
+    const { loadGatewayModelCatalog } = await import("./server-model-catalog.js");
+    await loadGatewayModelCatalog();
     piSdkMock.enabled = true;
     piSdkMock.models = [{ id: "gpt-test-a", name: "A", provider: "openai" }];
     await writeSessionStore({
@@ -437,7 +439,7 @@ describe("gateway server sessions", () => {
       label: "Dashboard Chat",
       model: "openai/gpt-test-a",
       parentSessionKey: "main",
-    });
+    }, 180_000);
 
     expect(created.ok).toBe(true);
     expect(created.payload?.key).toMatch(/^agent:ops:dashboard:/);

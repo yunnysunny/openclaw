@@ -94,6 +94,25 @@ import type {
 } from "./types.js";
 import { assertValidParams } from "./validation.js";
 
+const gatewaySessionsTimingEnabled = process.env.OPENCLAW_DEBUG_GATEWAY_SESSIONS_TIMING === "1";
+const gatewaySessionsTimingFile = process.env.OPENCLAW_DEBUG_GATEWAY_SESSIONS_TIMING_FILE?.trim();
+
+function logGatewaySessionsTiming(stage: string, elapsedMs: number, extra?: Record<string, unknown>) {
+  if (!gatewaySessionsTimingEnabled) {
+    return;
+  }
+  const suffix = extra ? ` extra=${JSON.stringify(extra)}` : "";
+  const line = `[gateway-sessions-timing] stage=${stage} elapsedMs=${elapsedMs}${suffix}`;
+  console.error(line);
+  if (gatewaySessionsTimingFile) {
+    try {
+      fs.appendFileSync(gatewaySessionsTimingFile, `${line}\n`, "utf8");
+    } catch {
+      // Diagnostic logging must not affect request handling.
+    }
+  }
+}
+
 type SessionsRuntimeModule = typeof import("./sessions.runtime.js");
 
 let sessionsRuntimeModulePromise: Promise<SessionsRuntimeModule> | undefined;
@@ -795,6 +814,7 @@ export const sessionsHandlers: GatewayRequestHandlers = {
     );
   },
   "sessions.create": async ({ req, params, respond, context, client, isWebchatConnect }) => {
+    const createStartMs = Date.now();
     if (!assertValidParams(params, validateSessionsCreateParams, "sessions.create", respond)) {
       return;
     }
@@ -844,6 +864,7 @@ export const sessionsHandlers: GatewayRequestHandlers = {
       : buildDashboardSessionKey(agentId);
     const target = resolveGatewaySessionStoreTarget({ cfg, key });
     const targetAgentId = resolveAgentIdFromSessionKey(target.canonicalKey);
+    const storePatchStartMs = Date.now();
     const created = await updateSessionStore(target.storePath, async (store) => {
       const patched = await applySessionsPatchToStore({
         cfg,
@@ -869,15 +890,23 @@ export const sessionsHandlers: GatewayRequestHandlers = {
         entry: nextEntry,
       };
     });
+    logGatewaySessionsTiming("sessions.create.store-patch", Date.now() - storePatchStartMs, {
+      key: target.canonicalKey,
+      hasParent: Boolean(canonicalParentSessionKey),
+    });
     if (!created.ok) {
       respond(false, undefined, created.error);
       return;
     }
+    const transcriptStartMs = Date.now();
     const ensured = ensureSessionTranscriptFile({
       sessionId: created.entry.sessionId,
       storePath: target.storePath,
       sessionFile: created.entry.sessionFile,
       agentId: targetAgentId,
+    });
+    logGatewaySessionsTiming("sessions.create.ensure-transcript", Date.now() - transcriptStartMs, {
+      key: target.canonicalKey,
     });
     if (!ensured.ok) {
       await updateSessionStore(target.storePath, (store) => {
@@ -947,6 +976,11 @@ export const sessionsHandlers: GatewayRequestHandlers = {
         payload: runPayload,
         cached: runMeta?.cached === true,
       });
+    logGatewaySessionsTiming("sessions.create.before-respond", Date.now() - createStartMs, {
+      key: target.canonicalKey,
+      runStarted,
+      hasInitialMessage: Boolean(initialMessage),
+    });
 
     respond(
       true,

@@ -39,7 +39,8 @@ vi.mock("../../../src/plugins/providers.runtime.js", () => ({
   isPluginProvidersLoadInFlight: () => false,
   isPluginProvidersLoadInFlightAsync: async () => false,
   resolvePluginProviders: (params: unknown) => resolvePluginProvidersMock(params as never),
-  resolvePluginProvidersAsync: async (params: unknown) => resolvePluginProvidersMock(params as never),
+  resolvePluginProvidersAsync: async (params: unknown) =>
+    resolvePluginProvidersMock(params as never),
 }));
 
 export function describeOpenAIProviderCatalogContract() {
