@@ -13,6 +13,7 @@ vi.mock("./auth-bridge.js", () => ({
 
 vi.mock("openclaw/plugin-sdk/provider-auth", () => ({
   resolveOpenClawAgentDir: mocks.resolveOpenClawAgentDir,
+  listProfilesForProviderAsync: async () => [],
 }));
 
 let listCodexAppServerModels: typeof import("./models.js").listCodexAppServerModels;

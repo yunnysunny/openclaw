@@ -60,6 +60,9 @@ async function getServerModule() {
   return await serverModulePromise;
 }
 
+/** Default wait for gateway WS req/res pairs ({@link rpcReq}, {@link connectReq}). Large Vitest shards can stall the event loop past 10s. */
+const DEFAULT_GATEWAY_TEST_RPC_TIMEOUT_MS = 25_000;
+
 const GATEWAY_TEST_ENV_KEYS = [
   "HOME",
   "USERPROFILE",
@@ -549,9 +552,8 @@ export function trackConnectChallengeNonce(ws: WebSocket): void {
 export function onceMessage<T extends GatewayTestMessage = GatewayTestMessage>(
   ws: WebSocket,
   filter: (obj: T) => boolean,
-  // Full-suite runs can saturate the event loop (581+ files). Keep this high
-  // enough to avoid flaky RPC timeouts, but still fail fast when a response
-  // never arrives.
+  // Full-suite runs can saturate the event loop. {@link rpcReq} passes a higher
+  // default than this baseline for method responses.
   timeoutMs = 10_000,
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -957,7 +959,11 @@ export async function connectReq(
     const rec = o as Record<string, unknown>;
     return rec.type === "res" && rec.id === id;
   };
-  const responsePromise = onceMessage<ConnectResponse>(ws, isResponseForId, opts?.timeoutMs);
+  const responsePromise = onceMessage<ConnectResponse>(
+    ws,
+    isResponseForId,
+    opts?.timeoutMs ?? DEFAULT_GATEWAY_TEST_RPC_TIMEOUT_MS,
+  );
   ws.send(
     JSON.stringify({
       type: "req",
@@ -1065,7 +1071,7 @@ export async function rpcReq<T extends Record<string, unknown>>(
       const rec = o as Record<string, unknown>;
       return rec.type === "res" && rec.id === id;
     },
-    timeoutMs,
+    timeoutMs ?? DEFAULT_GATEWAY_TEST_RPC_TIMEOUT_MS,
   );
   ws.send(JSON.stringify({ type: "req", id, method, params }));
   return await responsePromise;

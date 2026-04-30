@@ -213,9 +213,25 @@ beforeAll(async () => {
   sharedSessionStoreDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-sessions-"));
 });
 
+async function rmTmpTreeRetry(dir: string): Promise<void> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      await fs.rm(dir, { recursive: true, force: true });
+      return;
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if ((code === "ENOTEMPTY" || code === "EBUSY" || code === "EPERM") && attempt < 4) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 50 * (attempt + 1)));
+        continue;
+      }
+      throw err;
+    }
+  }
+}
+
 afterAll(async () => {
   await harness.close();
-  await fs.rm(sharedSessionStoreDir, { recursive: true, force: true });
+  await rmTmpTreeRetry(sharedSessionStoreDir);
 });
 
 const openClient = async (opts?: Parameters<typeof connectOk>[1]) => await harness.openClient(opts);

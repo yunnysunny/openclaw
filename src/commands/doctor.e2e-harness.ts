@@ -318,6 +318,7 @@ vi.mock("../process/exec.js", () => ({
 
 vi.mock("openclaw/plugin-sdk/provider-auth", () => ({
   isNonSecretApiKeyMarker: () => false,
+  listProfilesForProviderAsync: async () => [],
 }));
 
 vi.mock("openclaw/plugin-sdk/provider-model-shared", () => ({

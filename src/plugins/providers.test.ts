@@ -32,6 +32,7 @@ let resolveEnabledProviderPluginIds: typeof import("./providers.js").resolveEnab
 let resolveDiscoveredProviderPluginIds: typeof import("./providers.js").resolveDiscoveredProviderPluginIds;
 let resolveDiscoveredProviderPluginIdsAsync: typeof import("./providers.js").resolveDiscoveredProviderPluginIdsAsync;
 let resolveDiscoverableProviderOwnerPluginIds: typeof import("./providers.js").resolveDiscoverableProviderOwnerPluginIds;
+let resolveDiscoverableProviderOwnerPluginIdsAsync: typeof import("./providers.js").resolveDiscoverableProviderOwnerPluginIdsAsync;
 let resolvePluginProviders: typeof import("./providers.runtime.js").resolvePluginProviders;
 let setActivePluginRegistry: SetActivePluginRegistry;
 

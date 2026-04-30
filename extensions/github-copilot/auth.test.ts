@@ -9,6 +9,10 @@ vi.mock("openclaw/plugin-sdk/provider-auth", () => ({
   coerceSecretRef: coerceSecretRefMock,
   ensureAuthProfileStore: ensureAuthProfileStoreMock,
   listProfilesForProvider: listProfilesForProviderMock,
+  listProfilesForProviderAsync: async (
+    authStore: unknown,
+    providerId: string,
+  ) => listProfilesForProviderMock(authStore, providerId),
 }));
 
 vi.mock("openclaw/plugin-sdk/config-runtime", () => ({

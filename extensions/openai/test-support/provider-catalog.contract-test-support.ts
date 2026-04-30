@@ -31,11 +31,15 @@ vi.mock("../../../src/plugins/providers.js", () => ({
     resolveOwningPluginIdsForProviderMock(params as never),
   resolveCatalogHookProviderPluginIds: (params: unknown) =>
     resolveCatalogHookProviderPluginIdsMock(params as never),
+  resolveCatalogHookProviderPluginIdsAsync: async (params: unknown) =>
+    resolveCatalogHookProviderPluginIdsMock(params as never),
 }));
 
 vi.mock("../../../src/plugins/providers.runtime.js", () => ({
   isPluginProvidersLoadInFlight: () => false,
+  isPluginProvidersLoadInFlightAsync: async () => false,
   resolvePluginProviders: (params: unknown) => resolvePluginProvidersMock(params as never),
+  resolvePluginProvidersAsync: async (params: unknown) => resolvePluginProvidersMock(params as never),
 }));
 
 export function describeOpenAIProviderCatalogContract() {

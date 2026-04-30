@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  type ProviderConfig,
   resolveMissingProviderApiKey,
   resolveMissingProviderApiKeyAsync,
 } from "./models-config.providers.secret-helpers.js";
 
-const minimaxModelList = {
+const minimaxModelList: ProviderConfig = {
   baseUrl: "https://api.minimax.io/anthropic",
   api: "anthropic-messages" as const,
   models: [
@@ -12,7 +13,7 @@ const minimaxModelList = {
       id: "MiniMax-M2.7",
       name: "MiniMax M2.7",
       reasoning: false,
-      input: ["text"] as const,
+      input: ["text"] as Array<"text" | "image">,
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
       contextWindow: 200000,
       maxTokens: 8192,
@@ -38,7 +39,7 @@ describe("models-config", () => {
       provider: minimaxModelList,
       env: { MINIMAX_API_KEY: "sk-minimax-test" } as NodeJS.ProcessEnv,
       profileApiKey: undefined,
-    } as const;
+    };
     const asyncProvider = await resolveMissingProviderApiKeyAsync(params);
     const syncProvider = resolveMissingProviderApiKey(params);
     expect(asyncProvider).toEqual(syncProvider);

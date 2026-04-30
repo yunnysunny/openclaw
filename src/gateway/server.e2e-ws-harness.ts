@@ -31,7 +31,21 @@ export async function startGatewayServerHarness(): Promise<GatewayServerHarness>
   const openClient = async (opts?: Parameters<typeof connectOk>[1]): Promise<GatewayWsClient> => {
     const ws = new WebSocket(`ws://127.0.0.1:${port}`);
     trackConnectChallengeNonce(ws);
-    await new Promise<void>((resolve) => ws.once("open", resolve));
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("timeout waiting for ws open")), 10_000);
+      const onOpen = () => {
+        clearTimeout(timer);
+        ws.off("error", onError);
+        resolve();
+      };
+      const onError = (err: Error) => {
+        clearTimeout(timer);
+        ws.off("open", onOpen);
+        reject(err);
+      };
+      ws.once("open", onOpen);
+      ws.once("error", onError);
+    });
     const hello = await connectOk(ws, opts);
     return { ws, hello };
   };
