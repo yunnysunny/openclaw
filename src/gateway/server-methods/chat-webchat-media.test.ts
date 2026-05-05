@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import * as fsPromises from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -87,8 +88,8 @@ describe("buildWebchatAudioContentBlocksFromReplyPayloads", () => {
   });
 
   it("drops tool-result file:// URLs with remote hosts before touching the filesystem", async () => {
-    const statSpy = vi.spyOn(fs, "statSync");
-    const readSpy = vi.spyOn(fs, "readFileSync");
+    const statSpy = vi.spyOn(fsPromises, "stat");
+    const readSpy = vi.spyOn(fsPromises, "readFile");
 
     const blocks = await buildWebchatAudioContentBlocksFromReplyPayloads([
       {
@@ -147,14 +148,14 @@ describe("buildWebchatAudioContentBlocksFromReplyPayloads", () => {
     const audioPath = path.join(tmpDir, "huge.mp3");
     fs.writeFileSync(audioPath, Buffer.from([0x02]));
 
-    const origStat = fs.statSync.bind(fs);
-    const statSpy = vi.spyOn(fs, "statSync").mockImplementation((p: fs.PathLike) => {
+    const origStat = fsPromises.stat.bind(fsPromises);
+    const statSpy = vi.spyOn(fsPromises, "stat").mockImplementation(async (p: fs.PathLike) => {
       if (String(p) === audioPath) {
         return { isFile: () => true, size: 16 * 1024 * 1024 } as fs.Stats;
       }
-      return origStat(p);
+      return await origStat(p);
     });
-    const readSpy = vi.spyOn(fs, "readFileSync");
+    const readSpy = vi.spyOn(fsPromises, "readFile");
 
     const blocks = await buildWebchatAudioContentBlocksFromReplyPayloads(
       [{ mediaUrl: audioPath }],

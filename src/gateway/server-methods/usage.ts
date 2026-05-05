@@ -1,4 +1,4 @@
-import fs from "node:fs";
+import * as fs from "node:fs/promises";
 import { loadConfig } from "../../config/config.js";
 import {
   resolveSessionFilePath,
@@ -468,7 +468,7 @@ export const usageHandlers: GatewayRequestHandlers = {
 
       if (sessionFile) {
         try {
-          const stats = fs.statSync(sessionFile);
+          const stats = await fs.stat(sessionFile);
           if (stats.isFile()) {
             mergedEntries.push({
               key: resolvedStoreKey,

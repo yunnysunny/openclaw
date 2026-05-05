@@ -1,4 +1,4 @@
-import fs from "node:fs";
+import fs from "node:fs/promises";
 import path from "node:path";
 import type { ReplyPayload } from "../../auto-reply/reply-payload.js";
 import { assertNoWindowsNetworkPath, safeFileURLToPath } from "../../infra/local-file-access.js";
@@ -74,7 +74,7 @@ async function resolveLocalAudioFileForEmbedding(
   }
   try {
     await assertLocalMediaAllowed(resolved, options?.localRoots);
-    const st = fs.statSync(resolved);
+    const st = await fs.stat(resolved);
     if (!st.isFile() || st.size > MAX_WEBCHAT_AUDIO_BYTES) {
       return null;
     }
@@ -114,7 +114,7 @@ export async function buildWebchatAudioContentBlocksFromReplyPayloads(
         continue;
       }
       seen.add(resolved);
-      const block = tryReadLocalAudioContentBlock(resolved);
+      const block = await tryReadLocalAudioContentBlock(resolved);
       if (block) {
         blocks.push(block);
       }
@@ -123,9 +123,11 @@ export async function buildWebchatAudioContentBlocksFromReplyPayloads(
   return blocks;
 }
 
-function tryReadLocalAudioContentBlock(filePath: string): Record<string, unknown> | null {
+async function tryReadLocalAudioContentBlock(
+  filePath: string,
+): Promise<Record<string, unknown> | null> {
   try {
-    const buf = fs.readFileSync(filePath);
+    const buf = await fs.readFile(filePath);
     if (buf.length > MAX_WEBCHAT_AUDIO_BYTES) {
       return null;
     }
