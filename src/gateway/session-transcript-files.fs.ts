@@ -130,6 +130,16 @@ export function archiveFileOnDisk(filePath: string, reason: ArchiveFileReason): 
   return archived;
 }
 
+export async function archiveFileOnDiskAsync(
+  filePath: string,
+  reason: ArchiveFileReason,
+): Promise<string> {
+  const ts = formatSessionArchiveTimestamp();
+  const archived = `${filePath}.${reason}.${ts}`;
+  await fs.promises.rename(filePath, archived);
+  return archived;
+}
+
 export function archiveSessionTranscripts(opts: {
   sessionId: string;
   storePath: string | undefined;

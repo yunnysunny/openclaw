@@ -10,6 +10,7 @@ import { stripEnvelope } from "./chat-sanitize.js";
 import {
   resolveSessionTranscriptCandidates,
   archiveFileOnDisk,
+  archiveFileOnDiskAsync,
   archiveSessionTranscripts,
   cleanupArchivedSessionTranscripts,
 } from "./session-transcript-files.fs.js";
@@ -148,6 +149,7 @@ export function readSessionMessages(
 
 export {
   archiveFileOnDisk,
+  archiveFileOnDiskAsync,
   archiveSessionTranscripts,
   cleanupArchivedSessionTranscripts,
   resolveSessionTranscriptCandidates,

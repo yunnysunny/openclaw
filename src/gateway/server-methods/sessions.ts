@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import fs from "node:fs";
+import * as fs from "node:fs/promises";
 import path from "node:path";
 import { CURRENT_SESSION_VERSION, SessionManager } from "@mariozechner/pi-coding-agent";
 import { resolveAgentWorkspaceDir, resolveDefaultAgentId } from "../../agents/agent-scope.js";
@@ -65,7 +65,7 @@ import {
 } from "../session-compaction-checkpoints.js";
 import { reactivateCompletedSubagentSession } from "../session-subagent-reactivation.js";
 import {
-  archiveFileOnDisk,
+  archiveFileOnDiskAsync,
   listSessionsFromStore,
   loadCombinedSessionStoreForGateway,
   loadGatewaySessionRow,
@@ -105,11 +105,9 @@ function logGatewaySessionsTiming(stage: string, elapsedMs: number, extra?: Reco
   const line = `[gateway-sessions-timing] stage=${stage} elapsedMs=${elapsedMs}${suffix}`;
   console.error(line);
   if (gatewaySessionsTimingFile) {
-    try {
-      fs.appendFileSync(gatewaySessionsTimingFile, `${line}\n`, "utf8");
-    } catch {
-      // Diagnostic logging must not affect request handling.
-    }
+    void fs
+      .appendFile(gatewaySessionsTimingFile, `${line}\n`, "utf8")
+      .catch(() => undefined);
   }
 }
 
@@ -309,12 +307,12 @@ function cloneCheckpointSessionEntry(params: {
   };
 }
 
-function ensureSessionTranscriptFile(params: {
+async function ensureSessionTranscriptFile(params: {
   sessionId: string;
   storePath: string;
   sessionFile?: string;
   agentId: string;
-}): { ok: true; transcriptPath: string } | { ok: false; error: string } {
+}): Promise<{ ok: true; transcriptPath: string } | { ok: false; error: string }> {
   try {
     const transcriptPath = resolveSessionFilePath(
       params.sessionId,
@@ -324,8 +322,8 @@ function ensureSessionTranscriptFile(params: {
         agentId: params.agentId,
       }),
     );
-    if (!fs.existsSync(transcriptPath)) {
-      fs.mkdirSync(path.dirname(transcriptPath), { recursive: true });
+    if (!(await fileExists(transcriptPath))) {
+      await fs.mkdir(path.dirname(transcriptPath), { recursive: true });
       const header = {
         type: "session",
         version: CURRENT_SESSION_VERSION,
@@ -333,7 +331,7 @@ function ensureSessionTranscriptFile(params: {
         timestamp: new Date().toISOString(),
         cwd: process.cwd(),
       };
-      fs.writeFileSync(transcriptPath, `${JSON.stringify(header)}\n`, {
+      await fs.writeFile(transcriptPath, `${JSON.stringify(header)}\n`, {
         encoding: "utf-8",
         mode: 0o600,
       });
@@ -345,6 +343,24 @@ function ensureSessionTranscriptFile(params: {
       error: formatErrorMessage(err),
     };
   }
+}
+
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function findExistingFilePath(candidates: readonly string[]): Promise<string | undefined> {
+  for (const candidate of candidates) {
+    if (await fileExists(candidate)) {
+      return candidate;
+    }
+  }
+  return undefined;
 }
 
 function resolveAbortSessionKey(params: {
@@ -899,7 +915,7 @@ export const sessionsHandlers: GatewayRequestHandlers = {
       return;
     }
     const transcriptStartMs = Date.now();
-    const ensured = ensureSessionTranscriptFile({
+    const ensured = await ensureSessionTranscriptFile({
       sessionId: created.entry.sessionId,
       storePath: target.storePath,
       sessionFile: created.entry.sessionFile,
@@ -1049,7 +1065,7 @@ export const sessionsHandlers: GatewayRequestHandlers = {
       );
       return;
     }
-    if (!fs.existsSync(checkpoint.preCompaction.sessionFile)) {
+    if (!(await fileExists(checkpoint.preCompaction.sessionFile))) {
       respond(
         false,
         undefined,
@@ -1160,7 +1176,7 @@ export const sessionsHandlers: GatewayRequestHandlers = {
       );
       return;
     }
-    if (!fs.existsSync(checkpoint.preCompaction.sessionFile)) {
+    if (!(await fileExists(checkpoint.preCompaction.sessionFile))) {
       respond(
         false,
         undefined,
@@ -1557,12 +1573,9 @@ export const sessionsHandlers: GatewayRequestHandlers = {
       return;
     }
 
-    const filePath = resolveSessionTranscriptCandidates(
-      sessionId,
-      storePath,
-      entry?.sessionFile,
-      target.agentId,
-    ).find((candidate) => fs.existsSync(candidate));
+    const filePath = await findExistingFilePath(
+      resolveSessionTranscriptCandidates(sessionId, storePath, entry?.sessionFile, target.agentId),
+    );
     if (!filePath) {
       respond(
         true,
@@ -1660,7 +1673,7 @@ export const sessionsHandlers: GatewayRequestHandlers = {
       return;
     }
 
-    const raw = fs.readFileSync(filePath, "utf-8");
+    const raw = await fs.readFile(filePath, "utf-8");
     const lines = raw.split(/\r?\n/).filter((l) => Boolean(normalizeOptionalString(l)));
     if (lines.length <= maxLines) {
       respond(
@@ -1676,9 +1689,9 @@ export const sessionsHandlers: GatewayRequestHandlers = {
       return;
     }
 
-    const archived = archiveFileOnDisk(filePath, "bak");
+    const archived = await archiveFileOnDiskAsync(filePath, "bak");
     const keptLines = lines.slice(-maxLines);
-    fs.writeFileSync(filePath, `${keptLines.join("\n")}\n`, "utf-8");
+    await fs.writeFile(filePath, `${keptLines.join("\n")}\n`, "utf-8");
 
     await updateSessionStore(storePath, (store) => {
       const entryKey = compactTarget.primaryKey;

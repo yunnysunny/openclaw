@@ -82,6 +82,7 @@ import type {
 
 export {
   archiveFileOnDisk,
+  archiveFileOnDiskAsync,
   archiveSessionTranscripts,
   attachOpenClawTranscriptMeta,
   capArrayByJsonBytes,
