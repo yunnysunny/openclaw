@@ -277,6 +277,30 @@ function resolveProviderCompatHookPlugins(params: {
   });
 }
 
+async function resolveProviderCompatHookPluginsAsync(params: {
+  provider: string;
+  config?: OpenClawConfig;
+  workspaceDir?: string;
+  env?: NodeJS.ProcessEnv;
+}): Promise<ProviderPlugin[]> {
+  const candidates = await resolveProviderPluginsForHooksAsync(params);
+  const owner = await resolveProviderRuntimePluginAsync(params);
+  if (!owner) {
+    return candidates;
+  }
+
+  const ordered = [owner, ...candidates];
+  const seen = new Set<string>();
+  return ordered.filter((candidate) => {
+    const key = `${candidate.pluginId ?? ""}:${candidate.id}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
+
 function applyCompatPatchToModel(
   model: ProviderRuntimeModel,
   patch: Record<string, unknown>,
@@ -308,6 +332,35 @@ export function applyProviderResolvedModelCompatWithPlugins(params: {
   let changed = false;
 
   for (const plugin of resolveProviderCompatHookPlugins(params)) {
+    const patch = plugin.contributeResolvedModelCompat?.({
+      ...params.context,
+      model: nextModel,
+    });
+    if (!patch || typeof patch !== "object") {
+      continue;
+    }
+    const patchedModel = applyCompatPatchToModel(nextModel, patch as Record<string, unknown>);
+    if (patchedModel === nextModel) {
+      continue;
+    }
+    nextModel = patchedModel;
+    changed = true;
+  }
+
+  return changed ? nextModel : undefined;
+}
+
+export async function applyProviderResolvedModelCompatWithPluginsAsync(params: {
+  provider: string;
+  config?: OpenClawConfig;
+  workspaceDir?: string;
+  env?: NodeJS.ProcessEnv;
+  context: ProviderNormalizeResolvedModelContext;
+}): Promise<ProviderRuntimeModel | undefined> {
+  let nextModel = params.context.model;
+  let changed = false;
+
+  for (const plugin of await resolveProviderCompatHookPluginsAsync(params)) {
     const patch = plugin.contributeResolvedModelCompat?.({
       ...params.context,
       model: nextModel,

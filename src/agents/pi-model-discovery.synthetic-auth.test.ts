@@ -18,8 +18,13 @@ const resolveProviderSyntheticAuthWithPlugin = vi.hoisted(() =>
   ),
 );
 
+const resolveProviderSyntheticAuthWithPluginAsync = vi.hoisted(() =>
+  vi.fn(async (params: { provider: string }) => resolveProviderSyntheticAuthWithPlugin(params)),
+);
+
 vi.mock("../plugins/synthetic-auth.runtime.js", () => ({
   resolveRuntimeSyntheticAuthProviderRefs,
+  resolveRuntimeSyntheticAuthProviderRefsAsync: async () => resolveRuntimeSyntheticAuthProviderRefs(),
 }));
 
 vi.mock("../plugins/provider-runtime.js", () => ({
@@ -27,10 +32,13 @@ vi.mock("../plugins/provider-runtime.js", () => ({
   applyProviderResolvedTransportWithPlugin: () => undefined,
   normalizeProviderResolvedModelWithPlugin: () => undefined,
   resolveProviderSyntheticAuthWithPlugin,
+  resolveProviderSyntheticAuthWithPluginAsync,
   resolveExternalAuthProfilesWithPlugins: () => [],
+  resolveExternalAuthProfilesWithPluginsAsync: async () => [],
 }));
 
 let discoverAuthStorage: typeof import("./pi-model-discovery.js").discoverAuthStorage;
+let discoverAuthStorageAsync: typeof import("./pi-model-discovery.js").discoverAuthStorageAsync;
 
 async function withAgentDir(run: (agentDir: string) => Promise<void>): Promise<void> {
   const agentDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-pi-synthetic-auth-"));
@@ -43,12 +51,13 @@ async function withAgentDir(run: (agentDir: string) => Promise<void>): Promise<v
 
 describe("pi model discovery synthetic auth", () => {
   beforeAll(async () => {
-    ({ discoverAuthStorage } = await import("./pi-model-discovery.js"));
+    ({ discoverAuthStorage, discoverAuthStorageAsync } = await import("./pi-model-discovery.js"));
   });
 
   beforeEach(() => {
     resolveRuntimeSyntheticAuthProviderRefs.mockClear();
     resolveProviderSyntheticAuthWithPlugin.mockClear();
+    resolveProviderSyntheticAuthWithPluginAsync.mockClear();
   });
 
   afterEach(() => {
@@ -69,6 +78,32 @@ describe("pi model discovery synthetic auth", () => {
 
       expect(resolveRuntimeSyntheticAuthProviderRefs).toHaveBeenCalled();
       expect(resolveProviderSyntheticAuthWithPlugin).toHaveBeenCalledWith({
+        provider: "claude-cli",
+        context: {
+          config: undefined,
+          provider: "claude-cli",
+          providerConfig: undefined,
+        },
+      });
+      expect(authStorage.hasAuth("claude-cli")).toBe(true);
+      await expect(authStorage.getApiKey("claude-cli")).resolves.toBe("claude-cli-access-token");
+    });
+  });
+
+  it("mirrors plugin-owned synthetic cli auth into pi auth storage (async discover path)", async () => {
+    await withAgentDir(async (agentDir) => {
+      saveAuthProfileStore(
+        {
+          version: 1,
+          profiles: {},
+        },
+        agentDir,
+      );
+
+      const authStorage = await discoverAuthStorageAsync(agentDir);
+
+      expect(resolveRuntimeSyntheticAuthProviderRefs).toHaveBeenCalled();
+      expect(resolveProviderSyntheticAuthWithPluginAsync).toHaveBeenCalledWith({
         provider: "claude-cli",
         context: {
           config: undefined,

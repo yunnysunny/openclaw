@@ -13,6 +13,7 @@ import {
   applyProviderResolvedTransportWithPlugin,
   normalizeProviderResolvedModelWithPlugin,
   resolveProviderSyntheticAuthWithPlugin,
+  resolveProviderSyntheticAuthWithPluginAsync,
 } from "../plugins/provider-runtime.js";
 import {
   resolveRuntimeSyntheticAuthProviderRefs,
@@ -352,7 +353,7 @@ export async function resolvePiCredentialsForDiscoveryAsync(
     if (credentials[provider]) {
       continue;
     }
-    const resolved = resolveProviderSyntheticAuthWithPlugin({
+    const resolved = await resolveProviderSyntheticAuthWithPluginAsync({
       provider,
       context: {
         config: undefined,

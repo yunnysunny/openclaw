@@ -4,6 +4,7 @@ import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import type { ProviderRuntimeModel } from "../../plugins/provider-runtime-model.types.js";
 import {
   applyProviderResolvedModelCompatWithPlugins,
+  applyProviderResolvedModelCompatWithPluginsAsync,
   applyProviderResolvedTransportWithPlugin,
   buildProviderUnknownModelHintWithPlugin,
   clearProviderRuntimeHookCache,
@@ -47,6 +48,10 @@ type ProviderRuntimeHooks = {
   applyProviderResolvedModelCompatWithPlugins?: (
     params: Parameters<typeof applyProviderResolvedModelCompatWithPlugins>[0],
   ) => unknown;
+  /** When set, {@link normalizeResolvedModelAsync} prefers this over the sync compat hook. */
+  applyProviderResolvedModelCompatWithPluginsAsync?: (
+    params: Parameters<typeof applyProviderResolvedModelCompatWithPluginsAsync>[0],
+  ) => Promise<ProviderRuntimeModel | undefined>;
   applyProviderResolvedTransportWithPlugin?: (
     params: Parameters<typeof applyProviderResolvedTransportWithPlugin>[0],
   ) => unknown;
@@ -75,6 +80,7 @@ type ProviderRuntimeHooks = {
 
 const DEFAULT_PROVIDER_RUNTIME_HOOKS: ProviderRuntimeHooks = {
   applyProviderResolvedModelCompatWithPlugins,
+  applyProviderResolvedModelCompatWithPluginsAsync,
   applyProviderResolvedTransportWithPlugin,
   buildProviderUnknownModelHintWithPlugin,
   clearProviderRuntimeHookCache,
@@ -223,7 +229,7 @@ function normalizeResolvedModel(params: {
   });
 }
 
-/** Async normalize: first provider hook load uses {@link resolveProviderRuntimePluginAsync}. */
+/** Async normalize: uses async provider registry hooks where available ({@link normalizeProviderResolvedModelWithPluginAsync}, {@link applyProviderResolvedModelCompatWithPluginsAsync}). */
 async function normalizeResolvedModelAsync(params: {
   provider: string;
   model: Model<Api>;
@@ -261,17 +267,31 @@ async function normalizeResolvedModelAsync(params: {
           context: ctx,
         }) as Model<Api> | undefined,
       ));
-  const compatNormalized = runtimeHooks.applyProviderResolvedModelCompatWithPlugins?.({
-    provider: params.provider,
-    config: params.cfg,
-    context: {
-      config: params.cfg,
-      agentDir: params.agentDir,
-      provider: params.provider,
-      modelId: normalizedInputModel.id,
-      model: (pluginNormalized ?? normalizedInputModel) as never,
-    },
-  }) as Model<Api> | undefined;
+  const compatNormalized = await (runtimeHooks.applyProviderResolvedModelCompatWithPluginsAsync
+    ? runtimeHooks.applyProviderResolvedModelCompatWithPluginsAsync({
+        provider: params.provider,
+        config: params.cfg,
+        context: {
+          config: params.cfg,
+          agentDir: params.agentDir,
+          provider: params.provider,
+          modelId: normalizedInputModel.id,
+          model: (pluginNormalized ?? normalizedInputModel) as never,
+        },
+      })
+    : Promise.resolve(
+        runtimeHooks.applyProviderResolvedModelCompatWithPlugins?.({
+          provider: params.provider,
+          config: params.cfg,
+          context: {
+            config: params.cfg,
+            agentDir: params.agentDir,
+            provider: params.provider,
+            modelId: normalizedInputModel.id,
+            model: (pluginNormalized ?? normalizedInputModel) as never,
+          },
+        }) as Model<Api> | undefined,
+      ));
   const transportNormalized = runtimeHooks.applyProviderResolvedTransportWithPlugin?.({
     provider: params.provider,
     config: params.cfg,
@@ -674,8 +694,8 @@ function resolveExplicitModelWithRegistry(params: {
 
 /**
  * Like {@link resolveExplicitModelWithRegistry}, but the normalize step
- * `await`s {@link resolveProviderRuntimePluginAsync} for the first provider hook
- * (see {@link normalizeProviderResolvedModelWithPluginAsync}).
+ * awaits async provider registry hooks (see {@link normalizeProviderResolvedModelWithPluginAsync},
+ * {@link applyProviderResolvedModelCompatWithPluginsAsync}).
  */
 export async function resolveExplicitModelWithRegistryAsync(params: {
   provider: string;

@@ -42,6 +42,7 @@ let normalizeProviderConfigWithPlugin: typeof import("./provider-runtime.js").no
 let normalizeProviderModelIdWithPlugin: typeof import("./provider-runtime.js").normalizeProviderModelIdWithPlugin;
 let normalizeProviderModelIdWithPluginAsync: typeof import("./provider-runtime.js").normalizeProviderModelIdWithPluginAsync;
 let applyProviderResolvedModelCompatWithPlugins: typeof import("./provider-runtime.js").applyProviderResolvedModelCompatWithPlugins;
+let applyProviderResolvedModelCompatWithPluginsAsync: typeof import("./provider-runtime.js").applyProviderResolvedModelCompatWithPluginsAsync;
 let applyProviderResolvedTransportWithPlugin: typeof import("./provider-runtime.js").applyProviderResolvedTransportWithPlugin;
 let normalizeProviderTransportWithPlugin: typeof import("./provider-runtime.js").normalizeProviderTransportWithPlugin;
 let prepareProviderExtraParams: typeof import("./provider-runtime.js").prepareProviderExtraParams;
@@ -259,6 +260,7 @@ describe("provider-runtime", () => {
       applyProviderNativeStreamingUsageCompatWithPlugin,
       applyProviderConfigDefaultsWithPlugin,
       applyProviderResolvedModelCompatWithPlugins,
+      applyProviderResolvedModelCompatWithPluginsAsync,
       applyProviderResolvedTransportWithPlugin,
       classifyProviderFailoverReasonWithPlugin,
       formatProviderAuthProfileApiKeyWithPlugin,
@@ -1095,6 +1097,13 @@ describe("provider-runtime", () => {
       }),
     ).toBeUndefined();
 
+    await expect(
+      applyProviderResolvedModelCompatWithPluginsAsync({
+        provider: DEMO_PROVIDER_ID,
+        context: createDemoResolvedModelContext({}),
+      }),
+    ).resolves.toBeUndefined();
+
     expect(
       formatProviderAuthProfileApiKeyWithPlugin({
         provider: DEMO_PROVIDER_ID,
@@ -1287,7 +1296,7 @@ describe("provider-runtime", () => {
     ).toBe("from-async");
   });
 
-  it("merges compat contributions from owner and foreign provider plugins", () => {
+  it("merges compat contributions from owner and foreign provider plugins", async () => {
     resolvePluginProvidersMock.mockImplementation((params) => {
       const onlyPluginIds = params.onlyPluginIds ?? [];
       const plugins: ProviderPlugin[] = [
@@ -1325,6 +1334,28 @@ describe("provider-runtime", () => {
         }),
       }),
     ).toMatchObject({
+      compat: {
+        supportsDeveloperRole: false,
+        supportsStrictMode: true,
+        supportsStore: false,
+      },
+    });
+
+    await expect(
+      applyProviderResolvedModelCompatWithPluginsAsync({
+        provider: "openrouter",
+        context: createDemoResolvedModelContext({
+          provider: "openrouter",
+          modelId: "mistralai/mistral-small-3.2-24b-instruct",
+          model: {
+            ...MODEL,
+            provider: "openrouter",
+            id: "mistralai/mistral-small-3.2-24b-instruct",
+            compat: { supportsDeveloperRole: false },
+          },
+        }),
+      }),
+    ).resolves.toMatchObject({
       compat: {
         supportsDeveloperRole: false,
         supportsStrictMode: true,
