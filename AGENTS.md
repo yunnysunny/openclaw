@@ -197,3 +197,14 @@ Scoped guides:
 - Connection/provider additions: update all UI surfaces + docs + status/config forms.
 - Provider-facing tool schemas: prefer flat string enum helpers over `Type.Union([Type.Literal(...)])`; some providers reject generated `anyOf`. Do not treat this as a repo-wide protocol/schema ban.
 - External messaging surfaces: no token-delta channel messages. Follow `docs/concepts/streaming.md`; preview/block streaming uses message edits/chunks and must preserve final/fallback delivery.
+
+## Cursor Cloud specific instructions
+
+- **Node/pnpm**: The update script installs Node 22.15.0 and pnpm 10.33.0 via corepack. No nvm/fnm in use.
+- **First-time setup**: After `pnpm install`, run `pnpm openclaw setup` to create `~/.openclaw/openclaw.json` and workspace dirs. This is idempotent but only needed once per fresh VM.
+- **Control UI**: Run `pnpm ui:build` before starting the gateway if you need the web dashboard. The gateway does not auto-build the UI on dev startup.
+- **Dev gateway**: `pnpm gateway:watch` starts with auto-reload on port 18789 (loopback). Use `pnpm openclaw status` to verify connectivity.
+- **Lint/typecheck/test commands**: See `## Commands` section above. Key quick commands: `pnpm lint:core`, `pnpm tsgo`, `pnpm test <path>`. Set `OPENCLAW_LOCAL_CHECK=0` for CI-like behavior.
+- **Test routing**: `pnpm test <filter>` uses `scripts/test-projects.mjs` to match against sharded vitest configs. Use full file paths for precise targeting (e.g. `pnpm test src/utils/utils-misc.test.ts`).
+- **Format**: `pnpm format:check` may show pre-existing issues on `main`; do not fix unrelated format drift.
+- **tsdown deprecation warning**: Node 22.15.0 triggers a tsdown deprecation warning during `pnpm build`/`pnpm openclaw setup`. This is cosmetic and does not affect functionality.
