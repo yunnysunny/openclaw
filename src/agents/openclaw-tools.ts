@@ -25,10 +25,10 @@ import { createCanvasTool } from "./tools/canvas-tool.js";
 import type { AnyAgentTool } from "./tools/common.js";
 import { createCronTool } from "./tools/cron-tool.js";
 import { createGatewayTool } from "./tools/gateway-tool.js";
-import { createImageGenerateTool } from "./tools/image-generate-tool.js";
+import { createImageGenerateTool, resolveImageGenerationModelConfigForToolAsync } from "./tools/image-generate-tool.js";
 import { createImageTool } from "./tools/image-tool.js";
 import { createMessageTool } from "./tools/message-tool.js";
-import { createMusicGenerateTool } from "./tools/music-generate-tool.js";
+import { createMusicGenerateTool, resolveMusicGenerationModelConfigForToolAsync } from "./tools/music-generate-tool.js";
 import { createNodesTool } from "./tools/nodes-tool.js";
 import { createPdfTool } from "./tools/pdf-tool.js";
 import { createSessionStatusTool } from "./tools/session-status-tool.js";
@@ -40,8 +40,9 @@ import { createSessionsYieldTool } from "./tools/sessions-yield-tool.js";
 import { createSubagentsTool } from "./tools/subagents-tool.js";
 import { createTtsTool } from "./tools/tts-tool.js";
 import { createUpdatePlanTool } from "./tools/update-plan-tool.js";
-import { createVideoGenerateTool } from "./tools/video-generate-tool.js";
+import { createVideoGenerateTool, resolveVideoGenerationModelConfigForToolAsync } from "./tools/video-generate-tool.js";
 import { createWebFetchTool, createWebSearchTool } from "./tools/web-tools.js";
+import type { ToolModelConfig } from "./tools/model-config.helpers.js";
 import { resolveWorkspaceRoot } from "./workspace-dir.js";
 
 type OpenClawToolsDeps = {
@@ -119,6 +120,13 @@ export function createOpenClawTools(
     allowGatewaySubagentBinding?: boolean;
     /** Internal: pre-resolved provider id to avoid duplicate normalization work. */
     resolvedModelProviderForPolicy?: string;
+    /**
+     * When set (including `null`), skips synchronous media-capability resolution for image generation.
+     * Used by {@link createOpenClawToolsAsync} to avoid sync fs/manifest work on the async path.
+     */
+    imageGenerationModelConfig?: ToolModelConfig | null;
+    videoGenerationModelConfig?: ToolModelConfig | null;
+    musicGenerationModelConfig?: ToolModelConfig | null;
   } & SpawnedToolContext,
 ): AnyAgentTool[] {
   const resolvedConfig = options?.config ?? openClawToolsDeps.config;
@@ -183,6 +191,7 @@ export function createOpenClawTools(
     workspaceDir,
     sandbox,
     fsPolicy: options?.fsPolicy,
+    imageGenerationModelConfig: options?.imageGenerationModelConfig,
   });
   const videoGenerateTool = createVideoGenerateTool({
     config: options?.config,
@@ -192,6 +201,7 @@ export function createOpenClawTools(
     workspaceDir,
     sandbox,
     fsPolicy: options?.fsPolicy,
+    videoGenerationModelConfig: options?.videoGenerationModelConfig,
   });
   const musicGenerateTool = createMusicGenerateTool({
     config: options?.config,
@@ -201,6 +211,7 @@ export function createOpenClawTools(
     workspaceDir,
     sandbox,
     fsPolicy: options?.fsPolicy,
+    musicGenerationModelConfig: options?.musicGenerationModelConfig,
   });
   const pdfTool = options?.agentDir?.trim()
     ? createPdfTool({
@@ -367,11 +378,29 @@ export async function createOpenClawToolsAsync(
         })
       : options?.modelProvider;
 
+  const [imageModelCfg, videoModelCfg, musicModelCfg] = await Promise.all([
+    resolveImageGenerationModelConfigForToolAsync({
+      cfg: resolvedConfig,
+      agentDir: options?.agentDir,
+    }),
+    resolveVideoGenerationModelConfigForToolAsync({
+      cfg: resolvedConfig,
+      agentDir: options?.agentDir,
+    }),
+    resolveMusicGenerationModelConfigForToolAsync({
+      cfg: resolvedConfig,
+      agentDir: options?.agentDir,
+    }),
+  ]);
+
   const coreTools = createOpenClawTools({
     ...options,
     disablePluginTools: true,
     modelProvider: normalizedModelProvider,
     resolvedModelProviderForPolicy: normalizedModelProvider,
+    imageGenerationModelConfig: imageModelCfg,
+    videoGenerationModelConfig: videoModelCfg,
+    musicGenerationModelConfig: musicModelCfg,
   });
   if (options?.disablePluginTools) {
     return coreTools;

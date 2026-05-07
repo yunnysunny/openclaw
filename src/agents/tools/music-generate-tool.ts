@@ -29,6 +29,7 @@ import {
   normalizeMediaReferenceInputs,
   readBooleanToolParam,
   resolveCapabilityModelConfigForTool,
+  resolveCapabilityModelConfigForToolAsync,
   resolveGenerateAction,
   resolveMediaToolLocalRoots,
   resolveSelectedCapabilityProvider,
@@ -116,6 +117,18 @@ export function resolveMusicGenerationModelConfigForTool(params: {
   agentDir?: string;
 }): ToolModelConfig | null {
   return resolveCapabilityModelConfigForTool({
+    cfg: params.cfg,
+    agentDir: params.agentDir,
+    modelConfig: params.cfg?.agents?.defaults?.musicGenerationModel,
+    providers: listRuntimeMusicGenerationProviders({ config: params.cfg }),
+  });
+}
+
+export async function resolveMusicGenerationModelConfigForToolAsync(params: {
+  cfg?: OpenClawConfig;
+  agentDir?: string;
+}): Promise<ToolModelConfig | null> {
+  return resolveCapabilityModelConfigForToolAsync({
     cfg: params.cfg,
     agentDir: params.agentDir,
     modelConfig: params.cfg?.agents?.defaults?.musicGenerationModel,
@@ -462,12 +475,17 @@ export function createMusicGenerateTool(options?: {
   sandbox?: MusicGenerateSandboxConfig;
   fsPolicy?: ToolFsPolicy;
   scheduleBackgroundWork?: MusicGenerateBackgroundScheduler;
+  /** When set (including `null`), skips sync resolution from {@link resolveMusicGenerationModelConfigForTool}. */
+  musicGenerationModelConfig?: ToolModelConfig | null;
 }): AnyAgentTool | null {
   const cfg: OpenClawConfig = options?.config ?? loadConfig();
-  const musicGenerationModelConfig = resolveMusicGenerationModelConfigForTool({
-    cfg,
-    agentDir: options?.agentDir,
-  });
+  const musicGenerationModelConfig =
+    options?.musicGenerationModelConfig !== undefined
+      ? options.musicGenerationModelConfig
+      : resolveMusicGenerationModelConfigForTool({
+          cfg,
+          agentDir: options?.agentDir,
+        });
   if (!musicGenerationModelConfig) {
     return null;
   }

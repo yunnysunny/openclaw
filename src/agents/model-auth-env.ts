@@ -8,7 +8,10 @@ import {
   resolvePluginSetupProviderAsync,
 } from "../plugins/setup-registry.js";
 import { normalizeOptionalSecretInput } from "../utils/normalize-secret-input.js";
-import { resolveProviderEnvApiKeyCandidates } from "./model-auth-env-vars.js";
+import {
+  resolveProviderEnvApiKeyCandidates,
+  resolveProviderEnvApiKeyCandidatesAsync,
+} from "./model-auth-env-vars.js";
 import { GCP_VERTEX_CREDENTIALS_MARKER } from "./model-auth-markers.js";
 import {
   resolveProviderIdForAuth,
@@ -137,7 +140,7 @@ export async function resolveEnvApiKeyAsync(
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<EnvApiKeyResult | null> {
   const normalized = await resolveProviderIdForAuthAsync(provider, { env });
-  const candidateMap = resolveProviderEnvApiKeyCandidates({ env });
+  const candidateMap = await resolveProviderEnvApiKeyCandidatesAsync({ env });
   const applied = new Set(getShellEnvAppliedKeys());
   const pick = (envVar: string): EnvApiKeyResult | null => {
     const value = normalizeOptionalSecretInput(env[envVar]);

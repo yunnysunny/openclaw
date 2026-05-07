@@ -1,7 +1,11 @@
 import { resolveProviderAuthAliasMap } from "../agents/provider-auth-aliases.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
-import { loadPluginManifestRegistrySync } from "../plugins/manifest-registry.js";
-import type { PluginManifestRecord } from "../plugins/manifest-registry.js";
+import {
+  loadPluginManifestRegistryAsync,
+  loadPluginManifestRegistrySync,
+  type PluginManifestRegistry,
+  type PluginManifestRecord,
+} from "../plugins/manifest-registry.js";
 import {
   isWorkspacePluginAllowedByConfig,
   normalizePluginConfigId,
@@ -72,14 +76,10 @@ function appendUniqueEnvVarCandidates(
   }
 }
 
-function resolveManifestProviderAuthEnvVarCandidates(
+function collectManifestProviderAuthEnvVarCandidates(
+  registry: PluginManifestRegistry,
   params?: ProviderEnvVarLookupParams,
 ): Record<string, string[]> {
-  const registry = loadPluginManifestRegistrySync({
-    config: params?.config,
-    workspaceDir: params?.workspaceDir,
-    env: params?.env,
-  });
   const candidates: Record<string, string[]> = {};
   for (const plugin of registry.plugins) {
     if (!shouldUsePluginProviderEnvVars(plugin, params)) {
@@ -106,11 +106,42 @@ function resolveManifestProviderAuthEnvVarCandidates(
   return candidates;
 }
 
+function resolveManifestProviderAuthEnvVarCandidates(
+  params?: ProviderEnvVarLookupParams,
+): Record<string, string[]> {
+  const registry = loadPluginManifestRegistrySync({
+    config: params?.config,
+    workspaceDir: params?.workspaceDir,
+    env: params?.env,
+  });
+  return collectManifestProviderAuthEnvVarCandidates(registry, params);
+}
+
+async function resolveManifestProviderAuthEnvVarCandidatesAsync(
+  params?: ProviderEnvVarLookupParams,
+): Promise<Record<string, string[]>> {
+  const registry = await loadPluginManifestRegistryAsync({
+    config: params?.config,
+    workspaceDir: params?.workspaceDir,
+    env: params?.env,
+  });
+  return collectManifestProviderAuthEnvVarCandidates(registry, params);
+}
+
 export function resolveProviderAuthEnvVarCandidates(
   params?: ProviderEnvVarLookupParams,
 ): Record<string, readonly string[]> {
   return {
     ...resolveManifestProviderAuthEnvVarCandidates(params),
+    ...CORE_PROVIDER_AUTH_ENV_VAR_CANDIDATES,
+  };
+}
+
+export async function resolveProviderAuthEnvVarCandidatesAsync(
+  params?: ProviderEnvVarLookupParams,
+): Promise<Record<string, readonly string[]>> {
+  return {
+    ...(await resolveManifestProviderAuthEnvVarCandidatesAsync(params)),
     ...CORE_PROVIDER_AUTH_ENV_VAR_CANDIDATES,
   };
 }

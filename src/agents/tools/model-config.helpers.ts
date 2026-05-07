@@ -6,11 +6,12 @@ import type { AgentModelConfig } from "../../config/types.agents-shared.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import {
   ensureAuthProfileStore,
+  ensureAuthProfileStoreAsync,
   hasAnyAuthProfileStoreSource,
   listProfilesForProvider,
 } from "../auth-profiles.js";
 import { DEFAULT_MODEL, DEFAULT_PROVIDER } from "../defaults.js";
-import { resolveEnvApiKey } from "../model-auth.js";
+import { resolveEnvApiKey, resolveEnvApiKeyAsync } from "../model-auth-env.js";
 import { resolveConfiguredModelRef } from "../model-selection.js";
 
 export type ToolModelConfig = { primary?: string; fallbacks?: string[] };
@@ -50,6 +51,26 @@ export function hasAuthForProvider(params: { provider: string; agentDir?: string
   return listProfilesForProvider(store, params.provider).length > 0;
 }
 
+export async function hasAuthForProviderAsync(params: {
+  provider: string;
+  agentDir?: string;
+}): Promise<boolean> {
+  if ((await resolveEnvApiKeyAsync(params.provider))?.apiKey) {
+    return true;
+  }
+  const agentDir = params.agentDir?.trim();
+  if (!agentDir) {
+    return false;
+  }
+  if (!hasAnyAuthProfileStoreSource(agentDir)) {
+    return false;
+  }
+  const store = await ensureAuthProfileStoreAsync(agentDir, {
+    allowKeychainPrompt: false,
+  });
+  return listProfilesForProvider(store, params.provider).length > 0;
+}
+
 export function coerceToolModelConfig(model?: AgentModelConfig): ToolModelConfig {
   const primary = resolveAgentModelPrimaryValue(model);
   const fallbacks = resolveAgentModelFallbackValues(model);
@@ -79,6 +100,45 @@ export function buildToolModelConfigFromCandidates(params: {
     const providerConfigured =
       params.isProviderConfigured?.(provider) ??
       hasAuthForProvider({ provider, agentDir: params.agentDir });
+    if (!provider || !providerConfigured) {
+      continue;
+    }
+    if (!deduped.includes(trimmed)) {
+      deduped.push(trimmed);
+    }
+  }
+
+  if (deduped.length === 0) {
+    return null;
+  }
+
+  return {
+    primary: deduped[0],
+    ...(deduped.length > 1 ? { fallbacks: deduped.slice(1) } : {}),
+  };
+}
+
+export async function buildToolModelConfigFromCandidatesAsync(params: {
+  explicit: ToolModelConfig;
+  agentDir?: string;
+  candidates: Array<string | null | undefined>;
+  isProviderConfiguredAsync?: (provider: string) => Promise<boolean>;
+}): Promise<ToolModelConfig | null> {
+  if (hasToolModelConfig(params.explicit)) {
+    return params.explicit;
+  }
+
+  const deduped: string[] = [];
+  for (const candidate of params.candidates) {
+    const trimmed = candidate?.trim();
+    if (!trimmed || !trimmed.includes("/")) {
+      continue;
+    }
+    const provider = trimmed.slice(0, trimmed.indexOf("/")).trim();
+    const providerConfigured =
+      params.isProviderConfiguredAsync != null
+        ? await params.isProviderConfiguredAsync(provider)
+        : await hasAuthForProviderAsync({ provider, agentDir: params.agentDir });
     if (!provider || !providerConfigured) {
       continue;
     }

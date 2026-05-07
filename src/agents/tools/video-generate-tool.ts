@@ -33,6 +33,7 @@ import {
   normalizeMediaReferenceInputs,
   readBooleanToolParam,
   resolveCapabilityModelConfigForTool,
+  resolveCapabilityModelConfigForToolAsync,
   resolveGenerateAction,
   resolveMediaToolLocalRoots,
   resolveSelectedCapabilityProvider,
@@ -212,6 +213,18 @@ export function resolveVideoGenerationModelConfigForTool(params: {
   agentDir?: string;
 }): ToolModelConfig | null {
   return resolveCapabilityModelConfigForTool({
+    cfg: params.cfg,
+    agentDir: params.agentDir,
+    modelConfig: params.cfg?.agents?.defaults?.videoGenerationModel,
+    providers: listRuntimeVideoGenerationProviders({ config: params.cfg }),
+  });
+}
+
+export async function resolveVideoGenerationModelConfigForToolAsync(params: {
+  cfg?: OpenClawConfig;
+  agentDir?: string;
+}): Promise<ToolModelConfig | null> {
+  return resolveCapabilityModelConfigForToolAsync({
     cfg: params.cfg,
     agentDir: params.agentDir,
     modelConfig: params.cfg?.agents?.defaults?.videoGenerationModel,
@@ -765,12 +778,17 @@ export function createVideoGenerateTool(options?: {
   sandbox?: VideoGenerateSandboxConfig;
   fsPolicy?: ToolFsPolicy;
   scheduleBackgroundWork?: VideoGenerateBackgroundScheduler;
+  /** When set (including `null`), skips sync resolution from {@link resolveVideoGenerationModelConfigForTool}. */
+  videoGenerationModelConfig?: ToolModelConfig | null;
 }): AnyAgentTool | null {
   const cfg: OpenClawConfig = options?.config ?? loadConfig();
-  const videoGenerationModelConfig = resolveVideoGenerationModelConfigForTool({
-    cfg,
-    agentDir: options?.agentDir,
-  });
+  const videoGenerationModelConfig =
+    options?.videoGenerationModelConfig !== undefined
+      ? options.videoGenerationModelConfig
+      : resolveVideoGenerationModelConfigForTool({
+          cfg,
+          agentDir: options?.agentDir,
+        });
   if (!videoGenerationModelConfig) {
     return null;
   }

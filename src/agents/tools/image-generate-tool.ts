@@ -23,9 +23,10 @@ import { decodeDataUrl } from "./image-tool.helpers.js";
 import {
   applyImageGenerationModelConfigDefaults,
   buildMediaReferenceDetails,
-  isCapabilityProviderConfigured,
+  isCapabilityProviderConfiguredAsync,
   normalizeMediaReferenceInputs,
   resolveCapabilityModelConfigForTool,
+  resolveCapabilityModelConfigForToolAsync,
   resolveGenerateAction,
   resolveMediaToolLocalRoots,
   resolveSelectedCapabilityProvider,
@@ -119,6 +120,18 @@ export function resolveImageGenerationModelConfigForTool(params: {
   agentDir?: string;
 }): ToolModelConfig | null {
   return resolveCapabilityModelConfigForTool({
+    cfg: params.cfg,
+    agentDir: params.agentDir,
+    modelConfig: params.cfg?.agents?.defaults?.imageGenerationModel,
+    providers: listRuntimeImageGenerationProviders({ config: params.cfg }),
+  });
+}
+
+export async function resolveImageGenerationModelConfigForToolAsync(params: {
+  cfg?: OpenClawConfig;
+  agentDir?: string;
+}): Promise<ToolModelConfig | null> {
+  return resolveCapabilityModelConfigForToolAsync({
     cfg: params.cfg,
     agentDir: params.agentDir,
     modelConfig: params.cfg?.agents?.defaults?.imageGenerationModel,
@@ -365,12 +378,17 @@ export function createImageGenerateTool(options?: {
   workspaceDir?: string;
   sandbox?: ImageGenerateSandboxConfig;
   fsPolicy?: ToolFsPolicy;
+  /** When set (including `null`), skips sync manifest/env lookups from {@link resolveImageGenerationModelConfigForTool}. */
+  imageGenerationModelConfig?: ToolModelConfig | null;
 }): AnyAgentTool | null {
   const cfg = options?.config ?? loadConfig();
-  const imageGenerationModelConfig = resolveImageGenerationModelConfigForTool({
-    cfg,
-    agentDir: options?.agentDir,
-  });
+  const imageGenerationModelConfig =
+    options?.imageGenerationModelConfig !== undefined
+      ? options.imageGenerationModelConfig
+      : resolveImageGenerationModelConfigForTool({
+          cfg,
+          agentDir: options?.agentDir,
+        });
   if (!imageGenerationModelConfig) {
     return null;
   }
@@ -396,22 +414,24 @@ export function createImageGenerateTool(options?: {
       const action = resolveAction(params);
       if (action === "list") {
         const runtimeProviders = listRuntimeImageGenerationProviders({ config: effectiveCfg });
-        const providers = runtimeProviders.map((provider) =>
-          Object.assign(
-            { id: provider.id },
-            provider.label ? { label: provider.label } : {},
-            provider.defaultModel ? { defaultModel: provider.defaultModel } : {},
-            {
-              models: provider.models ?? (provider.defaultModel ? [provider.defaultModel] : []),
-              configured: isCapabilityProviderConfigured({
-                providers: runtimeProviders,
-                provider,
-                cfg: effectiveCfg,
-                agentDir: options?.agentDir,
-              }),
-              authEnvVars: getImageGenerationProviderAuthEnvVars(provider.id),
-              capabilities: provider.capabilities,
-            },
+        const providers = await Promise.all(
+          runtimeProviders.map(async (provider) =>
+            Object.assign(
+              { id: provider.id },
+              provider.label ? { label: provider.label } : {},
+              provider.defaultModel ? { defaultModel: provider.defaultModel } : {},
+              {
+                models: provider.models ?? (provider.defaultModel ? [provider.defaultModel] : []),
+                configured: await isCapabilityProviderConfiguredAsync({
+                  providers: runtimeProviders,
+                  provider,
+                  cfg: effectiveCfg,
+                  agentDir: options?.agentDir,
+                }),
+                authEnvVars: getImageGenerationProviderAuthEnvVars(provider.id),
+                capabilities: provider.capabilities,
+              },
+            ),
           ),
         );
         const lines = providers.flatMap((provider) => {

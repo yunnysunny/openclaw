@@ -13,8 +13,10 @@ import { ToolInputError, readStringArrayParam, readStringParam } from "./common.
 import type { ImageModelConfig } from "./image-tool.helpers.js";
 import {
   buildToolModelConfigFromCandidates,
+  buildToolModelConfigFromCandidatesAsync,
   coerceToolModelConfig,
   hasAuthForProvider,
+  hasAuthForProviderAsync,
   hasToolModelConfig,
   resolveDefaultModelRef,
   type ToolModelConfig,
@@ -144,6 +146,33 @@ export function isCapabilityProviderConfigured<T extends CapabilityProvider>(par
   return hasAuthForProvider({ provider: provider.id, agentDir: params.agentDir });
 }
 
+export async function isCapabilityProviderConfiguredAsync<T extends CapabilityProvider>(params: {
+  providers: T[];
+  provider?: T;
+  providerId?: string;
+  cfg?: OpenClawConfig;
+  agentDir?: string;
+}): Promise<boolean> {
+  const provider =
+    params.provider ??
+    findCapabilityProviderById({
+      providers: params.providers,
+      providerId: params.providerId,
+    });
+  if (!provider) {
+    return params.providerId
+      ? hasAuthForProviderAsync({ provider: params.providerId, agentDir: params.agentDir })
+      : false;
+  }
+  if (provider.isConfigured) {
+    return provider.isConfigured({
+      cfg: params.cfg,
+      agentDir: params.agentDir,
+    });
+  }
+  return hasAuthForProviderAsync({ provider: provider.id, agentDir: params.agentDir });
+}
+
 export function resolveSelectedCapabilityProvider<T extends CapabilityProvider>(params: {
   providers: T[];
   modelConfig: ToolModelConfig;
@@ -206,6 +235,51 @@ export function resolveCapabilityModelCandidatesForTool(params: {
   return orderedRefs;
 }
 
+export async function resolveCapabilityModelCandidatesForToolAsync(params: {
+  cfg?: OpenClawConfig;
+  agentDir?: string;
+  providers: CapabilityProvider[];
+}): Promise<string[]> {
+  const providerDefaults = new Map<string, string>();
+  for (const provider of params.providers) {
+    const providerId = provider.id.trim();
+    const modelId = provider.defaultModel?.trim();
+    if (
+      !providerId ||
+      !modelId ||
+      providerDefaults.has(providerId) ||
+      !(await isCapabilityProviderConfiguredAsync({
+        providers: params.providers,
+        provider,
+        cfg: params.cfg,
+        agentDir: params.agentDir,
+      }))
+    ) {
+      continue;
+    }
+    providerDefaults.set(providerId, `${providerId}/${modelId}`);
+  }
+
+  const primaryProvider = resolveDefaultModelRef(params.cfg).provider;
+  const orderedProviders = [
+    primaryProvider,
+    ...[...providerDefaults.keys()]
+      .filter((providerId) => providerId !== primaryProvider)
+      .toSorted(),
+  ];
+  const orderedRefs: string[] = [];
+  const seen = new Set<string>();
+  for (const providerId of orderedProviders) {
+    const ref = providerDefaults.get(providerId);
+    if (!ref || seen.has(ref)) {
+      continue;
+    }
+    seen.add(ref);
+    orderedRefs.push(ref);
+  }
+  return orderedRefs;
+}
+
 export function resolveCapabilityModelConfigForTool(params: {
   cfg?: OpenClawConfig;
   agentDir?: string;
@@ -226,6 +300,34 @@ export function resolveCapabilityModelConfigForTool(params: {
     }),
     isProviderConfigured: (providerId) =>
       isCapabilityProviderConfigured({
+        providers: params.providers,
+        providerId,
+        cfg: params.cfg,
+        agentDir: params.agentDir,
+      }),
+  });
+}
+
+export async function resolveCapabilityModelConfigForToolAsync(params: {
+  cfg?: OpenClawConfig;
+  agentDir?: string;
+  modelConfig?: AgentModelConfig;
+  providers: CapabilityProvider[];
+}): Promise<ToolModelConfig | null> {
+  const explicit = coerceToolModelConfig(params.modelConfig);
+  if (hasToolModelConfig(explicit)) {
+    return explicit;
+  }
+  return buildToolModelConfigFromCandidatesAsync({
+    explicit,
+    agentDir: params.agentDir,
+    candidates: await resolveCapabilityModelCandidatesForToolAsync({
+      cfg: params.cfg,
+      agentDir: params.agentDir,
+      providers: params.providers,
+    }),
+    isProviderConfiguredAsync: (providerId) =>
+      isCapabilityProviderConfiguredAsync({
         providers: params.providers,
         providerId,
         cfg: params.cfg,

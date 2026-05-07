@@ -145,16 +145,7 @@ export function resolveConfigDir(
   if (configPath) {
     return path.dirname(resolveUserPath(configPath, env, homedir));
   }
-  const newDir = path.join(resolveRequiredHomeDir(env, homedir), ".openclaw");
-  try {
-    const hasNew = fs.existsSync(newDir);
-    if (hasNew) {
-      return newDir;
-    }
-  } catch {
-    // best-effort
-  }
-  return newDir;
+  return path.join(resolveRequiredHomeDir(env, homedir), ".openclaw");
 }
 
 export function resolveHomeDir(): string | undefined {
