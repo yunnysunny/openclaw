@@ -37,6 +37,7 @@ vi.mock("../pi-model-discovery.js", () => ({
 
 vi.mock("../../plugins/provider-runtime.js", () => ({
   applyProviderResolvedModelCompatWithPlugins: () => undefined,
+  applyProviderResolvedModelCompatWithPluginsAsync: async () => undefined,
   applyProviderResolvedTransportWithPlugin: () => undefined,
   buildProviderUnknownModelHintWithPlugin: () => undefined,
   clearProviderRuntimeHookCache: () => {},
