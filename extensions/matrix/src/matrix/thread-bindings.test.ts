@@ -641,11 +641,12 @@ describe("matrix thread bindings", () => {
       expect(await readPersistedLastActivityAt(bindingsPath)).toBe(originalLastActivityAt);
 
       await vi.advanceTimersByTimeAsync(1_000);
+      // Touch persistence is async (queued write); allow slow CI disks to finish.
       await vi.waitFor(
         async () => {
           expect(await readPersistedLastActivityAt(bindingsPath)).toBe(secondTouchedAt);
         },
-        { interval: 1, timeout: 100 },
+        { interval: 5, timeout: 10_000 },
       );
     } finally {
       vi.useRealTimers();

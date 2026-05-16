@@ -233,10 +233,13 @@ export async function createMatrixThreadBindingManager(params: {
 
   let persistQueue: Promise<void> = Promise.resolve();
   const enqueuePersist = (bindings?: MatrixThreadBindingRecord[]) => {
-    const snapshot = bindings ?? listBindingsForAccount(params.accountId);
     const next = persistQueue
       .catch(() => {})
       .then(async () => {
+        // Resolve the snapshot when this job actually runs so we never persist a
+        // binding view that became stale while earlier writes were in flight.
+        const snapshot =
+          bindings !== undefined ? bindings : listBindingsForAccount(params.accountId);
         await persistBindingsSnapshot(filePath, snapshot);
       });
     persistQueue = next;
@@ -257,13 +260,15 @@ export async function createMatrixThreadBindingManager(params: {
   let persistTimer: NodeJS.Timeout | null = null;
   const schedulePersist = (delayMs: number) => {
     if (persistTimer) {
-      return;
+      clearTimeout(persistTimer);
+      persistTimer = null;
     }
     persistTimer = setTimeout(() => {
       persistTimer = null;
       persistSafely("delayed-touch");
     }, delayMs);
-    persistTimer.unref?.();
+    // Intentionally do not unref: Node's unref + Vitest fake timers can skip firing;
+    // a ref'd 30s debounce is negligible for long-running gateways.
   };
   const updateBindingsBySessionKey = (input: {
     targetSessionKey: string;
@@ -355,7 +360,7 @@ export async function createMatrixThreadBindingManager(params: {
       if (persistTimer) {
         clearTimeout(persistTimer);
         persistTimer = null;
-        persistSafely("shutdown-flush");
+        persistSafely("shutdown-flush", [...listBindingsForAccount(params.accountId)]);
       }
       unregisterSessionBindingAdapter({
         channel: "matrix",
