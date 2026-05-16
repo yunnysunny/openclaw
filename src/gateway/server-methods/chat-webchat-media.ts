@@ -1,4 +1,3 @@
-import fs from "node:fs/promises";
 import path from "node:path";
 import type { ReplyPayload } from "../../auto-reply/reply-payload.js";
 import { assertNoWindowsNetworkPath, safeFileURLToPath } from "../../infra/local-file-access.js";
@@ -6,6 +5,7 @@ import { assertLocalMediaAllowed, LocalMediaAccessError } from "../../media/loca
 import { isAudioFileName } from "../../media/mime.js";
 import { resolveSendableOutboundReplyParts } from "../../plugin-sdk/reply-payload.js";
 import { normalizeLowercaseStringOrEmpty } from "../../shared/string-coerce.js";
+import { webchatMediaFs } from "./chat-webchat-media.fs.runtime.js";
 
 /** Cap embedded audio size to avoid multi‑MB payloads on the chat WebSocket. */
 const MAX_WEBCHAT_AUDIO_BYTES = 15 * 1024 * 1024;
@@ -74,7 +74,7 @@ async function resolveLocalAudioFileForEmbedding(
   }
   try {
     await assertLocalMediaAllowed(resolved, options?.localRoots);
-    const st = await fs.stat(resolved);
+    const st = await webchatMediaFs.stat(resolved);
     if (!st.isFile() || st.size > MAX_WEBCHAT_AUDIO_BYTES) {
       return null;
     }
@@ -127,7 +127,7 @@ async function tryReadLocalAudioContentBlock(
   filePath: string,
 ): Promise<Record<string, unknown> | null> {
   try {
-    const buf = await fs.readFile(filePath);
+    const buf = await webchatMediaFs.readFile(filePath);
     if (buf.length > MAX_WEBCHAT_AUDIO_BYTES) {
       return null;
     }

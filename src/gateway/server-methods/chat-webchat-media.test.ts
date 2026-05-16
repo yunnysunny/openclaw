@@ -1,10 +1,10 @@
 import fs from "node:fs";
-import * as fsPromises from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getDefaultLocalRoots } from "../../media/local-media-access.js";
+import { webchatMediaFs } from "./chat-webchat-media.fs.runtime.js";
 import { buildWebchatAudioContentBlocksFromReplyPayloads } from "./chat-webchat-media.js";
 
 describe("buildWebchatAudioContentBlocksFromReplyPayloads", () => {
@@ -88,8 +88,8 @@ describe("buildWebchatAudioContentBlocksFromReplyPayloads", () => {
   });
 
   it("drops tool-result file:// URLs with remote hosts before touching the filesystem", async () => {
-    const statSpy = vi.spyOn(fsPromises, "stat");
-    const readSpy = vi.spyOn(fsPromises, "readFile");
+    const statSpy = vi.spyOn(webchatMediaFs, "stat");
+    const readSpy = vi.spyOn(webchatMediaFs, "readFile");
 
     const blocks = await buildWebchatAudioContentBlocksFromReplyPayloads([
       {
@@ -148,14 +148,14 @@ describe("buildWebchatAudioContentBlocksFromReplyPayloads", () => {
     const audioPath = path.join(tmpDir, "huge.mp3");
     fs.writeFileSync(audioPath, Buffer.from([0x02]));
 
-    const origStat = fsPromises.stat.bind(fsPromises);
-    const statSpy = vi.spyOn(fsPromises, "stat").mockImplementation(async (p: fs.PathLike) => {
+    const origStat = webchatMediaFs.stat.bind(webchatMediaFs);
+    const statSpy = vi.spyOn(webchatMediaFs, "stat").mockImplementation(async (p: Parameters<typeof webchatMediaFs.stat>[0]) => {
       if (String(p) === audioPath) {
-        return { isFile: () => true, size: 16 * 1024 * 1024 } as fs.Stats;
+        return { isFile: () => true, size: 16 * 1024 * 1024 } as Awaited<ReturnType<typeof webchatMediaFs.stat>>;
       }
       return await origStat(p);
     });
-    const readSpy = vi.spyOn(fsPromises, "readFile");
+    const readSpy = vi.spyOn(webchatMediaFs, "readFile");
 
     const blocks = await buildWebchatAudioContentBlocksFromReplyPayloads(
       [{ mediaUrl: audioPath }],
