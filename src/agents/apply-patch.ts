@@ -1,7 +1,7 @@
 // @ts-nocheck
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { AgentTool } from "@mariozechner/pi-agent-core";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "typebox";
 import { openBoundaryFile, type BoundaryFileOpenResult } from "../infra/boundary-file-read.js";
 import { closeFileDescriptorAsync, readFileUtf8FromFd } from "../infra/fd-promise.js";

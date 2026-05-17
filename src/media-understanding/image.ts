@@ -1,6 +1,6 @@
 // @ts-nocheck
-import type { Api, Context, Model, ProviderStreamOptions } from "@mariozechner/pi-ai";
-import { complete } from "@mariozechner/pi-ai";
+import type { Api, Context, Model, ProviderStreamOptions } from "@earendil-works/pi-ai";
+import { complete } from "@earendil-works/pi-ai";
 import { isMinimaxVlmModel, minimaxUnderstandImage } from "../agents/minimax-vlm.js";
 import {
   getApiKeyForModel,

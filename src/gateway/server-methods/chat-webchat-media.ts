@@ -176,7 +176,9 @@ export async function buildWebchatAudioContentBlocksFromReplyPayloads(
         continue;
       }
       seen.add(resolved);
-      const block = await tryReadLocalAudioContentBlock(resolved);
+      const block = await tryReadLocalAudioContentBlock(resolved, {
+        isVoiceNote: Boolean((payload as { audioAsVoice?: unknown }).audioAsVoice),
+      });
       if (block) {
         blocks.push(block);
       }
@@ -273,17 +275,25 @@ export async function buildWebchatAssistantMessageFromReplyPayloads(
 
 async function tryReadLocalAudioContentBlock(
   filePath: string,
+  options?: { isVoiceNote?: boolean },
 ): Promise<Record<string, unknown> | null> {
   try {
-    const buf = await webchatMediaFs.readFile(filePath);
-    if (buf.length > MAX_WEBCHAT_AUDIO_BYTES) {
+    const st = await webchatMediaFs.stat(filePath);
+    if (!st.isFile() || st.size > MAX_WEBCHAT_AUDIO_BYTES) {
       return null;
     }
     const mediaType = mimeTypeForPath(filePath);
-    const base64Data = buf.toString("base64");
+    const url = await webchatMediaFs.realpath(filePath);
+    const label = path.basename(filePath);
     return {
-      type: "audio",
-      source: { type: "base64", media_type: mediaType, data: base64Data },
+      type: "attachment",
+      attachment: {
+        url,
+        kind: "audio",
+        label,
+        mimeType: mediaType,
+        ...(options?.isVoiceNote ? { isVoiceNote: true } : {}),
+      },
     };
   } catch {
     return null;

@@ -1,6 +1,6 @@
 // @ts-nocheck
-import type { Api, Model } from "@mariozechner/pi-ai";
-import type { ModelRegistry } from "@mariozechner/pi-coding-agent";
+import type { Api, Model } from "@earendil-works/pi-ai";
+import type { ModelRegistry } from "@earendil-works/pi-coding-agent";
 import type { AuthProfileStore } from "../../agents/auth-profiles/types.js";
 import { shouldSuppressBuiltInModelAsync } from "../../agents/model-suppression.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
