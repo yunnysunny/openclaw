@@ -1,7 +1,7 @@
 import { normalizePluginsConfig } from "./config-state.js";
 import { discoverOpenClawPlugins, type PluginCandidate } from "./discovery.js";
 import type { LoadInstalledPluginIndexParams } from "./installed-plugin-index-types.js";
-import { loadPluginManifestRegistry, type PluginManifestRegistry } from "./manifest-registry.js";
+import { loadPluginManifestRegistrySync, type PluginManifestRegistry } from "./manifest-registry.js";
 
 export function resolveInstalledPluginIndexRegistry(params: LoadInstalledPluginIndexParams): {
   registry: PluginManifestRegistry;
@@ -10,7 +10,7 @@ export function resolveInstalledPluginIndexRegistry(params: LoadInstalledPluginI
   if (params.candidates) {
     return {
       candidates: params.candidates,
-      registry: loadPluginManifestRegistry({
+      registry: loadPluginManifestRegistrySync({
         config: params.config,
         workspaceDir: params.workspaceDir,
         cache: false,
@@ -31,7 +31,7 @@ export function resolveInstalledPluginIndexRegistry(params: LoadInstalledPluginI
   });
   return {
     candidates: discovery.candidates,
-    registry: loadPluginManifestRegistry({
+    registry: loadPluginManifestRegistrySync({
       config: params.config,
       workspaceDir: params.workspaceDir,
       cache: false,

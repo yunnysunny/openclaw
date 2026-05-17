@@ -13,7 +13,7 @@ export {
   resolveWebFetchProviderContractEntriesForPluginId,
   resolveWebSearchProviderContractEntriesForPluginId,
 } from "../plugins/contracts/registry.js";
-export { loadPluginManifestRegistry } from "../plugins/manifest-registry.js";
+export { loadPluginManifestRegistrySync } from "../plugins/manifest-registry.js";
 export { resolveBundledExplicitProviderContractsFromPublicArtifacts } from "../plugins/provider-contract-public-artifacts.js";
 export {
   initializeGlobalHookRunner,

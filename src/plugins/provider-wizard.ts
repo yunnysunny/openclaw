@@ -317,7 +317,6 @@ export async function runProviderModelSelectedHook(params: {
 
   const setupProvider = resolvePluginSetupProvider({
     provider: selectedProviderId,
-    config: params.config,
     workspaceDir: params.workspaceDir,
     env: params.env,
   });

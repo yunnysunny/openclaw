@@ -9,7 +9,7 @@ import {
   normalizeAgentToolResultMiddlewareRuntimeIds,
 } from "./agent-tool-result-middleware.js";
 import { loadOpenClawPlugins } from "./loader.js";
-import { loadPluginManifestRegistry, type PluginManifestRegistry } from "./manifest-registry.js";
+import { loadPluginManifestRegistrySync, type PluginManifestRegistry } from "./manifest-registry.js";
 
 const log = createSubsystemLogger("plugins/agent-tool-result-middleware");
 
@@ -54,7 +54,7 @@ export async function loadAgentToolResultMiddlewaresForRuntime(params: {
     const env = params.env ?? process.env;
     const manifestRegistry =
       params.manifestRegistry ??
-      loadPluginManifestRegistry({
+      loadPluginManifestRegistrySync({
         config,
         workspaceDir: params.workspaceDir,
         env,

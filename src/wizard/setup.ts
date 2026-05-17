@@ -107,10 +107,8 @@ async function resolveAuthChoiceModelSelectionPolicy(params: {
   if (manifestChoice) {
     const setupProvider = resolvePluginSetupProvider({
       provider: manifestChoice.providerId,
-      config: params.config,
       workspaceDir: params.workspaceDir,
       env: params.env,
-      pluginIds: [manifestChoice.pluginId],
     });
     const setupMethod = setupProvider?.auth.find(
       (method) => normalizeProviderId(method.id) === normalizeProviderId(manifestChoice.methodId),

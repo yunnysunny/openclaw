@@ -71,7 +71,7 @@ function resolvePluginSourcePath(sourcePath: string): string {
   return sourcePath;
 }
 
-type PluginManifestContractListKey =
+export type PluginManifestContractListKey =
   | "speechProviders"
   | "externalAuthProviders"
   | "mediaUnderstandingProviders"
@@ -82,6 +82,7 @@ type PluginManifestContractListKey =
   | "videoGenerationProviders"
   | "musicGenerationProviders"
   | "memoryEmbeddingProviders"
+  | "migrationProviders"
   | "webContentExtractors"
   | "webFetchProviders"
   | "webSearchProviders";
@@ -652,6 +653,8 @@ export function loadPluginManifestRegistrySync(
     env?: NodeJS.ProcessEnv;
     candidates?: PluginCandidate[];
     diagnostics?: PluginDiagnostic[];
+    installRecords?: Record<string, unknown>;
+    bundledChannelConfigCollector?: BundledChannelConfigCollector;
   } = {},
 ): PluginManifestRegistry {
   const config = params.config ?? {};
@@ -1002,3 +1005,10 @@ export async function loadPluginManifestRegistryAsync(
   }
   return registry;
 }
+
+
+export type BundledChannelConfigCollector = (params: {
+  pluginId: string;
+  config: unknown;
+}) => Record<string, unknown> | undefined;
+

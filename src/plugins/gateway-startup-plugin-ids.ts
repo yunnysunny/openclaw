@@ -164,6 +164,8 @@ function canStartConfiguredChannelPlugin(params: {
 }
 
 export function resolveChannelPluginIds(params: {
+  manifestRegistry?: unknown;
+  index?: unknown;
   config: OpenClawConfig;
   workspaceDir?: string;
   env: NodeJS.ProcessEnv;

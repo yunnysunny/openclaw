@@ -162,7 +162,7 @@ function resolvePreferredInstallsByPluginId(
     }
     const install = resolveInstallInfoFromRegistryRecord({
       record,
-      installRecord: index.installRecords[record.pluginId],
+      installRecord: index.installRecords?.[record.pluginId],
     });
     if (!install) {
       continue;

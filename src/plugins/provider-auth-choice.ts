@@ -326,10 +326,8 @@ export async function applyAuthChoiceLoadedPluginProvider(
   const setupProvider = manifestAuthChoice
     ? resolvePluginSetupProvider({
         provider: manifestAuthChoice.providerId,
-        config: enabledConfig,
         workspaceDir,
         env: params.env,
-        pluginIds: [manifestAuthChoice.pluginId],
       })
     : undefined;
   let providers = setupProvider

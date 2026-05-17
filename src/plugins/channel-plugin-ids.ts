@@ -14,7 +14,10 @@ export {
 
 export {
   resolveChannelPluginIds,
+  resolveChannelPluginIds as resolveChannelPluginIdsFromRegistry,
   resolveConfiguredDeferredChannelPluginIds,
+  resolveConfiguredDeferredChannelPluginIds as resolveConfiguredDeferredChannelPluginIdsFromRegistry,
   resolveGatewayStartupPluginIds,
+  resolveGatewayStartupPluginIds as resolveGatewayStartupPluginIdsFromRegistry,
   resolveGatewayStartupPluginIdsAsync,
 } from "./gateway-startup-plugin-ids.js";

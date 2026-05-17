@@ -276,7 +276,7 @@ export function resolveBundledPluginsDir(env: NodeJS.ProcessEnv = process.env): 
 export async function resolveBundledPluginsDirAsync(
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<string | undefined> {
-  if (bundledPluginsDisabled(env)) {
+  if (areBundledPluginsDisabled(env)) {
     return resolveDisabledBundledPluginsDirAsync();
   }
 

@@ -51,8 +51,6 @@ export function collectPluginConfigAssignments(params: {
         env: params.context.env,
         cache: true,
         fallbackToBundledMetadata: true,
-        fallbackToBundledMetadataForResolvedBundled: true,
-        fallbackBundledPluginIds: bundledLoadablePluginIds,
         pluginIds: Object.keys(entries),
       }).entries(),
     ].flatMap(([pluginId, metadata]) => {

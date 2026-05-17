@@ -22,6 +22,11 @@ import type { PluginKind } from "./plugin-kind.types.js";
 export const PLUGIN_MANIFEST_FILENAME = "openclaw.plugin.json";
 export const PLUGIN_MANIFEST_FILENAMES = [PLUGIN_MANIFEST_FILENAME] as const;
 
+export type PluginManifestChannelCommandDefaults = {
+  nativeCommandsAutoEnabled?: boolean;
+  nativeSkillsAutoEnabled?: boolean;
+};
+
 export type PluginManifestChannelConfig = {
   schema: Record<string, unknown>;
   uiHints?: Record<string, PluginConfigUiHint>;
@@ -29,6 +34,7 @@ export type PluginManifestChannelConfig = {
   label?: string;
   description?: string;
   preferOver?: string[];
+  commands?: PluginManifestChannelCommandDefaults;
 };
 
 export type PluginManifestModelSupport = {
@@ -59,6 +65,10 @@ export type PluginManifestProviderEndpoint = {
 export type PluginManifestActivationCapability = "provider" | "channel" | "tool" | "hook";
 
 export type PluginManifestActivation = {
+  /** Explicit gateway startup activation flag. */
+  onStartup?: boolean;
+  /** Root-relative config paths that should activate this plugin. */
+  onConfigPaths?: string[];
   /**
    * Provider ids that should activate this plugin when explicitly requested.
    * This is metadata only; runtime loading still happens through the loader.
@@ -225,7 +235,7 @@ export type PluginManifest = {
    */
   contracts?: PluginManifestContracts;
   /** Optional model catalog metadata. */
-  modelCatalog?: { providers?: Record<string, unknown> } & Record<string, unknown>;
+  modelCatalog?: PluginManifestModelCatalog;
   /** Optional media-understanding-provider metadata. */
   mediaUnderstandingProviderMetadata?: Record<string, PluginManifestMediaUnderstandingProviderMetadata>;
   /** Manifest-owned config behavior consumed by generic core helpers. */
@@ -237,6 +247,7 @@ export type PluginManifestContracts = {
   embeddedExtensionFactories?: string[];
   agentToolResultMiddleware?: string[];
   externalAuthProviders?: string[];
+  migrationProviders?: string[];
   memoryEmbeddingProviders?: string[];
   speechProviders?: string[];
   realtimeTranscriptionProviders?: string[];
@@ -262,8 +273,18 @@ export type PluginManifestMediaUnderstandingProviderMetadata = {
 };
 
 export type PluginManifestModelCatalog = {
-  providers?: Record<string, unknown>;
-} & Record<string, unknown>;
+  providers?: Record<string, import("../model-catalog/index.js").ModelCatalogProvider>;
+  aliases?: Record<string, import("../model-catalog/index.js").ModelCatalogAlias>;
+  discovery?: Record<string, import("../model-catalog/index.js").ModelCatalogDiscovery>;
+  suppressions?: import("../model-catalog/index.js").ModelCatalogSuppression[];
+};
+
+export type PluginManifestModelIdNormalizationProvider = {
+  aliases?: Record<string, string>;
+  stripPrefixes?: string[];
+  prefixWhenBare?: string;
+  prefixWhenBareAfterAliasStartsWith?: Array<{ aliasPrefix?: string; modelPrefix?: string; prefix: string }>;
+};
 
 export type PluginManifestProviderAuthChoice = {
   /** Provider id owned by this manifest entry. */
@@ -1127,6 +1148,7 @@ export type PluginPackageChannel = {
   };
   cliAddOptions?: readonly PluginPackageChannelCliOption[];
   doctorCapabilities?: PluginPackageChannelDoctorCapabilities;
+  commands?: Record<string, unknown>;
 };
 
 export type PluginPackageChannelCliOption = {

@@ -130,6 +130,7 @@ export type PluginLoadOptions = {
   activationSourceConfig?: OpenClawConfig;
   autoEnabledReasons?: Readonly<Record<string, string[]>>;
   workspaceDir?: string;
+  manifestRegistry?: import("./manifest-registry.js").PluginManifestRegistry;
   // Allows callers to resolve plugin roots and load paths against an explicit env
   // instead of the process-global environment.
   env?: NodeJS.ProcessEnv;
@@ -1256,6 +1257,7 @@ function createPluginRecord(params: {
     cliCommands: [],
     services: [],
     gatewayDiscoveryServiceIds: [],
+    migrationProviderIds: [],
     commands: [],
     httpRoutes: 0,
     hookCount: 0,

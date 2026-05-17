@@ -25,6 +25,8 @@ type ReadOnlyChannelPluginOptions = {
   activationSourceConfig?: OpenClawConfig;
   includePersistedAuthState?: boolean;
   cache?: boolean;
+  stateDir?: string;
+  includeSetupRuntimeFallback?: boolean;
 };
 
 type ReadOnlyChannelPluginResolution = {

@@ -6,7 +6,7 @@ import { hashJson } from "./installed-plugin-index-hash.js";
 import { resolveInstalledPluginIndexPolicyHash } from "./installed-plugin-index-policy.js";
 import type { InstalledPluginIndex, InstalledPluginIndexRecord } from "./installed-plugin-index.js";
 import { extractPluginInstallRecordsFromInstalledPluginIndex } from "./installed-plugin-index.js";
-import { loadPluginManifestRegistry, type PluginManifestRegistry } from "./manifest-registry.js";
+import { loadPluginManifestRegistrySync, type PluginManifestRegistry } from "./manifest-registry.js";
 import type { BundledChannelConfigCollector } from "./manifest-registry.js";
 import {
   DEFAULT_PLUGIN_ENTRY_CANDIDATES,
@@ -296,7 +296,7 @@ export function loadPluginManifestRegistryForInstalledIndex(params: {
     .filter((plugin) => params.includeDisabled || plugin.enabled)
     .filter((plugin) => !pluginIdSet || pluginIdSet.has(plugin.pluginId))
     .map(toPluginCandidate);
-  const registry = loadPluginManifestRegistry({
+  const registry = loadPluginManifestRegistrySync({
     config: params.config,
     workspaceDir: params.workspaceDir,
     env,

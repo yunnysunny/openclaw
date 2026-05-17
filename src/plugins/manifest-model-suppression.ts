@@ -63,7 +63,9 @@ function listManifestModelCatalogSuppressions(params: {
     workspaceDir: params.workspaceDir,
     env: params.env,
   });
-  const planned = planManifestModelCatalogSuppressions({ registry });
+  const planned = planManifestModelCatalogSuppressions({
+    registry: registry as Parameters<typeof planManifestModelCatalogSuppressions>[0]["registry"],
+  });
   cache.set(key, planned.suppressions);
   return planned.suppressions;
 }
