@@ -8,7 +8,7 @@ import {
 } from "../../plugins/channel-plugin-ids.js";
 import { loadOpenClawPlugins } from "../../plugins/loader.js";
 import {
-  loadPluginManifestRegistry,
+  loadPluginManifestRegistrySync,
   type PluginManifestRecord,
 } from "../../plugins/manifest-registry.js";
 import { DEFAULT_ACCOUNT_ID, normalizeAccountId } from "../../routing/session-key.js";
@@ -520,7 +520,7 @@ export function resolveReadOnlyChannelPluginsForConfig(
 ): ReadOnlyChannelPluginResolution {
   const env = options.env ?? process.env;
   const workspaceDir = resolveReadOnlyWorkspaceDir(cfg, options);
-  const manifestRecords = loadPluginManifestRegistry({
+  const manifestRecords = loadPluginManifestRegistrySync({
     config: cfg,
     workspaceDir,
     env,
@@ -594,7 +594,7 @@ export function resolveReadOnlyChannelPluginsForConfig(
         cache: false,
         activate: false,
         includeSetupOnlyChannelPlugins: true,
-        forceSetupOnlyChannelPlugins: true,
+        includeSetupOnlyChannelPlugins: true,
         requireSetupEntryForSetupOnlyChannelPlugins: true,
         onlyPluginIds: externalPluginIds,
       });

@@ -770,7 +770,7 @@ export async function createOpenClawCodingToolsAsync(
   });
   const sandboxToolPolicy = sandbox?.tools;
   const subagentPolicy =
-    isSubagentSessionKey(options?.sessionKey) && options?.sessionKey
+    isSubagentEnvelopeSession(options?.sessionKey) && options?.sessionKey
       ? resolveSubagentToolPolicyForSession(options.config, options.sessionKey)
       : undefined;
   const fsPolicy = createToolFsPolicy(

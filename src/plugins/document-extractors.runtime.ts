@@ -7,7 +7,7 @@ import {
 } from "./config-state.js";
 import { loadBundledDocumentExtractorEntriesFromDir } from "./document-extractor-public-artifacts.js";
 import type { PluginDocumentExtractorEntry } from "./document-extractor-types.js";
-import { loadPluginManifestRegistry } from "./manifest-registry.js";
+import { loadPluginManifestRegistrySync } from "./manifest-registry.js";
 import type { PluginManifestRecord } from "./manifest-registry.js";
 
 function compareExtractors(
@@ -30,7 +30,7 @@ function resolveBundledDocumentExtractorCompatPluginIds(params: {
 }): string[] {
   const onlyPluginIdSet =
     params.onlyPluginIds && params.onlyPluginIds.length > 0 ? new Set(params.onlyPluginIds) : null;
-  return loadPluginManifestRegistry({
+  return loadPluginManifestRegistrySync({
     config: params.config,
     workspaceDir: params.workspaceDir,
     env: params.env,
@@ -74,7 +74,7 @@ function resolveEnabledBundledDocumentExtractorPlugins(params: {
   });
   const onlyPluginIdSet =
     params.onlyPluginIds && params.onlyPluginIds.length > 0 ? new Set(params.onlyPluginIds) : null;
-  return loadPluginManifestRegistry({
+  return loadPluginManifestRegistrySync({
     config: activation.config,
     workspaceDir: params.workspaceDir,
     env: params.env,

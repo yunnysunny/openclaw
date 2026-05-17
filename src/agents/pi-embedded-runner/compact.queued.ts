@@ -41,7 +41,7 @@ import type { EmbeddedPiCompactResult } from "./types.js";
 export async function compactEmbeddedPiSession(
   params: CompactEmbeddedPiSessionParams,
 ): Promise<EmbeddedPiCompactResult> {
-  ensureRuntimePluginsLoaded({
+  await ensureRuntimePluginsLoadedAsync({
     config: params.config,
     workspaceDir: params.workspaceDir,
     allowGatewaySubagentBinding: params.allowGatewaySubagentBinding,

@@ -9,6 +9,7 @@ import {
 import {
   loadPluginManifestRegistryAsync,
   loadPluginManifestRegistrySync,
+  resolveManifestContractPluginIds,
   type PluginManifestRecord,
   type PluginManifestRegistry,
 } from "./manifest-registry.js";
@@ -638,5 +639,44 @@ export async function resolveCatalogHookProviderPluginIdsAsync(params: {
   const bundledCompatPluginIds = await resolveBundledProviderCompatPluginIdsAsync(params);
   return [...new Set([...enabledProviderPluginIds, ...bundledCompatPluginIds])].toSorted(
     (left, right) => left.localeCompare(right),
+  );
+}
+
+export function resolveExternalAuthProfileProviderPluginIds(params: {
+  config?: PluginLoadOptions["config"];
+  workspaceDir?: string;
+  env?: PluginLoadOptions["env"];
+}): string[] {
+  return resolveManifestContractPluginIds({
+    contract: "externalAuthProviders",
+    config: params.config,
+    workspaceDir: params.workspaceDir,
+    env: params.env,
+  });
+}
+
+export function resolveExternalAuthProfileCompatFallbackPluginIds(params: {
+  config?: PluginLoadOptions["config"];
+  workspaceDir?: string;
+  env?: PluginLoadOptions["env"];
+  declaredPluginIds?: ReadonlySet<string>;
+}): string[] {
+  // Deprecated compatibility fallback for provider plugins that still implement
+  // resolveExternalOAuthProfiles or omit contracts.externalAuthProviders.
+  const declaredPluginIds =
+    params.declaredPluginIds ?? new Set(resolveExternalAuthProfileProviderPluginIds(params));
+  const registry = loadPluginManifestRegistrySync(params);
+  const normalizedConfig = normalizePluginsConfig(params.config?.plugins);
+  return listManifestPluginIds(
+    registry,
+    (plugin) =>
+      plugin.origin !== "bundled" &&
+      plugin.providers.length > 0 &&
+      !declaredPluginIds.has(plugin.id) &&
+      isProviderPluginEligibleForRuntimeOwnerActivation({
+        plugin,
+        normalizedConfig,
+        rootConfig: params.config,
+      }),
   );
 }

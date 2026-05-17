@@ -292,7 +292,7 @@ describe("activation planner", () => {
   });
 
   it("returns capability reasons from explicit hints and manifest ownership", () => {
-    mocks.loadPluginManifestRegistry.mockReturnValue({
+    mocks.loadPluginManifestRegistrySync.mockReturnValue({
       plugins: [
         {
           id: "explicit-provider",

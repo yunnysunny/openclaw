@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("./manifest-registry.js", () => ({
-  loadPluginManifestRegistry: () => ({ diagnostics: [], plugins: mocks.plugins }),
+  loadPluginManifestRegistrySync: () => ({ diagnostics: [], plugins: mocks.plugins }),
 }));
 
 vi.mock("./config-state.js", () => ({

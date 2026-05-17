@@ -80,7 +80,6 @@ export async function resolvePluginDiscoveryProviders(
 ): Promise<ProviderPlugin[]> {
   return resolveRuntimePluginDiscoveryProviders(params);
 }
-}
 
 export async function groupPluginDiscoveryProvidersByOrder(
   providers: ProviderPlugin[],
@@ -186,10 +185,10 @@ export function runProviderStaticCatalog(params: {
   return params.provider.staticCatalog?.run({
     config: {},
     env: {},
-    resolveProviderApiKey: () => ({
+    resolveProviderApiKey: async () => ({
       apiKey: undefined,
     }),
-    resolveProviderAuth: () => ({
+    resolveProviderAuth: async () => ({
       apiKey: undefined,
       mode: "none",
       source: "none",

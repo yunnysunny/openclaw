@@ -358,7 +358,7 @@ describe("setup-registry getJiti", () => {
       "export default { register(api) { api.registerProvider({ id: 'openai', label: 'OpenAI', auth: [] }); api.registerCliBackend({ id: 'codex-cli', config: { command: 'codex' } }); } };\n",
       "utf-8",
     );
-    mocks.loadPluginManifestRegistry.mockReturnValue({
+    mocks.loadPluginManifestRegistrySync.mockReturnValue({
       plugins: [
         {
           id: "openai",
@@ -397,7 +397,7 @@ describe("setup-registry getJiti", () => {
     expect(fs.existsSync(path.join(process.cwd(), "extensions", "openai", "setup-api.ts"))).toBe(
       true,
     );
-    mocks.loadPluginManifestRegistry.mockReturnValue({
+    mocks.loadPluginManifestRegistrySync.mockReturnValue({
       plugins: [
         {
           id: "workspace-openai",
@@ -424,7 +424,7 @@ describe("setup-registry getJiti", () => {
   it("reports setup descriptor drift without rejecting runtime registrations", () => {
     const pluginRoot = makeTempDir();
     fs.writeFileSync(path.join(pluginRoot, "setup-api.js"), "export default {};\n", "utf-8");
-    mocks.loadPluginManifestRegistry.mockReturnValue({
+    mocks.loadPluginManifestRegistrySync.mockReturnValue({
       plugins: [
         {
           id: "openai",
@@ -512,7 +512,7 @@ describe("setup-registry getJiti", () => {
       "export default { register(api) { api.registerProvider({ id: 'openai', label: 'OpenAI', auth: [] }); } };\n",
       "utf-8",
     );
-    mocks.loadPluginManifestRegistry.mockReturnValue({
+    mocks.loadPluginManifestRegistrySync.mockReturnValue({
       plugins: [
         {
           id: "workspace-shadow",

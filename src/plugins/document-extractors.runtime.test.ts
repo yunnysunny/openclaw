@@ -19,7 +19,7 @@ vi.mock("./document-extractor-public-artifacts.js", () => ({
 }));
 
 vi.mock("./manifest-registry.js", () => ({
-  loadPluginManifestRegistry: vi.fn(() => ({
+  loadPluginManifestRegistrySync: vi.fn(() => ({
     plugins: [
       {
         id: "document-extract",

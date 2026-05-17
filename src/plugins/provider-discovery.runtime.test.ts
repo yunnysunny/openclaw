@@ -3,14 +3,14 @@ import type { PluginManifestRecord } from "./manifest-registry.js";
 import type { ProviderPlugin } from "./types.js";
 
 const mocks = vi.hoisted(() => ({
-  loadPluginManifestRegistry: vi.fn(),
+  loadPluginManifestRegistrySync: vi.fn(),
   resolveDiscoveredProviderPluginIds: vi.fn(),
   resolvePluginProviders: vi.fn(),
   loadSource: vi.fn(),
 }));
 
 vi.mock("./manifest-registry.js", () => ({
-  loadPluginManifestRegistry: mocks.loadPluginManifestRegistry,
+  loadPluginManifestRegistrySync: mocks.loadPluginManifestRegistrySync,
 }));
 
 vi.mock("./providers.js", () => ({
@@ -78,7 +78,7 @@ describe("resolvePluginDiscoveryProvidersRuntime", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.resolveDiscoveredProviderPluginIds.mockReturnValue(["deepseek"]);
-    mocks.loadPluginManifestRegistry.mockReturnValue({
+    mocks.loadPluginManifestRegistrySync.mockReturnValue({
       plugins: [createManifestPlugin("deepseek")],
       diagnostics: [],
     });
@@ -110,7 +110,7 @@ describe("resolvePluginDiscoveryProvidersRuntime", () => {
       "kilocode",
       "unused",
     ]);
-    mocks.loadPluginManifestRegistry.mockReturnValue({
+    mocks.loadPluginManifestRegistrySync.mockReturnValue({
       plugins: [
         createManifestPlugin("codex"),
         createManifestPlugin("deepseek"),

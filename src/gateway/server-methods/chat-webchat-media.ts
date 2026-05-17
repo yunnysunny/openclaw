@@ -213,7 +213,7 @@ export async function buildWebchatAssistantMessageFromReplyPayloads(
           continue;
         }
         seenAudio.add(resolvedAudioPath);
-        const block = tryReadLocalAudioContentBlock(resolvedAudioPath);
+        const block = await tryReadLocalAudioContentBlock(resolvedAudioPath);
         if (block) {
           payloadMediaBlocks.push(block);
           hasAudio = true;

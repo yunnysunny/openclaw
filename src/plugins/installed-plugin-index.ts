@@ -13,7 +13,7 @@ import {
 } from "./install-source-info.js";
 import type { PluginManifestCommandAlias } from "./manifest-command-aliases.js";
 import {
-  loadPluginManifestRegistry,
+  loadPluginManifestRegistrySync,
   type PluginManifestRecord,
   type PluginManifestRegistry,
 } from "./manifest-registry.js";
@@ -390,7 +390,7 @@ function resolveRegistry(params: LoadInstalledPluginIndexParams): {
   if (params.candidates) {
     return {
       candidates: params.candidates,
-      registry: loadPluginManifestRegistry({
+      registry: loadPluginManifestRegistrySync({
         config: params.config,
         workspaceDir: params.workspaceDir,
         cache: false,
@@ -410,7 +410,7 @@ function resolveRegistry(params: LoadInstalledPluginIndexParams): {
   });
   return {
     candidates: discovery.candidates,
-    registry: loadPluginManifestRegistry({
+    registry: loadPluginManifestRegistrySync({
       config: params.config,
       workspaceDir: params.workspaceDir,
       cache: false,

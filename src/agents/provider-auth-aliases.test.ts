@@ -1,16 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
 
-const loadPluginManifestRegistry = vi.hoisted(() => vi.fn());
+const loadPluginManifestRegistrySync = vi.hoisted(() => vi.fn());
 
 vi.mock("../plugins/manifest-registry.js", () => ({
-  loadPluginManifestRegistry,
+  loadPluginManifestRegistrySync,
 }));
 
 import { resolveProviderIdForAuth } from "./provider-auth-aliases.js";
 
 describe("provider auth aliases", () => {
   it("treats deprecated auth choice ids as provider auth aliases", () => {
-    loadPluginManifestRegistry.mockReturnValue({
+    loadPluginManifestRegistrySync.mockReturnValue({
       plugins: [
         {
           id: "openai",

@@ -229,7 +229,7 @@ describe("resolvePluginCapabilityProviders", () => {
     });
 
     expectResolvedCapabilityProviderIds(providers, ["deepgram"]);
-    expect(mocks.loadPluginManifestRegistry).not.toHaveBeenCalled();
+    expect(mocks.loadPluginManifestRegistrySync).not.toHaveBeenCalled();
     expect(mocks.resolveRuntimePluginRegistry).toHaveBeenCalledWith();
   });
 
@@ -263,7 +263,7 @@ describe("resolvePluginCapabilityProviders", () => {
     });
 
     expectResolvedCapabilityProviderIds(providers, ["microsoft"]);
-    expect(mocks.loadPluginManifestRegistry).not.toHaveBeenCalled();
+    expect(mocks.loadPluginManifestRegistrySync).not.toHaveBeenCalled();
     expect(mocks.resolveRuntimePluginRegistry).toHaveBeenCalledWith();
   });
 
@@ -285,7 +285,7 @@ describe("resolvePluginCapabilityProviders", () => {
         }),
       },
     } as never);
-    mocks.loadPluginManifestRegistry.mockReturnValue({
+    mocks.loadPluginManifestRegistrySync.mockReturnValue({
       plugins: [
         {
           id: "microsoft",
@@ -345,7 +345,7 @@ describe("resolvePluginCapabilityProviders", () => {
         }),
       },
     } as never);
-    mocks.loadPluginManifestRegistry.mockReturnValue({
+    mocks.loadPluginManifestRegistrySync.mockReturnValue({
       plugins: [
         {
           id: "microsoft",
@@ -433,7 +433,7 @@ describe("resolvePluginCapabilityProviders", () => {
         },
       } as never,
     );
-    mocks.loadPluginManifestRegistry.mockReturnValue({
+    mocks.loadPluginManifestRegistrySync.mockReturnValue({
       plugins: [
         {
           id: "microsoft",

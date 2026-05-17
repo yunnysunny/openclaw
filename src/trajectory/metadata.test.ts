@@ -3,7 +3,7 @@ import { REDACTED_SENTINEL } from "../config/redact-snapshot.js";
 import { createEmptyPluginRegistry } from "../plugins/registry-empty.js";
 import { resetPluginRuntimeStateForTest, setActivePluginRegistry } from "../plugins/runtime.js";
 
-const loadPluginManifestRegistry = vi.hoisted(() => vi.fn(() => ({ plugins: [] })));
+const loadPluginManifestRegistrySync = vi.hoisted(() => vi.fn(() => ({ plugins: [] })));
 
 vi.mock("../infra/git-commit.js", () => ({
   resolveCommitHash: () => "abcdef0",
@@ -19,7 +19,7 @@ vi.mock("../infra/os-summary.js", () => ({
 }));
 
 vi.mock("../plugins/manifest-registry.js", () => ({
-  loadPluginManifestRegistry,
+  loadPluginManifestRegistrySync,
 }));
 
 import { buildTrajectoryArtifacts, buildTrajectoryRunMetadata } from "./metadata.js";

@@ -10,7 +10,7 @@ import {
   sanitizeSupportSnapshotValue,
   type SupportRedactionContext,
 } from "../logging/diagnostic-support-redaction.js";
-import { loadPluginManifestRegistry } from "../plugins/manifest-registry.js";
+import { loadPluginManifestRegistrySync } from "../plugins/manifest-registry.js";
 import { getActivePluginRegistry, listImportedRuntimePluginIds } from "../plugins/runtime.js";
 import { VERSION } from "../version.js";
 
@@ -136,7 +136,7 @@ function buildPluginsFromManifest(params: {
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
 }) {
-  const registry = loadPluginManifestRegistry({
+  const registry = loadPluginManifestRegistrySync({
     config: params.config,
     workspaceDir: params.workspaceDir,
     env: params.env,

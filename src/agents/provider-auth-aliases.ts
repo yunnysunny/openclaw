@@ -143,17 +143,6 @@ function buildProviderAuthAliasMapFromRegistry(
   return aliases;
 }
 
-export function resolveProviderAuthAliasMap(
-  params?: ProviderAuthAliasLookupParams,
-): Record<string, string> {
-  const registry = loadPluginManifestRegistrySync({
-    config: params?.config,
-    workspaceDir: params?.workspaceDir,
-    env: params?.env,
-  });
-  return buildProviderAuthAliasMapFromRegistry(registry, params);
-}
-
 export async function resolveProviderIdForAuthAsync(
   provider: string,
   params?: ProviderAuthAliasLookupParams,

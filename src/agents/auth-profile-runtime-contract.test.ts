@@ -14,9 +14,9 @@ import { runAgentAttempt } from "./command/attempt-execution.js";
 import type { EmbeddedPiRunResult } from "./pi-embedded.js";
 import { resolveProviderIdForAuth } from "./provider-auth-aliases.js";
 
-type LoadPluginManifestRegistry = typeof ManifestRegistryModule.loadPluginManifestRegistry;
+type LoadPluginManifestRegistry = typeof ManifestRegistryModule.loadPluginManifestRegistrySync;
 
-const loadPluginManifestRegistry = vi.hoisted(() =>
+const loadPluginManifestRegistrySync = vi.hoisted(() =>
   vi.fn<LoadPluginManifestRegistry>(() => ({
     plugins: [],
     diagnostics: [],
@@ -29,7 +29,7 @@ vi.mock("../plugins/manifest-registry.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../plugins/manifest-registry.js")>();
   return {
     ...actual,
-    loadPluginManifestRegistry,
+    loadPluginManifestRegistrySync,
   };
 });
 
@@ -173,7 +173,7 @@ describe("Auth profile runtime contract - Pi and CLI adapter", () => {
   beforeEach(async () => {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-auth-contract-"));
     storePath = path.join(tmpDir, "sessions.json");
-    loadPluginManifestRegistry.mockReset().mockReturnValue(createAuthAliasManifestRegistry());
+    loadPluginManifestRegistrySync.mockReset().mockReturnValue(createAuthAliasManifestRegistry());
     runCliAgentMock.mockReset();
     runEmbeddedPiAgentMock.mockReset();
     runCliAgentMock.mockResolvedValue(makeCliResult("ok"));

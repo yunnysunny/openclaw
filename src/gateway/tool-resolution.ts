@@ -183,8 +183,16 @@ export async function resolveGatewayScopedToolsAsync(params: {
     messageProvider: params.messageProvider,
     accountId: params.accountId ?? null,
   });
-  const subagentPolicy = isSubagentSessionKey(params.sessionKey)
-    ? resolveSubagentToolPolicy(params.cfg)
+  const asyncSubagentStore = resolveSubagentCapabilityStore(params.sessionKey, {
+    cfg: params.cfg,
+  });
+  const subagentPolicy = isSubagentEnvelopeSession(params.sessionKey, {
+    cfg: params.cfg,
+    store: asyncSubagentStore,
+  })
+    ? resolveSubagentToolPolicyForSession(params.cfg, params.sessionKey, {
+        store: asyncSubagentStore,
+      })
     : undefined;
   const workspaceDir = resolveAgentWorkspaceDir(
     params.cfg,

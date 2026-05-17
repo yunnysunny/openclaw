@@ -18,7 +18,7 @@ import {
   passesManifestOwnerBasePolicy,
 } from "../plugins/manifest-owner-policy.js";
 import {
-  loadPluginManifestRegistry,
+  loadPluginManifestRegistrySync,
   type PluginManifestRecord,
 } from "../plugins/manifest-registry.js";
 import { resolveProviderUsageAuthWithPlugin } from "../plugins/provider-runtime.js";
@@ -183,7 +183,7 @@ function resolveUsageCredentialProviderIds(params: {
   const providerIds = new Set(normalizeProviderIds([params.provider]));
   const providerIdSet = new Set(providerIds);
   try {
-    const registry = loadPluginManifestRegistry({
+    const registry = loadPluginManifestRegistrySync({
       config: params.state.cfg,
       env: params.state.env,
     });
