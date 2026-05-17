@@ -89,7 +89,7 @@ import {
   incrementPresenceVersion,
   refreshGatewayHealthSnapshot,
 } from "./server/health-state.js";
-import { resolveHookClientIpConfig } from "./server/hooks.js";
+import { resolveHookClientIpConfig } from "./server/hook-client-ip-config.js";
 import { createReadinessChecker } from "./server/readiness.js";
 import { loadGatewayTlsRuntime } from "./server/tls.js";
 import { resolveSharedGatewaySessionGeneration } from "./server/ws-shared-generation.js";
@@ -466,7 +466,7 @@ export async function startGatewayServer(
   const serverStartedAt = Date.now();
   let startupSidecarsReady = minimalTestGateway;
   const channelManager = createChannelManager({
-    loadConfig: () =>
+    getRuntimeConfig: () =>
       applyPluginAutoEnable({
         config: loadConfig(),
         env: process.env,
@@ -658,7 +658,7 @@ export async function startGatewayServer(
         setSkillsRefreshTimer: (timer) => {
           runtimeState.skillsRefreshTimer = timer;
         },
-        loadConfig,
+        getRuntimeConfig: () => loadConfig(),
       }),
     );
     runtimeState.bonjourStop = earlyRuntime.bonjourStop;
@@ -716,6 +716,8 @@ export async function startGatewayServer(
     const gatewayRequestContext = createGatewayRequestContext({
       deps,
       runtimeState,
+      getRuntimeConfig: () => loadConfig(),
+      broadcastVoiceWakeRoutingChanged: () => {},
       execApprovalManager,
       pluginApprovalManager,
       loadGatewayModelCatalog,

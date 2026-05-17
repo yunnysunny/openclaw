@@ -254,7 +254,7 @@ export const handleTtsCommands: CommandHandler = async (params, allowTextCommand
       };
     }
     const latest = await readLatestAssistantTextFromSessionTranscript(
-      params.sessionEntry.sessionFile,
+      params.sessionEntry.sessionFile ?? "",
     );
     const latestText = latest?.text.trim();
     if (!latestText || isSilentReplyPayloadText(latestText)) {

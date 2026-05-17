@@ -2211,6 +2211,7 @@ export async function runEmbeddedAttempt(
           channelId: params.messageChannel ?? params.messageProvider ?? undefined,
         };
         const hookResult = await resolvePromptBuildHookResult({
+          config: params.config ?? ({} as never),
           prompt: params.prompt,
           messages: activeSession.messages,
           hookCtx,
@@ -2591,6 +2592,7 @@ export async function runEmbeddedAttempt(
               await abortable(activeSession.prompt(effectivePrompt));
             }
             rewriteSubmittedPromptTranscript({
+              messages: [],
               sessionManager,
               sessionFile: params.sessionFile,
               previousLeafId: transcriptLeafId,

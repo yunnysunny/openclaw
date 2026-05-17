@@ -167,7 +167,11 @@ export function normalizeProviderModelIdWithManifest(params: {
 
   if (!hasProviderPrefix(modelId)) {
     for (const rule of policy.prefixWhenBareAfterAliasStartsWith ?? []) {
-      if (normalizeLowercaseStringOrEmpty(modelId).startsWith(rule.modelPrefix.toLowerCase())) {
+      const matchPrefix = rule.modelPrefix ?? rule.aliasPrefix;
+      if (
+        matchPrefix &&
+        normalizeLowercaseStringOrEmpty(modelId).startsWith(matchPrefix.toLowerCase())
+      ) {
         return formatPrefixedModelId(rule.prefix, modelId);
       }
     }

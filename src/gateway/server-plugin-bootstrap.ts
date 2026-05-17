@@ -94,18 +94,14 @@ export function prepareGatewayPluginLoad(params: GatewayPluginBootstrapParams) {
     autoEnabledReasons: autoEnabled.autoEnabledReasons,
     workspaceDir: params.workspaceDir,
     log: params.log,
-    ...(params.coreGatewayHandlers !== undefined && {
-      coreGatewayHandlers: params.coreGatewayHandlers,
-    }),
+    coreGatewayHandlers: params.coreGatewayHandlers ?? {},
     ...(params.coreGatewayMethodNames !== undefined && {
       coreGatewayMethodNames: params.coreGatewayMethodNames,
     }),
     baseMethods: params.baseMethods,
     pluginIds: params.pluginIds,
-    pluginLookUpTable: params.pluginLookUpTable,
     preferSetupRuntimeForChannelPlugins: params.preferSetupRuntimeForChannelPlugins,
     suppressPluginInfoLogs: params.suppressPluginInfoLogs,
-    bundledRuntimeDepsInstaller: params.bundledRuntimeDepsInstaller,
   });
   return finalizePrepareGatewayPluginLoad(params, resolvedConfig, loaded);
 }
@@ -142,7 +138,7 @@ export async function prepareGatewayPluginLoadAsync(
     autoEnabledReasons: autoEnabled.autoEnabledReasons,
     workspaceDir: params.workspaceDir,
     log: params.log,
-    coreGatewayHandlers: params.coreGatewayHandlers,
+    coreGatewayHandlers: params.coreGatewayHandlers ?? {},
     baseMethods: params.baseMethods,
     pluginIds: params.pluginIds,
     preferSetupRuntimeForChannelPlugins: params.preferSetupRuntimeForChannelPlugins,

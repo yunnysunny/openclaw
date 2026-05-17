@@ -6,6 +6,8 @@ export type BundledPluginSource = {
   pluginId: string;
   localPath: string;
   npmSpec?: string;
+  requiresConfig?: boolean;
+  configSchema?: Record<string, unknown>;
 };
 
 export type BundledPluginLookup =

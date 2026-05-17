@@ -39,6 +39,7 @@ import {
   type PluginManifestConfigContracts,
   type PluginManifest,
   type PluginManifestChannelConfig,
+  type PluginManifestChannelCommandDefaults,
   type PluginManifestContracts,
   type PluginManifestMediaUnderstandingProviderMetadata,
   type PluginManifestModelCatalog,
@@ -155,6 +156,7 @@ export type PluginManifestRecord = {
     label?: string;
     blurb?: string;
     preferOver?: readonly string[];
+    commands?: PluginManifestChannelCommandDefaults;
   };
 };
 

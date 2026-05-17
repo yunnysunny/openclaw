@@ -155,3 +155,8 @@ export async function resolveOllamaDiscoveryResult(params: {
     },
   };
 }
+
+export function shouldUseSyntheticOllamaAuth(_providerConfig: unknown): boolean {
+  return false;
+}
+

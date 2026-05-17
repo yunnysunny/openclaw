@@ -13,3 +13,6 @@ export const loadPluginManifestRegistryAsync = loadPluginManifestRegistryAsyncIm
 export const collectChannelSchemaMetadata = collectChannelSchemaMetadataImpl;
 export const collectPluginSchemaMetadata = collectPluginSchemaMetadataImpl;
 export const buildConfigSchema = buildConfigSchemaImpl;
+
+export const collectBundledChannelConfigs: ((params: unknown) => Record<string, unknown>) | undefined = undefined;
+

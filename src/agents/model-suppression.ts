@@ -89,3 +89,13 @@ export async function buildSuppressedBuiltInModelErrorAsync(params: {
 }): Promise<string | undefined> {
   return (await resolveBuiltInModelSuppressionAsync(params))?.errorMessage;
 }
+
+export function shouldSuppressBuiltInModelFromManifest(_params: {
+  provider?: string;
+  id?: string;
+  baseUrl?: string;
+  config?: unknown;
+}): boolean {
+  return false;
+}
+

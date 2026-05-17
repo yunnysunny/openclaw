@@ -1773,7 +1773,6 @@ export function createConfigIO(
         validateConfigObjectWithPlugins(effectiveConfigRaw, {
           env: deps.env,
           pluginValidation: overrides.pluginValidation,
-          loadPluginMetadataSnapshot: loadValidationPluginMetadataSnapshot,
         }),
       );
       if (!validated.ok) {
