@@ -121,7 +121,7 @@ async function validatePackageExtensionEntry(params: {
     boundaryLabel: "plugin package directory",
   });
   if (!opened.ok) {
-    return matchRootFileOpenFailure(opened, {
+    return (matchRootFileOpenFailure(opened, {
       path: () => ({ ok: false, error: `${params.label} not found: ${params.entry}` }),
       io: () => ({ ok: false, error: `${params.label} unreadable: ${params.entry}` }),
       validation: () => ({
@@ -132,7 +132,7 @@ async function validatePackageExtensionEntry(params: {
         ok: false,
         error: `${params.label} failed plugin directory boundary checks: ${params.entry}`,
       }),
-    });
+    }) as ExtensionEntryValidation);
   }
   fs.closeSync(opened.fd);
   return { ok: true, exists: true };
@@ -336,7 +336,7 @@ function resolvePackageEntrySource(params: {
       rejectHardlinks,
     });
     if (!opened.ok) {
-      return matchRootFileOpenFailure(opened, {
+      return matchRootFileOpenFailure<string | null>(opened, {
         path: () => null,
         io: () => {
           params.diagnostics.push({

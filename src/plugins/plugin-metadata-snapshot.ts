@@ -9,7 +9,7 @@ import {
   loadPluginManifestRegistryForInstalledIndex,
   resolveInstalledManifestRegistryIndexFingerprint,
 } from "./manifest-registry-installed.js";
-import { loadPluginManifestRegistry, type PluginManifestRecord } from "./manifest-registry.js";
+import { loadPluginManifestRegistrySync, type PluginManifestRecord } from "./manifest-registry.js";
 import { resolvePluginControlPlaneFingerprint } from "./plugin-control-plane-context.js";
 import type {
   LoadPluginMetadataSnapshotParams,
@@ -214,7 +214,7 @@ function loadPluginMetadataSnapshotImpl(
   const manifestStartedAt = performance.now();
   const manifestRegistry =
     index.plugins.length === 0
-      ? loadPluginManifestRegistry({
+      ? loadPluginManifestRegistrySync({
           config: params.config,
           workspaceDir: params.workspaceDir,
           env: params.env,
@@ -230,7 +230,9 @@ function loadPluginMetadataSnapshotImpl(
         });
   const manifestRegistryMs = performance.now() - manifestStartedAt;
   const normalizePluginId = createPluginRegistryIdNormalizer(index, { manifestRegistry });
-  const byPluginId = new Map(manifestRegistry.plugins.map((plugin) => [plugin.id, plugin]));
+  const byPluginId = new Map<string, PluginManifestRecord>(
+    manifestRegistry.plugins.map((plugin: PluginManifestRecord) => [plugin.id, plugin]),
+  );
   const ownerMapsStartedAt = performance.now();
   const owners = buildPluginMetadataOwnerMaps(manifestRegistry.plugins);
   const ownerMapsMs = performance.now() - ownerMapsStartedAt;

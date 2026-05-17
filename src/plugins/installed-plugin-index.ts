@@ -95,9 +95,11 @@ export type InstalledPluginIndexRecord = {
   packageInstall?: PluginInstallSourceInfo;
   manifestPath: string;
   manifestHash: string;
+  manifestFile?: import("./installed-plugin-index-hash.js").InstalledPluginFileSignature;
   packageJson?: {
     path: string;
     hash: string;
+    fileSignature?: import("./installed-plugin-index-hash.js").InstalledPluginFileSignature;
   };
   rootDir: string;
   origin: PluginManifestRecord["origin"];

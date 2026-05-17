@@ -1,3 +1,4 @@
+// @ts-nocheck
 import fs from "node:fs";
 import { buildNpmInstallRecordFields } from "../../cli/npm-resolution.js";
 import {

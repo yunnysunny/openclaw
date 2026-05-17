@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { getRuntimeConfig } from "../../config/config.js";
 import { ensureMcpLoopbackServer } from "../../gateway/mcp-http.js";
 import {

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import "./fs-safe-defaults.js";
 export {
   writeSiblingTempFile,

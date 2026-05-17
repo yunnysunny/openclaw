@@ -27,6 +27,7 @@ type ReadOnlyChannelPluginOptions = {
   cache?: boolean;
   stateDir?: string;
   includeSetupRuntimeFallback?: boolean;
+  includeSetupFallbackPlugins?: boolean;
 };
 
 type ReadOnlyChannelPluginResolution = {

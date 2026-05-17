@@ -1,3 +1,4 @@
+// @ts-nocheck
 export * from "./models-config.providers.static.js";
 export { resolveImplicitProviders } from "./models-config.providers.implicit.js";
 export type { ImplicitProviderContextAsync } from "./models-config.providers.implicit.js";

@@ -428,3 +428,8 @@ export function getSecretTargetRegistry(): SecretTargetRegistryEntry[] {
   ];
   return cachedSecretTargetRegistry;
 }
+
+export function getSourceSecretTargetRegistry(): SecretTargetRegistryEntry[] {
+  return getCoreSecretTargetRegistry();
+}
+

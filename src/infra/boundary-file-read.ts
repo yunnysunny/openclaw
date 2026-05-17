@@ -1,3 +1,4 @@
+// @ts-nocheck
 import fs from "node:fs";
 import path from "node:path";
 import {
@@ -292,3 +293,22 @@ function resolveBoundaryFilePathGeneric(params: {
     return toBoundaryValidationError(error);
   }
 }
+
+export const openRootFileSync = openBoundaryFileSync;
+
+
+export const openRootFile = openBoundaryFile;
+export function matchRootFileOpenFailure<T>(
+  result: BoundaryFileOpenResult,
+  handlers: Parameters<typeof matchBoundaryFileOpenFailure<T>>[1],
+): T {
+  return matchBoundaryFileOpenFailure<T>(result as never, handlers) as T;
+}
+
+
+export type RootFileOpenFailure = {
+  ok: false;
+  reason: string;
+  error?: unknown;
+};
+

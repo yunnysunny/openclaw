@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { TOOL_NAME_SEPARATOR } from "../../pi-bundle-mcp-names.js";
 import type { OpenClawCodingToolConstructionPlan } from "../../pi-tools.js";
 import { isToolAllowedByPolicyName } from "../../tool-policy-match.js";

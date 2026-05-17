@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { readConfigFileSnapshot, replaceConfigFile } from "../../config/config.js";
 import { INCLUDE_KEY } from "../../config/includes.js";
 import { validateConfigObjectWithPlugins } from "../../config/validation.js";

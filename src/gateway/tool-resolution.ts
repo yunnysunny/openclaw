@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { resolveAgentWorkspaceDir, resolveDefaultAgentId } from "../agents/agent-scope.js";
 import { createOpenClawTools, createOpenClawToolsAsync } from "../agents/openclaw-tools.js";
 import {

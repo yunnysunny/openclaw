@@ -306,7 +306,7 @@ async function readFileProviderPayload(params: {
       }
       return parsed;
     } catch (error) {
-      if (error instanceof FsSafeError && error.code === "timeout") {
+      if (error instanceof FsSafeError && (error as FsSafeError & { code?: string }).code === "timeout") {
         throw new Error(`File provider "${params.providerName}" timed out after ${timeoutMs}ms.`, {
           cause: error,
         });

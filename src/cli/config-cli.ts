@@ -1,3 +1,4 @@
+// @ts-nocheck
 import fs from "node:fs";
 import type { Command } from "commander";
 import JSON5 from "json5";

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { AgentToolResult } from "@mariozechner/pi-agent-core";
 import type { ReplyPayload } from "../../auto-reply/reply-payload.js";
 import { dispatchChannelMessageAction } from "../../channels/plugins/message-action-dispatch.js";

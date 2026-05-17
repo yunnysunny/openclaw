@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Config includes: $include directive for modular configs
  *

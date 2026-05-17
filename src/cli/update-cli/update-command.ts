@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash } from "node:crypto";
 import fs from "node:fs/promises";

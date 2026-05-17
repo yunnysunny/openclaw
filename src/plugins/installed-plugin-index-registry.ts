@@ -29,7 +29,6 @@ export function resolveInstalledPluginIndexRegistry(params: LoadInstalledPluginI
     workspaceDir: params.workspaceDir,
     extraPaths: normalized.loadPaths,
     env: params.env,
-    installRecords,
   });
   return {
     candidates: discovery.candidates,

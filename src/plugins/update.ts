@@ -962,7 +962,7 @@ export async function syncPluginsForUpdateChannel(params: {
       }
 
       const result = await installPluginFromNpmSpec({
-        spec: bridge.npmSpec,
+        spec: bridge.npmSpec ?? "",
         mode: "update",
         expectedPluginId: targetPluginId,
         logger,
@@ -970,7 +970,7 @@ export async function syncPluginsForUpdateChannel(params: {
       if (!result.ok) {
         const message = formatNpmInstallFailure({
           pluginId: targetPluginId,
-          spec: bridge.npmSpec,
+          spec: bridge.npmSpec ?? "",
           phase: "update",
           result,
         });

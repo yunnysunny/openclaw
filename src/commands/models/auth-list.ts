@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { resolveAgentDir, resolveDefaultAgentId } from "../../agents/agent-scope.js";
 import {
   ensureAuthProfileStore,

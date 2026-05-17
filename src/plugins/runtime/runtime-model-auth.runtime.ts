@@ -31,7 +31,6 @@ export async function getRuntimeAuthForModel(params: {
   const resolvedAuth = await resolveModelApiKey({
     model: params.model,
     cfg: params.cfg,
-    workspaceDir: params.workspaceDir,
   });
 
   if (!resolvedAuth.apiKey || resolvedAuth.mode === "aws-sdk") {
@@ -41,11 +40,9 @@ export async function getRuntimeAuthForModel(params: {
   const preparedAuth = await prepareProviderRuntimeAuth({
     provider: params.model.provider,
     config: params.cfg,
-    workspaceDir: params.workspaceDir,
     env: process.env,
     context: {
       config: params.cfg,
-      workspaceDir: params.workspaceDir,
       env: process.env,
       provider: params.model.provider,
       modelId: params.model.id,

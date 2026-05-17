@@ -177,3 +177,12 @@ export function createCachedPluginBoundaryModuleLoader<TModule>(
     return loaded;
   };
 }
+
+export function loadPluginBoundaryModule<TModule>(
+  modulePath: string,
+  loaders: unknown,
+  _meta?: unknown,
+): TModule {
+  return loadPluginBoundaryModuleWithJiti<TModule>(modulePath, loaders as PluginJitiLoaderCache);
+}
+

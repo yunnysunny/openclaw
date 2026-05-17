@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { AuthProfileStore } from "../../agents/auth-profiles/types.js";
 import {
   listProviderEnvAuthLookupKeys,

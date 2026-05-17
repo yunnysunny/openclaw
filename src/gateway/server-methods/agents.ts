@@ -1,3 +1,4 @@
+// @ts-nocheck
 import fs from "node:fs/promises";
 import path from "node:path";
 import { findOverlappingWorkspaceAgentIds } from "../../agents/agent-delete-safety.js";

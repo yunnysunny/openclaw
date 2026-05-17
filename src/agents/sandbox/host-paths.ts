@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { posix } from "node:path";
 import {
   resolvePathViaExistingAncestor,

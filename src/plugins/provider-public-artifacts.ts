@@ -20,6 +20,7 @@ export type BundledProviderPolicySurface = {
   resolveConfigApiKeyAsync?: (
     ctx: ProviderResolveConfigApiKeyContext,
   ) => Promise<string | null | undefined> | string | null | undefined;
+  resolveThinkingProfile?: (ctx: unknown) => unknown;
 };
 
 const bundledProviderPolicySurfaceCache = new Map<string, BundledProviderPolicySurface | null>();

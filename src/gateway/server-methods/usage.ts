@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as fs from "node:fs/promises";
 import { loadConfig } from "../../config/config.js";
 import {

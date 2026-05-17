@@ -20,4 +20,7 @@ export {
   resolveGatewayStartupPluginIds,
   resolveGatewayStartupPluginIds as resolveGatewayStartupPluginIdsFromRegistry,
   resolveGatewayStartupPluginIdsAsync,
+  loadGatewayStartupPluginPlan,
+  resolveGatewayStartupPluginPlanFromRegistry,
+  type GatewayStartupPluginPlan,
 } from "./gateway-startup-plugin-ids.js";

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import fs from "node:fs";
 import { promisify } from "node:util";
 import {

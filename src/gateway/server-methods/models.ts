@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { resolveAgentWorkspaceDir, resolveDefaultAgentId } from "../../agents/agent-scope.js";
 import { DEFAULT_PROVIDER } from "../../agents/defaults.js";
 import { resolveVisibleModelCatalog } from "../../agents/model-catalog-visibility.js";

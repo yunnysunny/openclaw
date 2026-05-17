@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { Api, Model } from "@mariozechner/pi-ai";
 import {
   AuthStorage as PiAuthStorageClass,

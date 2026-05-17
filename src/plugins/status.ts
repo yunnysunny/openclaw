@@ -299,7 +299,6 @@ function buildPluginReport(
     config,
     workspaceDir,
     env: params?.env,
-    manifestRegistry: metadataSnapshot?.manifestRegistry,
   });
   const effectiveConfig = withBundledPluginAllowlistCompat({
     config,

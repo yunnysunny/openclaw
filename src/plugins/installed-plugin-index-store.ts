@@ -233,7 +233,7 @@ function canRefreshPersistedPolicyState(
   ) {
     return false;
   }
-  return hasPolicyRefreshTargets(persisted, params.policyPluginIds);
+  return hasPolicyRefreshTargets(persisted, (params as { policyPluginIds?: readonly string[] }).policyPluginIds);
 }
 
 function refreshPersistedPolicyState(

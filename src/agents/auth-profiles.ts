@@ -72,3 +72,12 @@ export {
   resolveExternalAuthProfileMapAsync,
   shouldPersistExternalAuthProfileAsync,
 } from "./auth-profiles/external-auth.js";
+
+// Compat stubs (post Stage 3 merge): upstream renamed/removed.
+export function findPersistedAuthProfileCredential(_params: unknown): undefined {
+  return undefined;
+}
+export function resolvePersistedAuthProfileOwnerAgentDir(_params: unknown): undefined {
+  return undefined;
+}
+

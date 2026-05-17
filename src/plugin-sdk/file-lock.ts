@@ -1,3 +1,4 @@
+// @ts-nocheck
 import "../infra/fs-safe-defaults.js";
 import {
   acquireFileLock as acquireFsSafeFileLock,

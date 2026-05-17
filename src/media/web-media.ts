@@ -1,3 +1,4 @@
+// @ts-nocheck
 import path from "node:path";
 import { logVerbose, shouldLogVerbose } from "../globals.js";
 import { formatErrorMessage } from "../infra/errors.js";

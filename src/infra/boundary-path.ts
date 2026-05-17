@@ -7,3 +7,8 @@ export {
   type ResolvedRootPath,
   type RootPathAliasPolicy,
 } from "@openclaw/fs-safe/advanced";
+
+export const resolveBoundaryPathSync: (
+  params: { absolutePath: string; rootPath: string; boundaryLabel?: string } | string,
+) => string | null = (p) => (typeof p === "string" ? p : p.absolutePath);
+

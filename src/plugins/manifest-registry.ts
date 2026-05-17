@@ -158,6 +158,15 @@ export type PluginManifestRecord = {
     preferOver?: readonly string[];
     commands?: PluginManifestChannelCommandDefaults;
   };
+  packageChannel?: import("./manifest.js").PluginPackageChannel;
+  packageDependencies?: Record<string, string>;
+  packageOptionalDependencies?: Record<string, string>;
+  enabledByDefaultOnPlatforms?: NodeJS.Platform[];
+  toolMetadata?: Record<string, Record<string, unknown>>;
+  modelIdNormalization?: {
+    providers?: Record<string, import("./manifest.js").PluginManifestModelIdNormalizationProvider>;
+  };
+  packageManifest?: import("./manifest.js").OpenClawPackageManifest;
 };
 
 export type PluginManifestRegistry = {

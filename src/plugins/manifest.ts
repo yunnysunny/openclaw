@@ -1166,8 +1166,9 @@ export type PluginPackageChannelDoctorCapabilities = {
 
 export type PluginPackageInstall = {
   npmSpec?: string;
+  clawhubSpec?: string;
   localPath?: string;
-  defaultChoice?: "npm" | "local";
+  defaultChoice?: "npm" | "local" | "clawhub";
   minHostVersion?: string;
   allowInvalidConfigRecovery?: boolean;
   expectedIntegrity?: string;
@@ -1196,6 +1197,7 @@ export type OpenClawPackageManifest = {
   channel?: PluginPackageChannel;
   install?: PluginPackageInstall;
   startup?: OpenClawPackageStartup;
+  plugin?: { id?: string; [key: string]: unknown };
 };
 
 export const DEFAULT_PLUGIN_ENTRY_CANDIDATES = [
@@ -1240,3 +1242,13 @@ export function resolvePackageExtensionEntries(
   }
   return { status: "ok", entries };
 }
+
+export type PluginManifestCapabilityProviderAuthSignal = {
+  type: "oauth" | "api_key" | "token";
+  [key: string]: unknown;
+};
+export type PluginManifestCapabilityProviderConfigSignal = {
+  path: string;
+  [key: string]: unknown;
+};
+

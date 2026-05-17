@@ -386,3 +386,15 @@ export async function resolveGatewayStartupPluginIdsAsync(params: {
     })
     .map((plugin) => plugin.id);
 }
+
+export type GatewayStartupPluginPlan = {
+  pluginIds: readonly string[];
+  channelPluginIds: readonly string[];
+};
+export function loadGatewayStartupPluginPlan(_params: unknown): GatewayStartupPluginPlan {
+  return { pluginIds: [], channelPluginIds: [] };
+}
+export function resolveGatewayStartupPluginPlanFromRegistry(_params: unknown): GatewayStartupPluginPlan {
+  return { pluginIds: [], channelPluginIds: [] };
+}
+

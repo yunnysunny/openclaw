@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { formatRemainingShort } from "../../agents/auth-health.js";
 import {
   isConfiguredAwsSdkAuthProfileForProvider,

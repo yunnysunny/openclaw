@@ -143,6 +143,9 @@ type MemoryPluginState = {
   capability?: MemoryPluginCapabilityRegistration;
   corpusSupplements: MemoryCorpusSupplementRegistration[];
   promptSupplements: MemoryPromptSupplementRegistration[];
+  promptBuilder?: MemoryPromptSectionBuilder;
+  flushPlanResolver?: unknown;
+  runtime?: unknown;
 };
 
 const memoryPluginState: MemoryPluginState = {

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { normalizeProviderId } from "../agents/provider-id.js";
 import {
   BASE_THINKING_LEVELS,

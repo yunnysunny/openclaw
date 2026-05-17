@@ -961,3 +961,12 @@ export function isBundledPluginExtensionPath(params: {
       normalizedModulePath === root || normalizedModulePath.startsWith(`${root}${path.sep}`),
   );
 }
+
+// Compat aliases for upstream rename: Module → Jiti.
+export const createPluginLoaderModuleCacheKey = createPluginLoaderJitiCacheKey;
+export const resolvePluginLoaderModuleConfig = resolvePluginLoaderJitiConfig;
+export const resolvePluginLoaderTryNative = resolvePluginLoaderJitiTryNative;
+
+
+export const shouldPreferNativeModuleLoad: ((modulePath: string) => boolean) = () => false;
+

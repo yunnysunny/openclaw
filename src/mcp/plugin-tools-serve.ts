@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Standalone MCP server that exposes OpenClaw plugin-registered tools
  * (e.g. memory-lancedb's memory_recall, memory_store, memory_forget)

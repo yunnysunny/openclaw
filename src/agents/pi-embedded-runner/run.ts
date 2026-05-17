@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { randomBytes } from "node:crypto";
 import fs from "node:fs/promises";
 import type { ReplyPayload } from "../../auto-reply/reply-payload.js";

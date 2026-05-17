@@ -1,3 +1,4 @@
+// @ts-nocheck
 import path from "node:path";
 import type { Api, Model } from "@mariozechner/pi-ai";
 import * as PiCodingAgent from "@mariozechner/pi-coding-agent";

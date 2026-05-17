@@ -60,7 +60,7 @@ async function writeWizardConfigFile(config: OpenClawConfig): Promise<OpenClawCo
     commit: async (nextConfig, writeOptions) => {
       await replaceConfigFile({
         nextConfig,
-        writeOptions: { ...writeOptions, allowConfigSizeDrop: true },
+        writeOptions,
         afterWrite: { mode: "auto" },
       });
     },

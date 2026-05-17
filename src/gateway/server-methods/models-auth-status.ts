@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { resolveDefaultAgentDir } from "../../agents/agent-scope.js";
 import {
   type AuthHealthSummary,

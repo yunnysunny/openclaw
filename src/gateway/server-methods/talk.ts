@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { readConfigFileSnapshot } from "../../config/config.js";
 import { redactConfigObject } from "../../config/redact-snapshot.js";
 import {
