@@ -8,7 +8,8 @@ import type { PinnedDispatcherPolicy, SsrFPolicy } from "../infra/net/ssrf.js";
 import { getActivePluginRegistry } from "../plugins/runtime.js";
 import { resolveUserPath } from "../utils.js";
 import { maxBytesForKind, type MediaKind } from "./constants.js";
-import { fetchRemoteMedia } from "./fetch.js";
+import { readRemoteMediaBuffer } from "./fetch.js";
+import { basenameFromAnyPath, extnameFromAnyPath } from "./file-name.js";
 import {
   convertHeicToJpeg,
   hasAlphaChannel,
@@ -124,6 +125,10 @@ const HOST_READ_ALLOWED_DOCUMENT_MIMES = new Set([
   "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/gzip",
+  "application/x-7z-compressed",
+  "application/x-tar",
+  "application/zip",
   "text/csv",
   "text/markdown",
 ]);
@@ -318,7 +323,7 @@ function assertHostReadMediaAllowed(params: {
   }
   throw new LocalMediaAccessError(
     "path-not-allowed",
-    `Host-local media sends only allow buffer-verified images, audio, video, PDF, and Office documents (got ${sniffedMime ?? normalizedMime ?? "unknown"}).`,
+    `Host-local media sends only allow buffer-verified images, audio, video, PDF, Office documents, archives, CSV, and Markdown (got ${sniffedMime ?? normalizedMime ?? "unknown"}).`,
   );
 }
 
@@ -326,7 +331,7 @@ function toJpegFileName(fileName?: string): string | undefined {
   if (!fileName) {
     return undefined;
   }
-  const trimmed = fileName.trim();
+  const trimmed = basenameFromAnyPath(fileName.trim());
   if (!trimmed) {
     return fileName;
   }
@@ -529,7 +534,7 @@ async function loadWebMediaInternal(
           allowPrivateProxy: true,
         }
       : undefined;
-    const fetched = await fetchRemoteMedia({
+    const fetched = await readRemoteMediaBuffer({
       url: mediaUrl,
       fetchImpl,
       requestInit,
@@ -612,8 +617,8 @@ async function loadWebMediaInternal(
       buffer: data,
     });
   }
-  let fileName = path.basename(mediaUrl) || undefined;
-  if (fileName && !path.extname(fileName) && mime) {
+  let fileName = basenameFromAnyPath(mediaUrl) || undefined;
+  if (fileName && !extnameFromAnyPath(fileName) && mime) {
     const ext = extensionForMime(mime);
     if (ext) {
       fileName = `${fileName}${ext}`;

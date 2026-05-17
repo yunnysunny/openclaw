@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { findOverlappingWorkspaceAgentIds } from "../agents/agent-delete-safety.js";
 import { resolveAgentDir, resolveAgentWorkspaceDir } from "../agents/agent-scope.js";
+import { formatCliCommand } from "../cli/command-format.js";
 import { replaceConfigFile } from "../config/config.js";
 import { logConfigUpdated } from "../config/logging.js";
 import {
@@ -65,7 +66,9 @@ export async function agentsDeleteCommand(
 
   const input = opts.id?.trim();
   if (!input) {
-    runtime.error("Agent id is required.");
+    runtime.error(
+      `Agent id is required. Run ${formatCliCommand("openclaw agents list")} to choose one.`,
+    );
     runtime.exit(1);
     return;
   }
@@ -81,7 +84,9 @@ export async function agentsDeleteCommand(
   }
 
   if (findAgentEntryIndex(listAgentEntries(cfg), agentId) < 0) {
-    runtime.error(`Agent "${agentId}" not found.`);
+    runtime.error(
+      `Agent "${agentId}" not found. Run ${formatCliCommand("openclaw agents list")} to see configured agents.`,
+    );
     runtime.exit(1);
     return;
   }

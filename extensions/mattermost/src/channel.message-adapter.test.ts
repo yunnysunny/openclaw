@@ -13,6 +13,47 @@ vi.mock("./mattermost/send.js", () => ({
 
 import { mattermostPlugin } from "./channel.js";
 
+type MattermostMessageAdapter = NonNullable<typeof mattermostPlugin.message>;
+type MattermostMessageSender = NonNullable<MattermostMessageAdapter["send"]>;
+
+function requireMattermostMessageAdapter(): MattermostMessageAdapter {
+  const adapter = mattermostPlugin.message;
+  if (!adapter) {
+    throw new Error("Expected mattermost plugin to expose a channel message adapter");
+  }
+  return adapter;
+}
+
+function requireTextSender(
+  adapter: MattermostMessageAdapter,
+): NonNullable<MattermostMessageSender["text"]> {
+  const text = adapter.send?.text;
+  if (!text) {
+    throw new Error("Expected mattermost message adapter text sender");
+  }
+  return text;
+}
+
+function requireMediaSender(
+  adapter: MattermostMessageAdapter,
+): NonNullable<MattermostMessageSender["media"]> {
+  const media = adapter.send?.media;
+  if (!media) {
+    throw new Error("Expected mattermost message adapter media sender");
+  }
+  return media;
+}
+
+function requirePayloadSender(
+  adapter: MattermostMessageAdapter,
+): NonNullable<MattermostMessageSender["payload"]> {
+  const payload = adapter.send?.payload;
+  if (!payload) {
+    throw new Error("Expected mattermost message adapter payload sender");
+  }
+  return payload;
+}
+
 describe("mattermost channel message adapter", () => {
   beforeEach(() => {
     sendMessageMattermostMock.mockReset();
@@ -23,12 +64,14 @@ describe("mattermost channel message adapter", () => {
   });
 
   it("backs declared durable-final capabilities with outbound send proofs", async () => {
-    const adapter = mattermostPlugin.message;
-    expect(adapter).toBeDefined();
+    const adapter = requireMattermostMessageAdapter();
+    const sendText = requireTextSender(adapter);
+    const sendMedia = requireMediaSender(adapter);
+    const sendPayload = requirePayloadSender(adapter);
 
     const proveText = async () => {
       sendMessageMattermostMock.mockClear();
-      const result = await adapter!.send!.text!({
+      const result = await sendText({
         cfg: {},
         to: "channel:team-1",
         text: "hello",
@@ -45,7 +88,7 @@ describe("mattermost channel message adapter", () => {
 
     const proveMedia = async () => {
       sendMessageMattermostMock.mockClear();
-      const result = await adapter!.send!.media!({
+      const result = await sendMedia({
         cfg: {},
         to: "channel:team-1",
         text: "caption",
@@ -65,7 +108,7 @@ describe("mattermost channel message adapter", () => {
 
     const proveReplyThread = async () => {
       sendMessageMattermostMock.mockClear();
-      const result = await adapter!.send!.text!({
+      const result = await sendText({
         cfg: {},
         to: "channel:parent-1",
         text: "threaded",
@@ -82,7 +125,7 @@ describe("mattermost channel message adapter", () => {
 
     const proveExplicitReply = async () => {
       sendMessageMattermostMock.mockClear();
-      const result = await adapter!.send!.text!({
+      const result = await sendText({
         cfg: {},
         to: "channel:parent-1",
         text: "reply",
@@ -98,52 +141,93 @@ describe("mattermost channel message adapter", () => {
       expect(result.receipt.replyToId).toBe("post-parent-1");
     };
 
+    const provePayload = async () => {
+      sendMessageMattermostMock.mockClear();
+      sendMessageMattermostMock.mockResolvedValueOnce({
+        messageId: "post-1",
+        channelId: "channel-1",
+        receipt: {
+          primaryPlatformMessageId: "post-1",
+          platformMessageIds: ["post-1"],
+          parts: [{ platformMessageId: "post-1", kind: "card", index: 0 }],
+          sentAt: Date.now(),
+        },
+      });
+      const result = await sendPayload({
+        cfg: {},
+        to: "channel:team-1",
+        text: "card",
+        accountId: "default",
+        payload: {
+          text: "card",
+          channelData: {
+            mattermost: {
+              presentationButtons: [[{ text: "Open", callback_data: "open" }]],
+            },
+          },
+        },
+      });
+      expect(sendMessageMattermostMock).toHaveBeenLastCalledWith("channel:team-1", "card", {
+        cfg: {},
+        accountId: "default",
+        mediaUrl: undefined,
+        mediaLocalRoots: undefined,
+        mediaReadFile: undefined,
+        replyToId: undefined,
+        buttons: [[{ text: "Open", callback_data: "open" }]],
+      });
+      expect(result.receipt.platformMessageIds).toEqual(["post-1"]);
+      expect(result.receipt.parts[0]?.kind).toBe("card");
+    };
+
     await verifyChannelMessageAdapterCapabilityProofs({
       adapterName: "mattermostMessageAdapter",
-      adapter: adapter!,
+      adapter,
       proofs: {
         text: proveText,
         media: proveMedia,
+        payload: provePayload,
         replyTo: proveExplicitReply,
         thread: proveReplyThread,
         messageSendingHooks: () => {
-          expect(adapter!.send!.text).toBeTypeOf("function");
+          expect(sendText).toBeTypeOf("function");
         },
       },
     });
   });
 
   it("backs declared live preview finalizer capabilities with adapter proofs", async () => {
-    const adapter = mattermostPlugin.message;
+    const adapter = requireMattermostMessageAdapter();
+    const sendText = requireTextSender(adapter);
 
     await verifyChannelMessageLiveCapabilityAdapterProofs({
       adapterName: "mattermostMessageAdapter",
-      adapter: adapter!,
+      adapter,
       proofs: {
         draftPreview: () => {
-          expect(adapter!.live?.finalizer?.capabilities?.discardPending).toBe(true);
+          expect(adapter.live?.finalizer?.capabilities?.discardPending).toBe(true);
         },
         previewFinalization: () => {
-          expect(adapter!.live?.finalizer?.capabilities?.finalEdit).toBe(true);
+          expect(adapter.live?.finalizer?.capabilities?.finalEdit).toBe(true);
         },
         progressUpdates: () => {
-          expect(adapter!.live?.capabilities?.draftPreview).toBe(true);
+          expect(adapter.live?.capabilities?.draftPreview).toBe(true);
         },
       },
     });
 
     await verifyChannelMessageLiveFinalizerProofs({
       adapterName: "mattermostMessageAdapter",
-      adapter: adapter!,
+      adapter,
       proofs: {
         finalEdit: () => {
-          expect(adapter!.live?.capabilities?.previewFinalization).toBe(true);
+          expect(adapter.live?.capabilities?.previewFinalization).toBe(true);
         },
         normalFallback: () => {
-          expect(adapter!.send!.text).toBeTypeOf("function");
+          expect(sendText).toBeTypeOf("function");
         },
         discardPending: () => {
-          expect(adapter!.live?.capabilities?.draftPreview).toBe(true);
+          expect(adapter.live?.capabilities?.draftPreview).toBe(true);
         },
       },
     });

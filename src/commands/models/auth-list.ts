@@ -27,6 +27,33 @@ type AuthProfileSummary = {
   disabledUntil?: string;
 };
 
+function resolveProviderFilter(rawProvider: string | undefined): {
+  provider: string | undefined;
+  externalCliProvider: string | undefined;
+  matches: (profile: AuthProfileSummary) => boolean;
+} {
+  const provider = rawProvider?.trim() ? normalizeProviderId(rawProvider) : undefined;
+  if (!provider) {
+    return {
+      provider: undefined,
+      externalCliProvider: undefined,
+      matches: () => true,
+    };
+  }
+  if (provider === "openai") {
+    return {
+      provider,
+      externalCliProvider: "openai-codex",
+      matches: (profile) => profile.provider === "openai" || profile.provider === "openai-codex",
+    };
+  }
+  return {
+    provider,
+    externalCliProvider: provider,
+    matches: (profile) => profile.provider === provider,
+  };
+}
+
 function resolveTargetAgent(
   cfg: Awaited<ReturnType<typeof loadModelsConfig>>,
   raw?: string,
@@ -97,10 +124,17 @@ export async function modelsAuthListCommand(
 ) {
   const cfg = await loadModelsConfig({ commandName: "models auth list", runtime });
   const { agentId, agentDir } = resolveTargetAgent(cfg, opts.agent);
-  const provider = opts.provider?.trim() ? normalizeProviderId(opts.provider) : undefined;
+  const providerFilter = resolveProviderFilter(opts.provider);
   const store = ensureAuthProfileStore(
     agentDir,
-    provider ? { externalCli: externalCliDiscoveryForProviderAuth({ cfg, provider }) } : undefined,
+    providerFilter.externalCliProvider
+      ? {
+          externalCli: externalCliDiscoveryForProviderAuth({
+            cfg,
+            provider: providerFilter.externalCliProvider,
+          }),
+        }
+      : undefined,
   );
   const profiles = Object.entries(store.profiles)
     .map(([profileId, profile]) =>
@@ -112,7 +146,7 @@ export async function modelsAuthListCommand(
         usage: store.usageStats?.[profileId],
       }),
     )
-    .filter((profile) => !provider || profile.provider === provider)
+    .filter((profile) => providerFilter.matches(profile))
     .toSorted((a, b) => a.provider.localeCompare(b.provider) || a.id.localeCompare(b.id));
 
   if (opts.json) {
@@ -120,7 +154,7 @@ export async function modelsAuthListCommand(
       agentId,
       agentDir: shortenHomePath(agentDir),
       authStatePath: shortenHomePath(resolveAuthStatePathForDisplay(agentDir)),
-      provider: provider ?? null,
+      provider: providerFilter.provider ?? null,
       profiles,
     });
     return;
@@ -128,8 +162,8 @@ export async function modelsAuthListCommand(
 
   runtime.log(`Agent: ${agentId}`);
   runtime.log(`Auth state file: ${shortenHomePath(resolveAuthStatePathForDisplay(agentDir))}`);
-  if (provider) {
-    runtime.log(`Provider: ${provider}`);
+  if (providerFilter.provider) {
+    runtime.log(`Provider: ${providerFilter.provider}`);
   }
   if (profiles.length === 0) {
     runtime.log("Profiles: (none)");

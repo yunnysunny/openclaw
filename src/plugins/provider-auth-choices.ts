@@ -18,11 +18,12 @@ export type ProviderAuthChoiceMetadata = {
   groupId?: string;
   groupLabel?: string;
   groupHint?: string;
+  onboardingFeatured?: boolean;
   optionKey?: string;
   cliFlag?: string;
   cliOption?: string;
   cliDescription?: string;
-  onboardingScopes?: ("text-inference" | "image-generation")[];
+  onboardingScopes?: ("text-inference" | "image-generation" | "music-generation")[];
 };
 
 export type ProviderOnboardAuthFlag = {
@@ -93,6 +94,7 @@ function toProviderAuthChoiceCandidate(params: {
     ...(choice.groupId ? { groupId: choice.groupId } : {}),
     ...(choice.groupLabel ? { groupLabel: choice.groupLabel } : {}),
     ...(choice.groupHint ? { groupHint: choice.groupHint } : {}),
+    ...(choice.onboardingFeatured ? { onboardingFeatured: true } : {}),
     ...(choice.optionKey ? { optionKey: choice.optionKey } : {}),
     ...(choice.cliFlag ? { cliFlag: choice.cliFlag } : {}),
     ...(choice.cliOption ? { cliOption: choice.cliOption } : {}),

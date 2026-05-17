@@ -48,6 +48,7 @@ type BuildTrajectoryArtifactsParams = {
   timedOutDuringCompaction: boolean;
   promptError?: string;
   promptErrorSource?: string | null;
+  terminalError?: string;
   usage?: unknown;
   promptCache?: unknown;
   compactionCount: number;
@@ -305,6 +306,7 @@ export function buildTrajectoryArtifacts(
     timedOutDuringCompaction: params.timedOutDuringCompaction,
     promptError: params.promptError,
     promptErrorSource: params.promptErrorSource,
+    terminalError: params.terminalError,
     usage: params.usage,
     promptCache: params.promptCache,
     compactionCount: params.compactionCount,

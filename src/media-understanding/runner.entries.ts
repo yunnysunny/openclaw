@@ -23,6 +23,7 @@ import { resolveProxyFetchFromEnv } from "../infra/net/proxy-fetch.js";
 import { resolvePreferredOpenClawTmpDir } from "../infra/tmp-openclaw-dir.js";
 import { runFfmpeg } from "../media/ffmpeg-exec.js";
 import { runExec } from "../process/exec.js";
+import { providerOperationRetryConfig } from "../provider-runtime/operation-retry.js";
 import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 import { MediaAttachmentCache } from "./attachments.js";
 import {
@@ -34,6 +35,7 @@ import { MediaUnderstandingSkipError } from "./errors.js";
 import { fileExists } from "./fs.js";
 import { describeImageWithModel } from "./image-runtime.js";
 import { extractGeminiResponse } from "./output-extract.js";
+import { normalizeMediaExecutionProviderId } from "./provider-id.js";
 import { getMediaUnderstandingProvider, normalizeMediaProviderId } from "./provider-registry.js";
 import { resolveMaxBytes, resolveMaxChars, resolvePrompt, resolveTimeoutMs } from "./resolve.js";
 import type {
@@ -269,6 +271,8 @@ async function resolveCliMediaPath(params: {
         "16000",
         "-c:a",
         "pcm_s16le",
+        "-f",
+        "wav",
         outputPath,
       ]);
     },
@@ -420,6 +424,7 @@ async function resolveProviderExecutionAuth(params: {
   cfg: OpenClawConfig;
   entry: MediaUnderstandingModelConfig;
   agentDir?: string;
+  workspaceDir?: string;
 }) {
   const literalApiKey = resolveLiteralProviderApiKey({
     cfg: params.cfg,
@@ -441,6 +446,7 @@ async function resolveProviderExecutionAuth(params: {
     profileId: params.entry.profile,
     preferredProfile: params.entry.preferredProfile,
     agentDir: params.agentDir,
+    workspaceDir: params.workspaceDir,
   });
   return {
     apiKeys: collectProviderApiKeysForExecution({
@@ -457,12 +463,14 @@ async function resolveProviderExecutionContext(params: {
   entry: MediaUnderstandingModelConfig;
   config?: MediaUnderstandingConfig;
   agentDir?: string;
+  workspaceDir?: string;
 }) {
   const { apiKeys, providerConfig } = await resolveProviderExecutionAuth({
     providerId: params.providerId,
     cfg: params.cfg,
     entry: params.entry,
     agentDir: params.agentDir,
+    workspaceDir: params.workspaceDir,
   });
   const baseUrl = params.entry.baseUrl ?? params.config?.baseUrl ?? providerConfig?.baseUrl;
   const mergedHeaders = {
@@ -550,6 +558,7 @@ export async function runProviderEntry(params: {
   attachmentIndex: number;
   cache: MediaAttachmentCache;
   agentDir?: string;
+  workspaceDir?: string;
   providerRegistry: ProviderRegistry;
   config?: MediaUnderstandingConfig;
 }): Promise<MediaUnderstandingOutput | null> {
@@ -559,6 +568,7 @@ export async function runProviderEntry(params: {
     throw new Error(`Provider entry missing provider for ${capability}`);
   }
   const providerId = normalizeMediaProviderId(providerIdRaw);
+  const requestProviderId = normalizeMediaExecutionProviderId(providerIdRaw);
   const { maxBytes, maxChars, timeoutMs, prompt } = resolveEntryRunOptions({
     capability,
     entry,
@@ -580,18 +590,19 @@ export async function runProviderEntry(params: {
       timeoutMs,
     });
     const requestOverrides = resolveMediaRequestOverrides(params.config);
-    const provider = getMediaUnderstandingProvider(providerId, params.providerRegistry);
+    const provider = getMediaUnderstandingProvider(requestProviderId, params.providerRegistry);
     const imageInput = {
       buffer: media.buffer,
       fileName: media.fileName,
       mime: media.mime,
       model: modelId,
-      provider: providerId,
+      provider: requestProviderId,
       prompt: requestOverrides.prompt ?? prompt,
       timeoutMs,
       profile: entry.profile,
       preferredProfile: entry.preferredProfile,
       agentDir: params.agentDir,
+      workspaceDir: params.workspaceDir,
       cfg: params.cfg,
     };
     const describeImage = provider?.describeImage ?? describeImageWithModel;
@@ -600,7 +611,7 @@ export async function runProviderEntry(params: {
       kind: "image.description",
       attachmentIndex: params.attachmentIndex,
       text: trimOutput(result.text, maxChars),
-      provider: providerId,
+      provider: requestProviderId,
       model: result.model ?? modelId,
     };
   }
@@ -632,6 +643,7 @@ export async function runProviderEntry(params: {
       entry,
       config: params.config,
       agentDir: params.agentDir,
+      workspaceDir: params.workspaceDir,
     });
     const providerQuery = resolveProviderQuery({
       providerId,
@@ -644,11 +656,13 @@ export async function runProviderEntry(params: {
         cfg,
         providerId,
         capability: "audio",
+        workspaceDir: params.workspaceDir,
       }) ||
       entry.model;
     const result = await executeWithApiKeyRotation({
       provider: providerId,
       apiKeys,
+      transientRetry: providerOperationRetryConfig("read"),
       execute: async (apiKey) =>
         transcribeAudio({
           buffer: media.buffer,
@@ -702,10 +716,12 @@ export async function runProviderEntry(params: {
     entry,
     config: params.config,
     agentDir: params.agentDir,
+    workspaceDir: params.workspaceDir,
   });
   const result = await executeWithApiKeyRotation({
     provider: providerId,
     apiKeys,
+    transientRetry: providerOperationRetryConfig("read"),
     execute: (apiKey) =>
       describeVideo({
         buffer: media.buffer,

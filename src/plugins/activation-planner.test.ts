@@ -201,7 +201,11 @@ describe("activation planner", () => {
           command: "demo-tools",
         },
       }),
-    ).toMatchObject({
+    ).toEqual({
+      trigger: {
+        kind: "command",
+        command: "demo-tools",
+      },
       pluginIds: ["demo-channel"],
       entries: [
         {
@@ -363,7 +367,7 @@ describe("activation planner", () => {
         },
         onlyPluginIds: [],
       }),
-    ).toEqual([]);
+    ).toStrictEqual([]);
   });
 
   it("loads the manifest registry asynchronously and matches the sync planner results", async () => {

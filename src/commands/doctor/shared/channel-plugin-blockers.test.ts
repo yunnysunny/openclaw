@@ -24,7 +24,7 @@ describe("channel plugin blockers", () => {
       },
     });
 
-    expect(hits).toEqual([]);
+    expect(hits).toStrictEqual([]);
     expect(registrySpy).not.toHaveBeenCalled();
   });
 
@@ -156,7 +156,7 @@ describe("channel plugin blockers", () => {
       },
     });
 
-    expect(hits).toEqual([]);
+    expect(hits).toStrictEqual([]);
   });
 
   it("still reports the disabled bundled owner when an external channel owner is not trusted", () => {
