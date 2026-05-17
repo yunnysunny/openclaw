@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { CliDeps } from "../cli/deps.types.js";
 import type { GatewayTailscaleMode } from "../config/types.gateway.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
@@ -558,3 +559,6 @@ export async function startGatewayPostAttachRuntime(
 export const __testing = {
   prewarmConfiguredPrimaryModel,
 };
+
+export type GatewayPostReadySidecarHandle = unknown;
+

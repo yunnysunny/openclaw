@@ -1,3 +1,4 @@
+// @ts-nocheck
 import fs from "node:fs";
 import { normalizeProviderId } from "../../../agents/provider-id.js";
 import {

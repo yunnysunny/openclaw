@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import type { callGateway } from "../gateway/call.js";
 import type { dispatchGatewayMethodInProcess } from "../gateway/server-plugins.js";

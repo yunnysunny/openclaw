@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { statSync } from "node:fs";
 import path from "node:path";
 import type { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";

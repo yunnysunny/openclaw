@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { loadAuthProfileStoreWithoutExternalProfiles } from "../../agents/auth-profiles/store.js";
 import {

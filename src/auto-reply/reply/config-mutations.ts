@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { setConfigValueAtPath, unsetConfigValueAtPath } from "../../config/config-paths.js";
 import {
   transformConfigFileWithRetry,

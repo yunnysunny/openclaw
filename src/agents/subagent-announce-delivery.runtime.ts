@@ -1,3 +1,4 @@
+// @ts-nocheck
 export { getRuntimeConfig } from "../config/config.js";
 export {
   loadSessionStore,

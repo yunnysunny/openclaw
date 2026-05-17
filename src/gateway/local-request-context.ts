@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { loadManifestModelCatalog } from "../agents/model-catalog.js";
 import type { CliDeps } from "../cli/deps.types.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";

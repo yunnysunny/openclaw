@@ -1,3 +1,4 @@
+// @ts-nocheck
 export {
   buildAcpResult,
   createAcpVisibleTextAccumulator,

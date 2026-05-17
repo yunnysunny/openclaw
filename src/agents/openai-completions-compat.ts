@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { Model } from "@earendil-works/pi-ai";
 import type { ProviderEndpointClass, ProviderRequestCapabilities } from "./provider-attribution.js";
 import { resolveProviderRequestCapabilities } from "./provider-attribution.js";

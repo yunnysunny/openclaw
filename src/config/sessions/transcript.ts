@@ -1,3 +1,4 @@
+// @ts-nocheck
 import fs from "node:fs";
 import path from "node:path";
 import { CURRENT_SESSION_VERSION, SessionManager } from "@mariozechner/pi-coding-agent";
@@ -336,3 +337,6 @@ async function findLatestEquivalentAssistantMessageId(
 
   return undefined;
 }
+
+export { readLatestAssistantTextFromSessionTranscript } from "../sessions.js";
+

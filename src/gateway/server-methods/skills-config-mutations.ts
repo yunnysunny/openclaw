@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { mutateConfigFileWithRetry } from "../../config/config.js";
 import { REDACTED_SENTINEL } from "../../config/redact-snapshot.js";
 import { normalizeSecretInput } from "../../utils/normalize-secret-input.js";

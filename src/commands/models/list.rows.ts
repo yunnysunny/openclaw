@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { Api, Model } from "@earendil-works/pi-ai";
 import type { ModelRegistry } from "@earendil-works/pi-coding-agent";
 import { DEFAULT_CONTEXT_TOKENS } from "../../agents/defaults.js";

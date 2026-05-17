@@ -248,6 +248,7 @@ export type PluginManifestContracts = {
   agentToolResultMiddleware?: string[];
   externalAuthProviders?: string[];
   migrationProviders?: string[];
+  gatewayMethodDispatch?: Record<string, unknown>;
   memoryEmbeddingProviders?: string[];
   speechProviders?: string[];
   realtimeTranscriptionProviders?: string[];
@@ -302,6 +303,8 @@ export type PluginManifestProviderAuthChoice = {
   assistantVisibility?: "visible" | "manual-only";
   /** Legacy choice ids that should point users at this replacement choice. */
   deprecatedChoiceIds?: string[];
+  /** Whether the choice is featured during onboarding. */
+  onboardingFeatured?: boolean;
   /** Optional grouping metadata for auth-choice pickers. */
   groupId?: string;
   groupLabel?: string;
@@ -563,7 +566,7 @@ function normalizeManifestProviderEndpoints(
   return endpoints.length > 0 ? endpoints : undefined;
 }
 
-function normalizeManifestActivation(value: unknown): PluginManifestActivation | undefined {
+export function normalizeManifestActivation(value: unknown): PluginManifestActivation | undefined {
   if (!isRecord(value)) {
     return undefined;
   }

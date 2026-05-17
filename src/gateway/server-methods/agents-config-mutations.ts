@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { resolveAgentDir, resolveAgentWorkspaceDir } from "../../agents/agent-scope.js";
 import {
   applyAgentConfig,

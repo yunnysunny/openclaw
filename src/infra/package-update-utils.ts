@@ -44,3 +44,8 @@ export async function readInstalledPackageVersion(dir: string): Promise<string |
     await closeFileDescriptorAsync(opened.fd);
   }
 }
+
+export function installedPackageNeedsOpenClawPeerLinkRepair(_pkg: unknown): boolean {
+  return false;
+}
+

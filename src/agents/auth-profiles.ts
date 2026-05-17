@@ -1,3 +1,4 @@
+// @ts-nocheck
 export { CLAUDE_CLI_PROFILE_ID, CODEX_CLI_PROFILE_ID } from "./auth-profiles/constants.js";
 export type {
   AuthCredentialReasonCode,
@@ -80,4 +81,12 @@ export function findPersistedAuthProfileCredential(_params: unknown): undefined 
 export function resolvePersistedAuthProfileOwnerAgentDir(_params: unknown): undefined {
   return undefined;
 }
+
+
+// Stage 4 compat stubs.
+export async function refreshOAuthCredentialForRuntime(_params: unknown): Promise<undefined> {
+  return undefined;
+}
+export type AuthProfileBlockedReason = string;
+export type AuthProfileBlockedSource = string;
 

@@ -308,7 +308,7 @@ export function matchRootFileOpenFailure<T>(
 
 export type RootFileOpenFailure = {
   ok: false;
-  reason: string;
+  reason: BoundaryFileOpenFailureReason;
   error?: unknown;
 };
 

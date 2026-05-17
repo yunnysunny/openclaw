@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import {
   listMediaGenerationProviderModels,

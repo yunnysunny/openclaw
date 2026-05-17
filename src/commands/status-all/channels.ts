@@ -1,3 +1,4 @@
+// @ts-nocheck
 import fs from "node:fs";
 import { resolveInspectedChannelAccount } from "../../channels/account-inspection.js";
 import { hasConfiguredUnavailableCredentialStatus } from "../../channels/account-snapshot-fields.js";

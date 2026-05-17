@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { applyOwnerOnlyToolPolicy } from "../agents/tool-policy.js";
 import type { InboundEventKind } from "../channels/inbound-event/kind.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";

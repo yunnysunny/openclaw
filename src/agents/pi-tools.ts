@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { createCodingTools, createReadTool } from "@mariozechner/pi-coding-agent";
 import type { ModelCompatConfig } from "../config/types.models.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";

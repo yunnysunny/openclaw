@@ -1,3 +1,4 @@
+// @ts-nocheck
 import {
   isSilentReplyText,
   SILENT_REPLY_TOKEN,

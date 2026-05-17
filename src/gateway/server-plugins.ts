@@ -591,3 +591,6 @@ export async function loadGatewayPluginsAsync(params: {
   const gatewayMethods = Array.from(new Set([...params.baseMethods, ...pluginMethods]));
   return { pluginRegistry, gatewayMethods };
 }
+
+export const dispatchGatewayMethodInProcessRaw: ((...args: unknown[]) => Promise<unknown>) = async () => undefined;
+

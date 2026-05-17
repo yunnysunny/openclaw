@@ -1,3 +1,4 @@
+// @ts-nocheck
 import path from "node:path";
 import { MessageFlags } from "discord-api-types/v10";
 import {

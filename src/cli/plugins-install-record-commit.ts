@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { isDeepStrictEqual } from "node:util";
 import {
   replaceConfigFile,

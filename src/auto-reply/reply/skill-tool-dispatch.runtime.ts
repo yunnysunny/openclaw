@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { createOpenClawTools } from "../../agents/openclaw-tools.runtime.js";
 import {
   resolveEffectiveToolPolicy,

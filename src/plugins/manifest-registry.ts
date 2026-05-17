@@ -21,10 +21,7 @@ import {
   type PluginCandidate,
 } from "./discovery.js";
 import type { PluginManifestCommandAlias } from "./manifest-command-aliases.js";
-import {
-  clearPluginManifestRegistryCache,
-  pluginManifestRegistryCache,
-} from "./manifest-registry-state.js";
+import { pluginManifestRegistryCache } from "./manifest-registry-state.js";
 import type {
   PluginBundleFormat,
   PluginConfigUiHint,
