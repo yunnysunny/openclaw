@@ -13,6 +13,7 @@ vi.mock("./model-auth-env.js", () => ({
 }));
 
 vi.mock("./provider-auth-aliases.js", () => ({
+  resolveProviderAuthAliasMap: () => ({}),
   resolveProviderIdForAuth: (provider: string) => provider.trim().toLowerCase(),
   resolveProviderIdForAuthAsync: async (provider: string) => provider.trim().toLowerCase(),
 }));

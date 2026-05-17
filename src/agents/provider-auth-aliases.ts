@@ -59,6 +59,41 @@ function shouldUsePluginAuthAliases(
   return isWorkspacePluginTrustedForAuthAliases(plugin, params?.config);
 }
 
+function setPreferredAlias(params: {
+  aliases: Map<string, ProviderAuthAliasCandidate>;
+  alias: string;
+  origin?: PluginOrigin;
+  target: string;
+}) {
+  const normalizedAlias = normalizeProviderId(params.alias);
+  const normalizedTarget = normalizeProviderId(params.target);
+  if (!normalizedAlias || !normalizedTarget) {
+    return;
+  }
+  const existing = params.aliases.get(normalizedAlias);
+  if (
+    !existing ||
+    resolveProviderAuthAliasOriginPriority(params.origin) <
+      resolveProviderAuthAliasOriginPriority(existing.origin)
+  ) {
+    params.aliases.set(normalizedAlias, {
+      origin: params.origin,
+      target: normalizedTarget,
+    });
+  }
+}
+
+export function resolveProviderAuthAliasMap(
+  params?: ProviderAuthAliasLookupParams,
+): Record<string, string> {
+  const registry = loadPluginManifestRegistrySync({
+    config: params?.config,
+    workspaceDir: params?.workspaceDir,
+    env: params?.env,
+  });
+  return buildProviderAuthAliasMapFromRegistry(registry, params);
+}
+
 /** Build alias map using async manifest discovery (preferred for awaited auth flows). */
 export async function resolveProviderAuthAliasMapAsync(
   params?: ProviderAuthAliasLookupParams,
@@ -84,20 +119,21 @@ function buildProviderAuthAliasMapFromRegistry(
     for (const [alias, target] of Object.entries(plugin.providerAuthAliases ?? {}).toSorted(
       ([left], [right]) => left.localeCompare(right),
     )) {
-      const normalizedAlias = normalizeProviderId(alias);
-      const normalizedTarget = normalizeProviderId(target);
-      if (normalizedAlias && normalizedTarget) {
-        const existing = preferredAliases.get(normalizedAlias);
-        if (
-          !existing ||
-          resolveProviderAuthAliasOriginPriority(plugin.origin) <
-            resolveProviderAuthAliasOriginPriority(existing.origin)
-        ) {
-          preferredAliases.set(normalizedAlias, {
-            origin: plugin.origin,
-            target: normalizedTarget,
-          });
-        }
+      setPreferredAlias({
+        aliases: preferredAliases,
+        alias,
+        origin: plugin.origin,
+        target,
+      });
+    }
+    for (const choice of plugin.providerAuthChoices ?? []) {
+      for (const deprecatedChoiceId of choice.deprecatedChoiceIds ?? []) {
+        setPreferredAlias({
+          aliases: preferredAliases,
+          alias: deprecatedChoiceId,
+          origin: plugin.origin,
+          target: choice.provider,
+        });
       }
     }
   }

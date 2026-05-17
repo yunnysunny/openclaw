@@ -1,10 +1,11 @@
 import { beforeEach, describe, it, vi } from "vitest";
 import {
   expectAugmentedCodexCatalog,
+  expectedAugmentedOpenaiCodexCatalogEntriesWithGpt55,
   expectCodexBuiltInSuppression,
   expectCodexMissingAuthHint,
   importProviderRuntimeCatalogModule,
-  loadBundledPluginPublicSurfaceSync,
+  loadBundledPluginPublicSurface,
 } from "../../../test/helpers/plugins/provider-catalog.js";
 import type { ProviderPlugin } from "../../../test/helpers/plugins/provider-catalog.js";
 import {
@@ -46,7 +47,7 @@ vi.mock("../../../src/plugins/providers.runtime.js", () => ({
 export function describeOpenAIProviderCatalogContract() {
   const contractDepsPromise = (async () => {
     vi.resetModules();
-    const openaiPlugin = loadBundledPluginPublicSurfaceSync<{
+    const openaiPlugin = await loadBundledPluginPublicSurface<{
       default: Parameters<typeof registerProviderPlugin>[0]["plugin"];
     }>({
       pluginId: "openai",
@@ -111,6 +112,7 @@ export function describeOpenAIProviderCatalogContract() {
         const { openaiProvider } = await contractDepsPromise;
         expectCodexMissingAuthHint(
           (params) => openaiProvider.buildMissingAuthMessage?.(params.context) ?? undefined,
+          "openai-codex/gpt-5.5",
         );
       });
 
@@ -121,7 +123,10 @@ export function describeOpenAIProviderCatalogContract() {
 
       it("keeps bundled model augmentation wired through the provider runtime", async () => {
         const { augmentModelCatalogWithProviderPlugins } = await contractDepsPromise;
-        await expectAugmentedCodexCatalog(augmentModelCatalogWithProviderPlugins);
+        await expectAugmentedCodexCatalog(
+          augmentModelCatalogWithProviderPlugins,
+          expectedAugmentedOpenaiCodexCatalogEntriesWithGpt55,
+        );
       });
     },
   );

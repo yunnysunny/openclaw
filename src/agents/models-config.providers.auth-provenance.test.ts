@@ -8,6 +8,13 @@ vi.mock("../plugins/provider-runtime.js", () => ({
     Promise.resolve(resolveProviderSyntheticAuthWithPluginHoisted(...args)),
 }));
 
+vi.mock("./provider-auth-aliases.js", () => ({
+  resolveProviderAuthAliasMap: () => ({}),
+  resolveProviderIdForAuth: (provider: string) => provider.trim().toLowerCase(),
+}));
+
+type ProviderRuntimeModule = typeof import("../plugins/provider-runtime.js");
+
 let NON_ENV_SECRETREF_MARKER: typeof import("./model-auth-markers.js").NON_ENV_SECRETREF_MARKER;
 let MINIMAX_OAUTH_MARKER: typeof import("./model-auth-markers.js").MINIMAX_OAUTH_MARKER;
 let CUSTOM_LOCAL_AUTH_MARKER: typeof import("./model-auth-markers.js").CUSTOM_LOCAL_AUTH_MARKER;

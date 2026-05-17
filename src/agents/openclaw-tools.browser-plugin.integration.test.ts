@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
+import { activateSecretsRuntimeSnapshot, clearSecretsRuntimeSnapshot } from "../secrets/runtime.js";
 import {
   resolveOpenClawPluginToolsForOptions,
   resolveOpenClawPluginToolsForOptionsAsync,
@@ -19,6 +20,7 @@ describe("createOpenClawTools browser plugin integration", () => {
   afterEach(() => {
     hoisted.resolvePluginTools.mockReset();
     hoisted.resolvePluginToolsAsync.mockReset();
+    clearSecretsRuntimeSnapshot();
   });
 
   it("keeps the browser tool returned by plugin resolution", () => {
@@ -153,5 +155,58 @@ describe("createOpenClawTools browser plugin integration", () => {
     });
 
     expect(tools.map((tool) => tool.name)).toContain("browser");
+  });
+
+  it("does not pass a stale active snapshot as plugin runtime config for a resolved run config", () => {
+    const staleSourceConfig = {
+      plugins: {
+        allow: ["old-plugin"],
+      },
+    } as OpenClawConfig;
+    const staleRuntimeConfig = {
+      plugins: {
+        allow: ["old-plugin"],
+      },
+    } as OpenClawConfig;
+    const resolvedRunConfig = {
+      plugins: {
+        allow: ["browser"],
+      },
+      tools: {
+        experimental: {
+          planTool: true,
+        },
+      },
+    } as OpenClawConfig;
+    let capturedRuntimeConfig: OpenClawConfig | undefined;
+    hoisted.resolvePluginTools.mockImplementation((params: unknown) => {
+      capturedRuntimeConfig = (params as { context?: { runtimeConfig?: OpenClawConfig } }).context
+        ?.runtimeConfig;
+      return [];
+    });
+    activateSecretsRuntimeSnapshot({
+      sourceConfig: staleSourceConfig,
+      config: staleRuntimeConfig,
+      authStores: [],
+      warnings: [],
+      webTools: {
+        search: {
+          providerSource: "none",
+          diagnostics: [],
+        },
+        fetch: {
+          providerSource: "none",
+          diagnostics: [],
+        },
+        diagnostics: [],
+      },
+    });
+
+    resolveOpenClawPluginToolsForOptions({
+      options: { config: resolvedRunConfig },
+      resolvedConfig: resolvedRunConfig,
+    });
+
+    expect(capturedRuntimeConfig).toBe(resolvedRunConfig);
   });
 });

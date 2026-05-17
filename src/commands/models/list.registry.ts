@@ -3,6 +3,7 @@ import type { ModelRegistry } from "@mariozechner/pi-coding-agent";
 import type { AuthProfileStore } from "../../agents/auth-profiles/types.js";
 import { shouldSuppressBuiltInModelAsync } from "../../agents/model-suppression.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
+import { resolveRuntimeSyntheticAuthProviderRefs } from "../../plugins/synthetic-auth.runtime.js";
 import {
   formatErrorWithStack,
   MODEL_AVAILABILITY_UNAVAILABLE_CODE,
@@ -39,6 +40,9 @@ const hasAuthForProvider = (
     return true;
   }
   if (hasUsableCustomProviderApiKey(cfg, provider)) {
+    return true;
+  }
+  if (resolveRuntimeSyntheticAuthProviderRefs().includes(provider)) {
     return true;
   }
   return false;
@@ -113,13 +117,12 @@ async function loadAvailableModels(
   }
 }
 
-export async function loadModelRegistry(
-  cfg: OpenClawConfig,
-  _opts?: { sourceConfig?: OpenClawConfig },
-) {
+export async function loadModelRegistry(cfg: OpenClawConfig, opts?: { providerFilter?: string }) {
   const agentDir = resolveOpenClawAgentDir();
-  const authStorage = await discoverAuthStorageAsync(agentDir);
-  const registry = discoverModels(authStorage, agentDir);
+  const authStorage = await discoverAuthStorageAsync(agentDir, { readOnly: true });
+  const registry = discoverModels(authStorage, agentDir, {
+    providerFilter: opts?.providerFilter,
+  });
   const models = (
     await Promise.all(
       registry.getAll().map(async (model) =>

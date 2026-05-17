@@ -730,7 +730,7 @@ function resolveChannelAutoEnableDisplayLabel(
 ): string | undefined {
   const builtInChannelId = normalizeChatChannelId(entry.channelId);
   if (builtInChannelId) {
-    return getChatChannelMeta(builtInChannelId).label;
+    return getChatChannelMeta(builtInChannelId)?.label;
   }
   const plugin = manifestRegistry.plugins.find((record) => record.id === entry.pluginId);
   return plugin?.channelConfigs?.[entry.channelId]?.label ?? plugin?.channelCatalogMeta?.label;

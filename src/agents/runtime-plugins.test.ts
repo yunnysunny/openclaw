@@ -4,11 +4,18 @@ import { resolveUserPath } from "../utils.js";
 const hoisted = vi.hoisted(() => ({
   resolveRuntimePluginRegistry: vi.fn(),
   resolveRuntimePluginRegistryAsync: vi.fn(),
+  getActivePluginRuntimeSubagentMode: vi.fn<() => "default" | "explicit" | "gateway-bindable">(
+    () => "default",
+  ),
 }));
 
 vi.mock("../plugins/loader.js", () => ({
   resolveRuntimePluginRegistry: hoisted.resolveRuntimePluginRegistry,
   resolveRuntimePluginRegistryAsync: hoisted.resolveRuntimePluginRegistryAsync,
+}));
+
+vi.mock("../plugins/runtime.js", () => ({
+  getActivePluginRuntimeSubagentMode: hoisted.getActivePluginRuntimeSubagentMode,
 }));
 
 describe("ensureRuntimePluginsLoaded", () => {
@@ -21,6 +28,8 @@ describe("ensureRuntimePluginsLoaded", () => {
     hoisted.resolveRuntimePluginRegistryAsync.mockReset();
     hoisted.resolveRuntimePluginRegistry.mockReturnValue(undefined);
     hoisted.resolveRuntimePluginRegistryAsync.mockResolvedValue(undefined);
+    hoisted.getActivePluginRuntimeSubagentMode.mockReset();
+    hoisted.getActivePluginRuntimeSubagentMode.mockReturnValue("default");
     vi.resetModules();
     ({ ensureRuntimePluginsLoaded, ensureRuntimePluginsLoadedAsync } =
       await import("./runtime-plugins.js"));
@@ -64,6 +73,36 @@ describe("ensureRuntimePluginsLoaded", () => {
     expect(hoisted.resolveRuntimePluginRegistryAsync).toHaveBeenCalledWith({
       config: {} as never,
       workspaceDir,
+      runtimeOptions: {
+        allowGatewaySubagentBinding: true,
+      },
+    });
+  });
+
+  it("does not enable gateway subagent binding for normal runtime loads", async () => {
+    ensureRuntimePluginsLoaded({
+      config: {} as never,
+      workspaceDir: "/tmp/workspace",
+    });
+
+    expect(hoisted.resolveRuntimePluginRegistry).toHaveBeenCalledWith({
+      config: {} as never,
+      workspaceDir: "/tmp/workspace",
+      runtimeOptions: undefined,
+    });
+  });
+
+  it("inherits gateway-bindable mode from an active gateway registry", async () => {
+    hoisted.getActivePluginRuntimeSubagentMode.mockReturnValue("gateway-bindable");
+
+    ensureRuntimePluginsLoaded({
+      config: {} as never,
+      workspaceDir: "/tmp/workspace",
+    });
+
+    expect(hoisted.resolveRuntimePluginRegistry).toHaveBeenCalledWith({
+      config: {} as never,
+      workspaceDir: "/tmp/workspace",
       runtimeOptions: {
         allowGatewaySubagentBinding: true,
       },

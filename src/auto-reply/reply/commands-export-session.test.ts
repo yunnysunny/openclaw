@@ -1,36 +1,29 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { HandleCommandsParams } from "./commands-types.js";
 
-const hoisted = vi.hoisted(() => ({
-  resolveDefaultSessionStorePathMock: vi.fn(() => "/tmp/target-store/sessions.json"),
-  resolveSessionFilePathMock: vi.fn(() => "/tmp/target-store/session.jsonl"),
-  resolveSessionFilePathOptionsMock: vi.fn(
-    (params: { agentId: string; storePath: string }) => params,
-  ),
-  loadSessionStoreMock: vi.fn(() => ({
-    "agent:target:session": {
-      sessionId: "session-1",
-      updatedAt: 1,
-    },
-  })),
-  resolveCommandsSystemPromptBundleMock: vi.fn(async () => ({
-    systemPrompt: "system prompt",
-    tools: [],
-    skillsPrompt: "",
-    bootstrapFiles: [],
-    injectedFiles: [],
-    sandboxRuntime: { sandboxed: false, mode: "off" },
-  })),
-  getEntriesMock: vi.fn(() => []),
-  getHeaderMock: vi.fn(() => null),
-  getLeafIdMock: vi.fn(() => null),
-  writeFileSyncMock: vi.fn(),
-  mkdirSyncMock: vi.fn(),
-  existsSyncMock: vi.fn(() => true),
-  accessMock: vi.fn(async () => undefined),
-  mkdirMock: vi.fn(async () => undefined),
-  writeFileMock: vi.fn(async () => undefined),
-}));
+const hoisted = await vi.hoisted(async () => {
+  const { createExportCommandSessionMocks } = await import("./commands-export-test-mocks.js");
+  return {
+    ...createExportCommandSessionMocks(vi),
+    resolveCommandsSystemPromptBundleMock: vi.fn(async () => ({
+      systemPrompt: "system prompt",
+      tools: [],
+      skillsPrompt: "",
+      bootstrapFiles: [],
+      injectedFiles: [],
+      sandboxRuntime: { sandboxed: false, mode: "off" },
+    })),
+    getEntriesMock: vi.fn(() => []),
+    getHeaderMock: vi.fn(() => null),
+    getLeafIdMock: vi.fn(() => null),
+    writeFileSyncMock: vi.fn(),
+    mkdirSyncMock: vi.fn(),
+    existsSyncMock: vi.fn(() => true),
+    accessMock: vi.fn(async () => undefined),
+    mkdirMock: vi.fn(async () => undefined),
+    writeFileMock: vi.fn(async () => undefined),
+  };
+});
 
 vi.mock("@mariozechner/pi-coding-agent", () => ({
   SessionManager: {

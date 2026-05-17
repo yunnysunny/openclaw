@@ -499,23 +499,23 @@ describe("channel-health-monitor", () => {
   describe("stale socket detection", () => {
     const STALE_THRESHOLD = 30 * 60_000;
 
-    it("restarts a channel with no events past the stale threshold", async () => {
+    it("restarts a channel with no transport activity past the stale threshold", async () => {
       const now = Date.now();
       const manager = createSlackSnapshotManager(
         runningConnectedSlackAccount({
           lastStartAt: now - STALE_THRESHOLD - 60_000,
-          lastEventAt: now - STALE_THRESHOLD - 30_000,
+          lastTransportActivityAt: now - STALE_THRESHOLD - 30_000,
         }),
       );
       await expectRestartedChannel(manager, "slack");
     });
 
-    it("skips channels with recent events", async () => {
+    it("skips channels with recent transport activity", async () => {
       const now = Date.now();
       const manager = createSlackSnapshotManager(
         runningConnectedSlackAccount({
           lastStartAt: now - STALE_THRESHOLD - 60_000,
-          lastEventAt: now - 5_000,
+          lastTransportActivityAt: now - 5_000,
         }),
       );
       await expectNoRestart(manager);
@@ -526,24 +526,24 @@ describe("channel-health-monitor", () => {
       const manager = createSlackSnapshotManager(
         runningConnectedSlackAccount({
           lastStartAt: now - 5_000,
-          lastEventAt: null,
+          lastTransportActivityAt: null,
         }),
       );
       await expectNoRestart(manager);
     });
 
-    it("restarts a channel that has seen no events since connect past the stale threshold", async () => {
+    it("restarts a channel with no transport activity since connect past the stale threshold", async () => {
       const now = Date.now();
       const manager = createSlackSnapshotManager(
         runningConnectedSlackAccount({
           lastStartAt: now - STALE_THRESHOLD - 60_000,
-          lastEventAt: now - STALE_THRESHOLD - 60_000,
+          lastTransportActivityAt: now - STALE_THRESHOLD - 60_000,
         }),
       );
       await expectRestartedChannel(manager, "slack");
     });
 
-    it("skips connected channels that do not report event liveness", async () => {
+    it("skips connected channels that do not report transport liveness", async () => {
       const now = Date.now();
       const manager = createSnapshotManager({
         telegram: {
@@ -553,7 +553,7 @@ describe("channel-health-monitor", () => {
             enabled: true,
             configured: true,
             lastStartAt: now - STALE_THRESHOLD - 60_000,
-            lastEventAt: null,
+            lastTransportActivityAt: null,
           },
         },
       });
@@ -566,7 +566,7 @@ describe("channel-health-monitor", () => {
       const manager = createSlackSnapshotManager(
         runningConnectedSlackAccount({
           lastStartAt: now - customThreshold - 60_000,
-          lastEventAt: now - customThreshold - 30_000,
+          lastTransportActivityAt: now - customThreshold - 30_000,
         }),
       );
       const monitor = await startAndRunCheck(manager, {

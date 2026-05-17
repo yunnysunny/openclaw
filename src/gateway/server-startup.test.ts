@@ -19,6 +19,20 @@ const resolveModelAsyncMock = vi.fn<
     api: "openai-codex-responses",
   },
 }));
+const resolveModelAsyncMock = vi.fn<
+  (
+    provider: unknown,
+    modelId: unknown,
+    agentDir: unknown,
+    cfg: unknown,
+  ) => Promise<{ model?: { id: string; provider: string; api: string }; error?: string }>
+>(async () => ({
+  model: {
+    id: "gpt-5.4",
+    provider: "openai-codex",
+    api: "openai-codex-responses",
+  },
+}));
 const selectAgentHarnessMock = vi.fn((_params: unknown) => ({ id: "pi" }));
 const resolveEmbeddedAgentRuntimeMock = vi.fn(() => "auto");
 
@@ -36,6 +50,13 @@ vi.mock("../agents/harness/selection.js", () => ({
 }));
 
 vi.mock("../agents/pi-embedded-runner/model.js", () => ({
+  resolveModel: (
+    provider: unknown,
+    modelId: unknown,
+    agentDir: unknown,
+    cfg: unknown,
+    options?: unknown,
+  ) => resolveModelMock(provider, modelId, agentDir, cfg, options),
   resolveModelAsync: (
     provider: unknown,
     modelId: unknown,
@@ -60,6 +81,7 @@ describe("gateway startup primary model warmup", () => {
 
   beforeEach(() => {
     ensureOpenClawModelsJsonMock.mockClear();
+    resolveModelMock.mockClear();
     resolveModelAsyncMock.mockClear();
     selectAgentHarnessMock.mockClear();
     selectAgentHarnessMock.mockReturnValue({ id: "pi" });
@@ -111,7 +133,7 @@ describe("gateway startup primary model warmup", () => {
         agents: {
           defaults: {
             model: {
-              primary: "codex-cli/gpt-5.4",
+              primary: "codex-cli/gpt-5.5",
             },
             cliBackends: {
               "codex-cli": {
@@ -199,5 +221,54 @@ describe("gateway startup primary model warmup", () => {
     });
     expect(ensureOpenClawModelsJsonMock).toHaveBeenCalledWith(cfg, "/tmp/agent");
     expect(resolveModelAsyncMock).toHaveBeenCalled();
+  });
+
+  it("falls back to async model resolution before warning", async () => {
+    resolveModelMock.mockReturnValueOnce({ model: undefined } as never);
+    resolveModelAsyncMock.mockResolvedValueOnce({
+      model: {
+        id: "gpt-5.4",
+        provider: "codex",
+        api: "openai-codex-responses",
+      },
+    });
+    const warn = vi.fn();
+    const cfg = {
+      agents: {
+        defaults: {
+          model: {
+            primary: "codex/gpt-5.4",
+          },
+        },
+      },
+    } as OpenClawConfig;
+
+    await prewarmConfiguredPrimaryModel({ cfg, log: { warn } });
+
+    expect(resolveModelAsyncMock).toHaveBeenCalledWith("codex", "gpt-5.4", "/tmp/agent", cfg);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("warns only when both static and async model resolution miss", async () => {
+    resolveModelMock.mockReturnValueOnce({ model: undefined, error: "static miss" } as never);
+    resolveModelAsyncMock.mockResolvedValueOnce({ error: "async miss" });
+    const warn = vi.fn();
+
+    await prewarmConfiguredPrimaryModel({
+      cfg: {
+        agents: {
+          defaults: {
+            model: {
+              primary: "codex/gpt-5.4",
+            },
+          },
+        },
+      } as OpenClawConfig,
+      log: { warn },
+    });
+
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("startup model warmup failed for codex/gpt-5.4"),
+    );
   });
 });

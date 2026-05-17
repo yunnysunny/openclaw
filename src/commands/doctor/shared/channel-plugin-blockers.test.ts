@@ -25,7 +25,6 @@ describe("channel plugin blockers", () => {
     });
 
     expect(hits).toEqual([]);
-    expect(presenceSpy).not.toHaveBeenCalled();
     expect(registrySpy).not.toHaveBeenCalled();
   });
 
@@ -62,6 +61,50 @@ describe("channel plugin blockers", () => {
       {
         channelId: "slack",
         pluginId: "slack",
+        reason: "plugins disabled",
+      },
+    ]);
+  });
+
+  it("ignores ambient channel env when reporting plugin blockers", () => {
+    vi.spyOn(manifestRegistry, "loadPluginManifestRegistrySync").mockReturnValue({
+      plugins: [
+        {
+          id: "slack",
+          origin: "bundled",
+          channels: ["slack"],
+          enabledByDefault: true,
+        },
+        {
+          id: "telegram",
+          origin: "bundled",
+          channels: ["telegram"],
+          enabledByDefault: true,
+        },
+      ],
+      diagnostics: [],
+    } as unknown as ReturnType<typeof manifestRegistry.loadPluginManifestRegistrySync>);
+
+    const hits = scanConfiguredChannelPluginBlockers(
+      {
+        plugins: {
+          enabled: false,
+        },
+        channels: {
+          telegram: {
+            botToken: "configured",
+          },
+        },
+      },
+      {
+        SLACK_BOT_TOKEN: "ambient",
+      } as NodeJS.ProcessEnv,
+    );
+
+    expect(hits).toEqual([
+      {
+        channelId: "telegram",
+        pluginId: "telegram",
         reason: "plugins disabled",
       },
     ]);
