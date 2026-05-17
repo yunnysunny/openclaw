@@ -66,6 +66,13 @@ vi.mock("../plugins/manifest-registry.js", () => ({
     Promise.resolve(loadPluginManifestRegistrySync(...args)),
   resolveManifestContractOwnerPluginId,
 }));
+vi.mock("../plugins/manifest-registry-installed.js", () => ({
+  loadPluginManifestRegistryForInstalledIndex: loadPluginManifestRegistry,
+}));
+vi.mock("../plugins/plugin-registry.js", () => ({
+  loadPluginRegistrySnapshot: () => ({ plugins: [] }),
+  loadPluginManifestRegistryForPluginRegistry: () => loadPluginManifestRegistry(),
+}));
 vi.mock("../plugins/provider-runtime.js", () => ({
   resolveProviderSyntheticAuthWithPlugin,
   resolveProviderSyntheticAuthWithPluginAsync: (

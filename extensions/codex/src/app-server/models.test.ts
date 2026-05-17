@@ -7,15 +7,22 @@ const mocks = vi.hoisted(() => {
     applyAuthProfile: vi.fn(async () => undefined),
     startOptions: vi.fn(async ({ startOptions }) => startOptions),
   };
+  const managedBinary = {
+    startOptions: vi.fn(async (startOptions) => startOptions),
+  };
   const providerAuth = {
     agentDir: vi.fn(() => "/tmp/openclaw-agent"),
   };
-  return { authBridge, providerAuth };
+  return { authBridge, managedBinary, providerAuth };
 });
 
 vi.mock("./auth-bridge.js", () => ({
   applyCodexAppServerAuthProfile: mocks.authBridge.applyAuthProfile,
   bridgeCodexAppServerStartOptions: mocks.authBridge.startOptions,
+}));
+
+vi.mock("./managed-binary.js", () => ({
+  resolveManagedCodexAppServerStartOptions: mocks.managedBinary.startOptions,
 }));
 
 vi.mock("openclaw/plugin-sdk/provider-auth", () => ({
@@ -39,6 +46,8 @@ describe("listCodexAppServerModels", () => {
     vi.restoreAllMocks();
     mocks.authBridge.applyAuthProfile.mockClear();
     mocks.authBridge.startOptions.mockClear();
+    mocks.managedBinary.startOptions.mockClear();
+    mocks.managedBinary.startOptions.mockImplementation(async (startOptions) => startOptions);
     mocks.providerAuth.agentDir.mockClear();
   });
 
@@ -51,7 +60,7 @@ describe("listCodexAppServerModels", () => {
     const initialize = JSON.parse(harness.writes[0] ?? "{}") as { id?: number };
     harness.send({
       id: initialize.id,
-      result: { userAgent: "openclaw/0.118.0 (macOS; test)" },
+      result: { userAgent: "openclaw/0.125.0 (macOS; test)" },
     });
     await vi.waitFor(() => expect(harness.writes.length).toBeGreaterThanOrEqual(3));
     const list = JSON.parse(harness.writes[2] ?? "{}") as { id?: number; method?: string };
@@ -113,7 +122,7 @@ describe("listCodexAppServerModels", () => {
     const initialize = JSON.parse(harness.writes[0] ?? "{}") as { id?: number };
     harness.send({
       id: initialize.id,
-      result: { userAgent: "openclaw/0.118.0 (macOS; test)" },
+      result: { userAgent: "openclaw/0.125.0 (macOS; test)" },
     });
     await vi.waitFor(() => expect(harness.writes.length).toBeGreaterThanOrEqual(3));
     const firstList = JSON.parse(harness.writes[2] ?? "{}") as {
@@ -194,7 +203,7 @@ describe("listCodexAppServerModels", () => {
     const initialize = JSON.parse(harness.writes[0] ?? "{}") as { id?: number };
     harness.send({
       id: initialize.id,
-      result: { userAgent: "openclaw/0.118.0 (macOS; test)" },
+      result: { userAgent: "openclaw/0.125.0 (macOS; test)" },
     });
     await vi.waitFor(() => expect(harness.writes.length).toBeGreaterThanOrEqual(3));
     const firstList = JSON.parse(harness.writes[2] ?? "{}") as { id?: number };

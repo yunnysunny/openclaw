@@ -11,7 +11,7 @@ import { resolveUserPath } from "../utils.js";
 
 const DISABLED_BUNDLED_PLUGINS_DIR = path.join(os.tmpdir(), "openclaw-empty-bundled-plugins");
 
-function bundledPluginsDisabled(env: NodeJS.ProcessEnv): boolean {
+export function areBundledPluginsDisabled(env: NodeJS.ProcessEnv = process.env): boolean {
   const raw = normalizeOptionalLowercaseString(env.OPENCLAW_DISABLE_BUNDLED_PLUGINS);
   return raw === "1" || raw === "true";
 }
@@ -189,7 +189,7 @@ async function resolveBundledDirFromPackageRootAsync(
 }
 
 export function resolveBundledPluginsDir(env: NodeJS.ProcessEnv = process.env): string | undefined {
-  if (bundledPluginsDisabled(env)) {
+  if (areBundledPluginsDisabled(env)) {
     return resolveDisabledBundledPluginsDir();
   }
 

@@ -1,4 +1,4 @@
-import type { MarkdownTableMode } from "openclaw/plugin-sdk/config-runtime";
+import type { MarkdownTableMode } from "openclaw/plugin-sdk/config-types";
 import { chunkMarkdownTextWithMode, type ChunkMode } from "openclaw/plugin-sdk/reply-chunking";
 import type { ReplyPayload } from "openclaw/plugin-sdk/reply-chunking";
 import {
@@ -156,12 +156,14 @@ export async function deliverWebReply(params: {
                 audio: media.buffer,
                 ptt: true,
                 mimetype: media.mimetype,
-                caption,
               },
               quote,
             ),
           "media:audio",
         );
+        if (caption) {
+          await sendWithRetry(() => msg.reply(caption, quote), "media:audio-text");
+        }
       } else if (media.kind === "video") {
         const quote = getQuote();
         await sendWithRetry(

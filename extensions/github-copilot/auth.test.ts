@@ -13,7 +13,7 @@ vi.mock("openclaw/plugin-sdk/provider-auth", () => ({
     listProfilesForProviderMock(authStore, providerId),
 }));
 
-vi.mock("openclaw/plugin-sdk/config-runtime", () => ({
+vi.mock("openclaw/plugin-sdk/secret-input-runtime", () => ({
   resolveRequiredConfiguredSecretRefInputString: resolveRequiredConfiguredSecretRefInputStringMock,
 }));
 

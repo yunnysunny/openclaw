@@ -67,6 +67,8 @@ export type TalkConfig = {
   provider?: string;
   /** Provider-specific Talk config keyed by provider id. */
   providers?: Record<string, TalkProviderConfig>;
+  /** BCP 47 locale id used for Talk speech recognition on device nodes. */
+  speechLocale?: string;
   /** Stop speaking when user starts talking (default: true). */
   interruptOnSpeech?: boolean;
   /** Milliseconds of user silence before Talk mode sends the transcript after a pause. */
@@ -139,6 +141,12 @@ export type GatewayTrustedProxyConfig = {
    * Example: ["nick@example.com", "admin@company.org"]
    */
   allowUsers?: string[];
+  /**
+   * Allow loopback proxy sources (127.0.0.1, ::1) in trusted-proxy mode.
+   * Default false; enable only when a same-host reverse proxy is the intended
+   * trust boundary and direct Gateway access is otherwise locked down.
+   */
+  allowLoopback?: boolean;
 };
 
 export type GatewayAuthConfig = {

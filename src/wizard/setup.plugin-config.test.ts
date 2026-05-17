@@ -18,6 +18,10 @@ vi.mock("../plugins/manifest-registry.js", () => ({
   loadPluginManifestRegistryAsync,
 }));
 
+vi.mock("../plugins/plugin-registry.js", () => ({
+  loadPluginManifestRegistryForPluginRegistry: loadPluginManifestRegistry,
+}));
+
 function makeManifestPlugin(
   id: string,
   uiHints?: Record<string, PluginConfigUiHint>,

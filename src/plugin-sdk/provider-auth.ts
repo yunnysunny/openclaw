@@ -20,6 +20,7 @@ export {
   ensureAuthProfileStore,
   ensureAuthProfileStoreAsync,
   ensureAuthProfileStoreForLocalUpdate,
+  updateAuthProfileStoreWithLock,
 } from "../agents/auth-profiles/store.js";
 export {
   listProfilesForProvider,

@@ -46,7 +46,7 @@ import {
   pickAuthMethod,
   resolveProviderMatch,
 } from "../provider-auth-helpers.js";
-import { loadValidConfigOrThrow, updateConfig } from "./shared.js";
+import { loadValidConfigOrThrow, resolveKnownAgentId, updateConfig } from "./shared.js";
 
 function guardCancel<T>(value: T | symbol): T {
   if (typeof value === "symbol" || isCancel(value)) {
@@ -106,16 +106,20 @@ function listProvidersWithTokenMethods(providers: ProviderPlugin[]): ProviderPlu
 
 async function resolveModelsAuthContext(params?: {
   requestedProvider?: string;
+  rawAgentId?: string | null;
 }): Promise<ResolvedModelsAuthContext> {
   const config = await loadValidConfigOrThrow();
-  const defaultAgentId = resolveDefaultAgentId(config);
-  const agentDir = resolveAgentDir(config, defaultAgentId);
+  const agentId =
+    resolveKnownAgentId({ cfg: config, rawAgentId: params?.rawAgentId }) ??
+    resolveDefaultAgentId(config);
+  const agentDir = resolveAgentDir(config, agentId);
   const workspaceDir =
-    resolveAgentWorkspaceDir(config, defaultAgentId) ?? resolveDefaultAgentWorkspaceDir();
+    resolveAgentWorkspaceDir(config, agentId) ?? resolveDefaultAgentWorkspaceDir();
   const providers = resolvePluginProviders({
     config,
     workspaceDir,
     mode: "setup",
+    includeUntrustedWorkspacePlugins: false,
     bundledProviderAllowlistCompat: true,
     bundledProviderVitestCompat: true,
     ...(params?.requestedProvider?.trim()
@@ -130,9 +134,10 @@ async function resolveModelsAuthContext(params?: {
   };
 }
 
-async function resolveModelsAuthAgentDir(): Promise<string> {
+async function resolveModelsAuthAgentDir(rawAgentId?: string | null): Promise<string> {
   const config = await loadValidConfigOrThrow();
-  return resolveAgentDir(config, resolveDefaultAgentId(config));
+  const agentId = resolveKnownAgentId({ cfg: config, rawAgentId }) ?? resolveDefaultAgentId(config);
+  return resolveAgentDir(config, agentId);
 }
 
 function resolveRequestedProviderOrThrow(
@@ -324,7 +329,7 @@ async function runProviderAuthMethod(params: {
 }
 
 export async function modelsAuthSetupTokenCommand(
-  opts: { provider?: string; yes?: boolean },
+  opts: { provider?: string; yes?: boolean; agent?: string },
   runtime: RuntimeEnv,
 ) {
   if (!process.stdin.isTTY) {
@@ -333,6 +338,7 @@ export async function modelsAuthSetupTokenCommand(
 
   const { config, agentDir, workspaceDir, providers } = await resolveModelsAuthContext({
     requestedProvider: opts.provider,
+    rawAgentId: opts.agent,
   });
   const tokenProviders = listProvidersWithTokenMethods(providers);
   if (tokenProviders.length === 0) {
@@ -379,10 +385,11 @@ export async function modelsAuthPasteTokenCommand(
     provider?: string;
     profileId?: string;
     expiresIn?: string;
+    agent?: string;
   },
   runtime: RuntimeEnv,
 ) {
-  const agentDir = await resolveModelsAuthAgentDir();
+  const agentDir = await resolveModelsAuthAgentDir(opts.agent);
   const rawProvider = normalizeOptionalString(opts.provider);
   if (!rawProvider) {
     throw new Error("Missing --provider.");
@@ -438,8 +445,10 @@ export async function modelsAuthPasteTokenCommand(
   }
 }
 
-export async function modelsAuthAddCommand(_opts: Record<string, never>, runtime: RuntimeEnv) {
-  const { config, agentDir, workspaceDir, providers } = await resolveModelsAuthContext();
+export async function modelsAuthAddCommand(opts: { agent?: string }, runtime: RuntimeEnv) {
+  const { config, agentDir, workspaceDir, providers } = await resolveModelsAuthContext({
+    rawAgentId: opts.agent,
+  });
   const tokenProviders = listProvidersWithTokenMethods(providers);
 
   const provider = await select({
@@ -531,7 +540,10 @@ export async function modelsAuthAddCommand(_opts: Record<string, never>, runtime
       ).trim()
     : undefined;
 
-  await modelsAuthPasteTokenCommand({ provider: providerId, profileId, expiresIn }, runtime);
+  await modelsAuthPasteTokenCommand(
+    { provider: providerId, profileId, expiresIn, agent: opts.agent },
+    runtime,
+  );
 }
 
 type LoginOptions = {
@@ -539,6 +551,7 @@ type LoginOptions = {
   method?: string;
   setDefault?: boolean;
   yes?: boolean;
+  agent?: string;
 };
 
 /**
@@ -591,6 +604,7 @@ export async function modelsAuthLoginCommand(opts: LoginOptions, runtime: Runtim
 
   const { config, agentDir, workspaceDir, providers } = await resolveModelsAuthContext({
     requestedProvider: opts.provider,
+    rawAgentId: opts.agent,
   });
   const prompter = createClackPrompter();
   const authProviders = listProvidersWithAuthMethods(providers);
