@@ -224,24 +224,46 @@ export type PluginManifest = {
    * compat wiring, and contract coverage without importing plugin runtime.
    */
   contracts?: PluginManifestContracts;
+  /** Optional model catalog metadata. */
+  modelCatalog?: { providers?: Record<string, unknown> } & Record<string, unknown>;
+  /** Optional media-understanding-provider metadata. */
+  mediaUnderstandingProviderMetadata?: Record<string, PluginManifestMediaUnderstandingProviderMetadata>;
   /** Manifest-owned config behavior consumed by generic core helpers. */
   configContracts?: PluginManifestConfigContracts;
   channelConfigs?: Record<string, PluginManifestChannelConfig>;
 };
 
 export type PluginManifestContracts = {
+  embeddedExtensionFactories?: string[];
+  agentToolResultMiddleware?: string[];
+  externalAuthProviders?: string[];
   memoryEmbeddingProviders?: string[];
   speechProviders?: string[];
   realtimeTranscriptionProviders?: string[];
   realtimeVoiceProviders?: string[];
   mediaUnderstandingProviders?: string[];
+  documentExtractors?: string[];
   imageGenerationProviders?: string[];
   videoGenerationProviders?: string[];
   musicGenerationProviders?: string[];
+  webContentExtractors?: string[];
   webFetchProviders?: string[];
   webSearchProviders?: string[];
   tools?: string[];
 };
+
+export type PluginManifestMediaUnderstandingCapability = "image" | "audio" | "video";
+
+export type PluginManifestMediaUnderstandingProviderMetadata = {
+  capabilities?: PluginManifestMediaUnderstandingCapability[];
+  defaultModels?: Partial<Record<PluginManifestMediaUnderstandingCapability, string>>;
+  autoPriority?: Partial<Record<PluginManifestMediaUnderstandingCapability, number>>;
+  nativeDocumentInputs?: Array<"pdf">;
+};
+
+export type PluginManifestModelCatalog = {
+  providers?: Record<string, unknown>;
+} & Record<string, unknown>;
 
 export type PluginManifestProviderAuthChoice = {
   /** Provider id owned by this manifest entry. */
@@ -1103,6 +1125,21 @@ export type PluginPackageChannel = {
     specifier?: string;
     exportName?: string;
   };
+  cliAddOptions?: readonly PluginPackageChannelCliOption[];
+  doctorCapabilities?: PluginPackageChannelDoctorCapabilities;
+};
+
+export type PluginPackageChannelCliOption = {
+  flags: string;
+  description: string;
+  defaultValue?: boolean | string;
+};
+
+export type PluginPackageChannelDoctorCapabilities = {
+  dmAllowFromMode?: "topOnly" | "topOrNested" | "nestedOnly";
+  groupModel?: "sender" | "route" | "hybrid";
+  groupAllowFromFallbackToAllowFrom?: boolean;
+  warnOnEmptyGroupSenderAllowlist?: boolean;
 };
 
 export type PluginPackageInstall = {
@@ -1111,6 +1148,7 @@ export type PluginPackageInstall = {
   defaultChoice?: "npm" | "local";
   minHostVersion?: string;
   allowInvalidConfigRecovery?: boolean;
+  expectedIntegrity?: string;
 };
 
 export type OpenClawPackageStartup = {
@@ -1124,11 +1162,14 @@ export type OpenClawPackageStartup = {
 export type OpenClawPackageSetupFeatures = {
   legacyStateMigrations?: boolean;
   legacySessionSurfaces?: boolean;
+  configPromotion?: boolean;
 };
 
 export type OpenClawPackageManifest = {
   extensions?: string[];
   setupEntry?: string;
+  runtimeSetupEntry?: string;
+  runtimeExtensions?: string[];
   setupFeatures?: OpenClawPackageSetupFeatures;
   channel?: PluginPackageChannel;
   install?: PluginPackageInstall;

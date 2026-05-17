@@ -234,7 +234,7 @@ export async function loadProviderCatalogModelsForList(params: {
     (provider) =>
       typeof provider.pluginId === "string" && bundledPluginIdSet.has(provider.pluginId),
   );
-  const byOrder = groupPluginDiscoveryProvidersByOrder(providers);
+  const byOrder = await groupPluginDiscoveryProvidersByOrder(providers);
   const rows: Model<Api>[] = [];
   const seen = new Set<string>();
 

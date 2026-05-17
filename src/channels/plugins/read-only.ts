@@ -594,8 +594,6 @@ export function resolveReadOnlyChannelPluginsForConfig(
         cache: false,
         activate: false,
         includeSetupOnlyChannelPlugins: true,
-        includeSetupOnlyChannelPlugins: true,
-        requireSetupEntryForSetupOnlyChannelPlugins: true,
         onlyPluginIds: externalPluginIds,
       });
       addSetupChannelPlugins(byId, registry.channelSetups, {

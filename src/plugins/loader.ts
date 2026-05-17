@@ -1255,6 +1255,7 @@ function createPluginRecord(params: {
     gatewayMethods: [],
     cliCommands: [],
     services: [],
+    gatewayDiscoveryServiceIds: [],
     commands: [],
     httpRoutes: 0,
     hookCount: 0,
@@ -1943,7 +1944,7 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
         try {
           const installRoot = resolveBundledRuntimeDependencyInstallRoot(pluginRoot);
           const retainSpecs = bundledRuntimeDepsRetainSpecsByInstallRoot.get(installRoot) ?? [];
-          const installedSpecs = ensureBundledPluginRuntimeDeps({
+          const { installedSpecs } = ensureBundledPluginRuntimeDeps({
             pluginId: record.id,
             pluginRoot,
             env,
@@ -2934,7 +2935,7 @@ export async function loadOpenClawPluginsAsync(
         try {
           const installRoot = resolveBundledRuntimeDependencyInstallRoot(pluginRoot);
           const retainSpecs = bundledRuntimeDepsRetainSpecsByInstallRoot.get(installRoot) ?? [];
-          const installedSpecs = ensureBundledPluginRuntimeDeps({
+          const { installedSpecs } = ensureBundledPluginRuntimeDeps({
             pluginId: record.id,
             pluginRoot,
             env,

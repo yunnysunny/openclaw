@@ -166,7 +166,7 @@ export async function setupChannels(
     setup?: {
       installRuntimeDeps?: boolean;
       forceReload?: boolean;
-      forceSetupOnlyChannelPlugins?: boolean;
+      includeSetupOnlyChannelPlugins?: boolean;
     },
   ): Promise<ChannelSetupPlugin | undefined> => {
     const existing = getVisibleChannelPlugin(channel);
@@ -180,7 +180,7 @@ export async function setupChannels(
       ...(pluginId ? { pluginId } : {}),
       workspaceDir: resolveWorkspaceDir(),
       installRuntimeDeps: setup?.installRuntimeDeps ?? false,
-      forceSetupOnlyChannelPlugins: setup?.forceSetupOnlyChannelPlugins,
+      includeSetupOnlyChannelPlugins: setup?.includeSetupOnlyChannelPlugins,
     });
     const plugin =
       snapshot.channelSetups.find((entry) => entry.plugin.id === channel)?.plugin ??
@@ -410,7 +410,7 @@ export async function setupChannels(
     if (scopedPluginsById.has(channel)) {
       await loadScopedChannelPlugin(channel, undefined, {
         forceReload: true,
-        forceSetupOnlyChannelPlugins: true,
+        includeSetupOnlyChannelPlugins: true,
         installRuntimeDeps: true,
       });
     }

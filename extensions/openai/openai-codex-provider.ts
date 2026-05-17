@@ -483,7 +483,7 @@ export function buildOpenAICodexProviderPlugin(): ProviderPlugin {
     catalog: {
       order: "profile",
       run: async (ctx) => {
-        const authStore = ensureOpenAICodexCatalogAuthStore(ctx);
+        const authStore = ensureAuthProfileStoreForLocalUpdate(ctx.agentDir);
         if ((await listProfilesForProviderAsync(authStore, PROVIDER_ID)).length === 0) {
           return null;
         }
