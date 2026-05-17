@@ -22,6 +22,16 @@ vi.mock("../plugins/manifest-registry.js", () => ({
   loadPluginManifestRegistrySync,
 }));
 
+vi.mock("../plugins/plugin-metadata-snapshot.js", () => ({
+  loadPluginMetadataSnapshot: () => {
+    const registry = loadPluginManifestRegistry();
+    return {
+      plugins: registry.plugins,
+      manifestRegistry: registry,
+    };
+  },
+}));
+
 import { buildTrajectoryArtifacts, buildTrajectoryRunMetadata } from "./metadata.js";
 
 afterEach(() => {
@@ -174,6 +184,7 @@ describe("trajectory metadata", () => {
       timedOut: false,
       idleTimedOut: false,
       timedOutDuringCompaction: false,
+      timedOutDuringToolExecution: false,
       compactionCount: 1,
       assistantTexts: ["done"],
       finalPromptText: "run tests",

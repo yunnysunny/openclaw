@@ -14,13 +14,14 @@ import type {
   SessionModelUsage,
 } from "../../infra/session-cost-usage.js";
 import {
-  loadCostUsageSummary,
+  loadCostUsageSummaryFromCache,
   loadSessionLogs,
-  loadSessionCostSummary,
+  loadSessionCostSummaryFromCache,
   loadSessionUsageTimeSeries,
   discoverAllSessions,
   resolveExistingUsageSessionFile,
   type DiscoveredSession,
+  type UsageCacheStatus,
 } from "../../infra/session-cost-usage.js";
 import { parseAgentSessionKey } from "../../routing/session-key.js";
 import { resolvePreferredSessionKeyForSessionIdMatches } from "../../sessions/session-id-resolution.js";
@@ -314,6 +315,7 @@ async function discoverAllSessionsForUsage(params: {
         agentId: agent.id,
         startMs: params.startMs,
         endMs: params.endMs,
+        includeFirstUserMessage: false,
       });
       return sessions.map((session) => Object.assign({}, session, { agentId: agent.id }));
     }),
@@ -329,7 +331,12 @@ async function loadCostUsageSummaryCached(params: {
   const cacheKey = `${params.startMs}-${params.endMs}`;
   const now = Date.now();
   const cached = costUsageCache.get(cacheKey);
-  if (cached?.summary && cached.updatedAt && now - cached.updatedAt < COST_USAGE_CACHE_TTL_MS) {
+  if (
+    cached?.summary &&
+    cached.updatedAt &&
+    now - cached.updatedAt < COST_USAGE_CACHE_TTL_MS &&
+    cached.summary.cacheStatus?.status !== "refreshing"
+  ) {
     return cached.summary;
   }
 
@@ -341,13 +348,18 @@ async function loadCostUsageSummaryCached(params: {
   }
 
   const entry: CostUsageCacheEntry = cached ?? {};
-  const inFlight = loadCostUsageSummary({
+  const inFlight = loadCostUsageSummaryFromCache({
     startMs: params.startMs,
     endMs: params.endMs,
     config: params.config,
+    requestRefresh: true,
+    refreshMode: "sync-when-empty",
   })
     .then((summary) => {
-      setCostUsageCache(cacheKey, { summary, updatedAt: Date.now() });
+      setCostUsageCache(cacheKey, {
+        summary,
+        updatedAt: summary.cacheStatus?.status === "refreshing" ? undefined : Date.now(),
+      });
       return summary;
     })
     .catch((err) => {
@@ -371,6 +383,28 @@ async function loadCostUsageSummaryCached(params: {
     return entry.summary;
   }
   return await inFlight;
+}
+
+function mergeUsageCacheStatus(
+  target: UsageCacheStatus | undefined,
+  source: UsageCacheStatus,
+): UsageCacheStatus {
+  if (!target) {
+    return { ...source };
+  }
+  const statusRank = { fresh: 0, partial: 1, stale: 2, refreshing: 3 } as const;
+  return {
+    status: statusRank[source.status] > statusRank[target.status] ? source.status : target.status,
+    cachedFiles: target.cachedFiles + source.cachedFiles,
+    pendingFiles: target.pendingFiles + source.pendingFiles,
+    staleFiles: target.staleFiles + source.staleFiles,
+    refreshedAt:
+      target.refreshedAt === undefined
+        ? source.refreshedAt
+        : source.refreshedAt === undefined
+          ? target.refreshedAt
+          : Math.max(target.refreshedAt, source.refreshedAt),
+  };
 }
 
 // Exposed for unit tests (kept as a single export to avoid widening the public API surface).
@@ -599,6 +633,7 @@ export const usageHandlers: GatewayRequestHandlers = {
       { date: string; count: number; sum: number; min: number; max: number; p95Max: number }
     >();
     const modelDailyMap = new Map<string, SessionDailyModelUsage>();
+    let cacheStatus: UsageCacheStatus | undefined;
 
     const emptyTotals = (): CostUsageSummary["totals"] => ({
       input: 0,
@@ -632,7 +667,7 @@ export const usageHandlers: GatewayRequestHandlers = {
 
     for (const merged of limitedEntries) {
       const agentId = parseAgentSessionKey(merged.key)?.agentId;
-      const usage = await loadSessionCostSummary({
+      const cachedUsage = await loadSessionCostSummaryFromCache({
         sessionId: merged.sessionId,
         sessionEntry: merged.storeEntry,
         sessionFile: merged.sessionFile,
@@ -640,7 +675,10 @@ export const usageHandlers: GatewayRequestHandlers = {
         agentId,
         startMs,
         endMs,
+        refreshMode: "sync-when-empty",
       });
+      cacheStatus = mergeUsageCacheStatus(cacheStatus, cachedUsage.cacheStatus);
+      const usage = cachedUsage.summary;
 
       if (usage) {
         aggregateTotals.input += usage.input;
@@ -844,6 +882,7 @@ export const usageHandlers: GatewayRequestHandlers = {
       sessions,
       totals: aggregateTotals,
       aggregates,
+      cacheStatus,
     };
 
     respond(true, result, undefined);

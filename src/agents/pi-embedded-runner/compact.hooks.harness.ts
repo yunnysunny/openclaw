@@ -1,4 +1,5 @@
 import { vi, type Mock } from "vitest";
+import type { PluginMetadataSnapshot } from "../../plugins/plugin-metadata-snapshot.js";
 import { clearAgentHarnesses } from "../harness/registry.js";
 import type { CompactionTranscriptRotation } from "./compaction-successor-transcript.js";
 
@@ -104,6 +105,45 @@ export const rotateTranscriptAfterCompactionMock: Mock<
 > = vi.fn(async () => ({
   rotated: false,
 }));
+
+const emptyPluginMetadataSnapshot: PluginMetadataSnapshot = {
+  policyHash: "",
+  index: {
+    version: 1,
+    hostContractVersion: "test",
+    compatRegistryVersion: "test",
+    migrationVersion: 1,
+    policyHash: "",
+    generatedAtMs: 1,
+    installRecords: {},
+    plugins: [],
+    diagnostics: [],
+  },
+  registryDiagnostics: [],
+  manifestRegistry: { plugins: [], diagnostics: [] },
+  plugins: [],
+  diagnostics: [],
+  byPluginId: new Map(),
+  normalizePluginId: (pluginId: string) => pluginId,
+  owners: {
+    channels: new Map(),
+    channelConfigs: new Map(),
+    providers: new Map(),
+    modelCatalogProviders: new Map(),
+    cliBackends: new Map(),
+    setupProviders: new Map(),
+    commandAliases: new Map(),
+    contracts: new Map(),
+  },
+  metrics: {
+    registrySnapshotMs: 0,
+    manifestRegistryMs: 0,
+    ownerMapsMs: 0,
+    totalMs: 0,
+    indexPluginCount: 0,
+    manifestPluginCount: 0,
+  },
+};
 
 export function resetCompactSessionStateMocks(): void {
   sanitizeSessionHistoryMock.mockReset();
@@ -212,6 +252,10 @@ export async function loadCompactHooksHarness(): Promise<{
     ensureRuntimePluginsLoadedAsync: ensureRuntimePluginsLoaded,
   }));
 
+  vi.doMock("../../plugins/current-plugin-metadata-snapshot.js", () => ({
+    getCurrentPluginMetadataSnapshot: () => emptyPluginMetadataSnapshot,
+  }));
+
   vi.doMock("../harness/selection.js", () => ({
     maybeCompactAgentHarnessSession: maybeCompactAgentHarnessSessionMock,
   }));
@@ -302,8 +346,10 @@ export async function loadCompactHooksHarness(): Promise<{
   }));
 
   vi.doMock("../pi-settings.js", () => ({
+    applyPiAutoCompactionGuard: vi.fn(() => ({ supported: true, disabled: false })),
     applyPiCompactionSettingsFromConfig: vi.fn(),
     ensurePiCompactionReserveTokens: vi.fn(),
+    isSilentOverflowProneModel: vi.fn(() => false),
     resolveCompactionReserveTokensFloor: vi.fn(() => 0),
   }));
 
@@ -314,6 +360,7 @@ export async function loadCompactHooksHarness(): Promise<{
   vi.doMock("../model-auth.js", () => ({
     applyAuthHeaderOverride: vi.fn((model: unknown) => model),
     applyLocalNoAuthHeaderOverride: vi.fn((model: unknown) => model),
+    ensureAuthProfileStoreWithoutExternalProfiles: vi.fn(() => ({})),
     getApiKeyForModel: vi.fn(async () => ({ apiKey: "test", mode: "env" })),
     resolveModelAuthMode: vi.fn(() => "env"),
   }));
@@ -329,6 +376,7 @@ export async function loadCompactHooksHarness(): Promise<{
   vi.doMock("../session-write-lock.js", () => ({
     acquireSessionWriteLock: vi.fn(async () => ({ release: vi.fn(async () => {}) })),
     resolveSessionLockMaxHoldFromTimeout: vi.fn(() => 0),
+    resolveSessionWriteLockAcquireTimeoutMs: vi.fn(() => 60_000),
   }));
 
   vi.doMock("../../context-engine/init.js", () => ({
@@ -486,7 +534,7 @@ export async function loadCompactHooksHarness(): Promise<{
   }));
 
   vi.doMock("./history.js", () => ({
-    getDmHistoryLimitFromSessionKey: vi.fn(() => undefined),
+    getHistoryLimitFromSessionKey: vi.fn(() => undefined),
     limitHistoryTurns: vi.fn((msgs: unknown[]) => msgs.slice(0, 2)),
   }));
 
@@ -497,16 +545,19 @@ export async function loadCompactHooksHarness(): Promise<{
     resolveSkillsPromptForRun: vi.fn(() => undefined),
   }));
 
-  vi.doMock("../agent-paths.js", () => ({
-    resolveOpenClawAgentDir: vi.fn(() => "/tmp"),
-  }));
-
   vi.doMock("../agent-scope.js", () => ({
     listAgentEntries: vi.fn(() => []),
     resolveAgentConfig: vi.fn(() => undefined),
+    resolveAgentDir: vi.fn((_cfg: unknown, agentId: string) => `/tmp/agents/${agentId}/agent`),
+    resolveDefaultAgentDir: vi.fn(() => "/tmp/agents/main/agent"),
     resolveDefaultAgentId: vi.fn(() => "main"),
+    resolveRunModelFallbacksOverride: vi.fn(() => undefined),
     resolveSessionAgentId: resolveSessionAgentIdMock,
     resolveSessionAgentIds: vi.fn(() => ({ defaultAgentId: "main", sessionAgentId: "main" })),
+  }));
+
+  vi.doMock("../auth-profiles/source-check.js", () => ({
+    hasAnyAuthProfileStoreSource: vi.fn(() => false),
   }));
 
   vi.doMock("../memory-search.js", () => ({

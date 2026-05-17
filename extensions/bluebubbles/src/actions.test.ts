@@ -1,5 +1,5 @@
 import { importFreshModule } from "openclaw/plugin-sdk/test-fixtures";
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { sendBlueBubblesAttachment } from "./attachments.js";
 import { editBlueBubblesMessage, setGroupIconBlueBubbles } from "./chat.js";
 import { resolveBlueBubblesMessageId } from "./monitor-reply-cache.js";
@@ -90,6 +90,17 @@ describe("bluebubblesMessageActions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(getCachedBlueBubblesPrivateApiStatus).mockReturnValue(null);
+  });
+
+  afterAll(() => {
+    vi.doUnmock("./accounts.js");
+    vi.doUnmock("./reactions.js");
+    vi.doUnmock("./send.js");
+    vi.doUnmock("./chat.js");
+    vi.doUnmock("./attachments.js");
+    vi.doUnmock("./monitor-reply-cache.js");
+    vi.doUnmock("./probe.js");
+    vi.resetModules();
   });
 
   describe("describeMessageTool", () => {
@@ -530,7 +541,15 @@ describe("bluebubblesMessageActions", () => {
         accountId: null,
       });
 
-      expect(resolveBlueBubblesMessageId).toHaveBeenCalledWith("1", { requireKnownShortId: true });
+      expect(resolveBlueBubblesMessageId).toHaveBeenCalledWith(
+        "1",
+        expect.objectContaining({
+          requireKnownShortId: true,
+          chatContext: expect.objectContaining({
+            chatGuid: "iMessage;-;+15551234567",
+          }),
+        }),
+      );
       expect(sendBlueBubblesReaction).toHaveBeenCalledWith(
         expect.objectContaining({
           messageGuid: "resolved-uuid",

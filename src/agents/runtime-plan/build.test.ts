@@ -4,9 +4,7 @@ import { buildAgentRuntimePlan } from "./build.js";
 
 vi.mock("../../plugins/provider-hook-runtime.js", () => ({
   __testing: {},
-  clearProviderRuntimeHookCache: vi.fn(),
   prepareProviderExtraParams: vi.fn(() => undefined),
-  resetProviderRuntimeHookCacheForTest: vi.fn(),
   resolveProviderAuthProfileId: vi.fn(() => undefined),
   resolveProviderExtraParamsForTransport: vi.fn(() => undefined),
   resolveProviderFollowupFallbackRoute: vi.fn(() => undefined),
@@ -115,5 +113,46 @@ describe("AgentRuntimePlan", () => {
     expect(normalized).toHaveLength(1);
     expect(normalized[0]?.name).toBe("ping");
     expect(normalized[0]?.parameters).toBeTypeOf("object");
+  });
+
+  it("does not forward OpenAI API-key profiles into the Codex harness auth slot", () => {
+    const plan = buildAgentRuntimePlan({
+      provider: "openai",
+      modelId: "gpt-5.4",
+      modelApi: "openai-responses",
+      harnessId: "codex",
+      harnessRuntime: "codex",
+      authProfileProvider: "openai",
+      sessionAuthProfileId: "openai:work",
+      config: {},
+      workspaceDir: "/tmp/openclaw-runtime-plan",
+    });
+
+    expect(plan.auth).toMatchObject({
+      providerForAuth: "openai",
+      authProfileProviderForAuth: "openai",
+      harnessAuthProvider: "openai-codex",
+    });
+    expect(plan.auth.forwardedAuthProfileId).toBeUndefined();
+  });
+
+  it("forwards OpenAI Codex profiles for explicit OpenAI PI runs", () => {
+    const plan = buildAgentRuntimePlan({
+      provider: "openai",
+      modelId: "gpt-5.4",
+      modelApi: "openai-responses",
+      harnessId: "pi",
+      harnessRuntime: "pi",
+      authProfileProvider: "openai-codex",
+      sessionAuthProfileId: "openai-codex:work",
+      config: {},
+      workspaceDir: "/tmp/openclaw-runtime-plan",
+    });
+
+    expect(plan.auth).toMatchObject({
+      providerForAuth: "openai",
+      authProfileProviderForAuth: "openai-codex",
+      forwardedAuthProfileId: "openai-codex:work",
+    });
   });
 });

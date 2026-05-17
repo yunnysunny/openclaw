@@ -65,7 +65,11 @@ function createReadinessHarness(params: {
   startedAgoMs: number;
   accounts: Record<string, Partial<ChannelAccountSnapshot>>;
   getStartupPending?: () => boolean;
+  getStartupPendingReason?: Parameters<typeof createReadinessChecker>[0]["getStartupPendingReason"];
   getEventLoopHealth?: Parameters<typeof createReadinessChecker>[0]["getEventLoopHealth"];
+  shouldSkipChannelReadiness?: Parameters<
+    typeof createReadinessChecker
+  >[0]["shouldSkipChannelReadiness"];
   cacheTtlMs?: number;
 }) {
   const startedAt = Date.now() - params.startedAgoMs;
@@ -76,7 +80,9 @@ function createReadinessHarness(params: {
       channelManager: manager,
       startedAt,
       getStartupPending: params.getStartupPending,
+      getStartupPendingReason: params.getStartupPendingReason,
       getEventLoopHealth: params.getEventLoopHealth,
+      shouldSkipChannelReadiness: params.shouldSkipChannelReadiness,
       cacheTtlMs: params.cacheTtlMs,
     }),
   };
@@ -99,6 +105,22 @@ describe("createReadinessChecker", () => {
         startedAgoMs: 5 * 60_000,
         accounts: {},
         getStartupPending: () => true,
+      });
+      expect(readiness()).toEqual({
+        ready: false,
+        failing: ["startup-sidecars"],
+        uptimeMs: 300_000,
+      });
+    });
+  });
+
+  it("reports the current startup pending reason", () => {
+    withReadinessClock(() => {
+      const { readiness } = createReadinessHarness({
+        startedAgoMs: 5 * 60_000,
+        accounts: {},
+        getStartupPending: () => true,
+        getStartupPendingReason: () => "startup-sidecars",
       });
       expect(readiness()).toEqual({
         ready: false,
@@ -186,6 +208,32 @@ describe("createReadinessChecker", () => {
         },
       });
       expect(readiness()).toEqual({ ready: false, failing: ["discord"], uptimeMs: 300_000 });
+    });
+  });
+
+  it("treats intentionally skipped channels as ready", () => {
+    withReadinessClock(() => {
+      const { manager, readiness } = createReadinessHarness({
+        startedAgoMs: 5 * 60_000,
+        accounts: {
+          discord: {
+            running: false,
+            enabled: true,
+            configured: true,
+            lastStartAt: Date.now() - 5 * 60_000,
+          },
+          telegram: {
+            running: false,
+            enabled: true,
+            configured: true,
+            lastStartAt: Date.now() - 5 * 60_000,
+          },
+        },
+        shouldSkipChannelReadiness: () => true,
+      });
+
+      expect(readiness()).toEqual({ ready: true, failing: [], uptimeMs: 300_000 });
+      expect(manager.getRuntimeSnapshot).not.toHaveBeenCalled();
     });
   });
 

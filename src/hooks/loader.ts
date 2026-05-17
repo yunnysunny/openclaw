@@ -8,7 +8,7 @@
 import fsp from "node:fs/promises";
 import path from "node:path";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
-import { openBoundaryFile } from "../infra/boundary-file-read.js";
+import { openRootFile } from "../infra/boundary-file-read.js";
 import { formatErrorMessage } from "../infra/errors.js";
 import { closeFileDescriptorAsync } from "../infra/fd-promise.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
@@ -120,7 +120,7 @@ export async function loadInternalHooks(
           );
           continue;
         }
-        const opened = await openBoundaryFile({
+        const opened = await openRootFile({
           absolutePath: entry.hook.handlerPath,
           rootPath: hookBaseDir,
           boundaryLabel: "hook directory",
@@ -216,7 +216,7 @@ export async function loadInternalHooks(
         log.error(`Handler module path must stay within workspaceDir: ${safeLogValue(rawModule)}`);
         continue;
       }
-      const opened = await openBoundaryFile({
+      const opened = await openRootFile({
         absolutePath: modulePathSafe,
         rootPath: baseDirReal,
         boundaryLabel: "workspace directory",
