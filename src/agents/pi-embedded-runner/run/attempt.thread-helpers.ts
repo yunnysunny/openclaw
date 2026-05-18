@@ -94,3 +94,16 @@ export function shouldPersistCompletedBootstrapTurn(params: {
   }
   return true;
 }
+
+// Stage 4 compat stub: upstream gates the OpenAI WebSocket transport behind a
+// helper that consults provider config, env, and cooldown state. Locally the
+// transport stays HTTP/SSE, so this stub returns false to keep attempt.ts
+// resolving the helper without enabling a transport we don't yet support.
+export function shouldUseOpenAIWebSocketTransport(_params: {
+  provider?: string;
+  modelId?: string;
+  config?: OpenClawConfig;
+  env?: NodeJS.ProcessEnv;
+}): boolean {
+  return false;
+}

@@ -787,3 +787,37 @@ export function emitAcpAssistantDelta(params: { runId: string; text: string; del
     },
   });
 }
+
+// Stage 4 compat stubs: upstream emits explicit prompt-submitted lifecycle and
+// generic runtime events. Locally these aren't wired through emitAgentEvent
+// yet — keep them as no-ops so re-exports compile and ACP tests can mock them.
+export function emitAcpPromptSubmitted(_params: { runId: string; promptId?: string }): void {
+  // intentionally no-op
+}
+
+export function emitAcpRuntimeEvent(_params: {
+  runId: string;
+  type?: string;
+  data?: unknown;
+}): void {
+  // intentionally no-op
+}
+
+// Stage 4 compat stub: upstream gates session file detection through this helper.
+// Locally callers check transcript paths directly; keep an always-false stub
+// to satisfy attempt-execution.runtime.ts re-exports.
+export function sessionFileHasContent(_params: { sessionFile?: string }): boolean {
+  return false;
+}
+
+export function createAcpVisibleTextAccumulator(): { append: (text: string) => void; toString: () => string } {
+  let buffer = "";
+  return {
+    append(text: string) {
+      buffer += text;
+    },
+    toString() {
+      return buffer;
+    },
+  };
+}

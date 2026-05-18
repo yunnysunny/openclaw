@@ -49,6 +49,7 @@ export {
   resolveAuthProfileOrder,
 } from "./auth-profiles.js";
 export { requireApiKey, resolveAwsSdkEnvVarName } from "./model-auth-runtime-shared.js";
+export { formatMissingAuthError } from "./model-auth-runtime-shared.js";
 export type { ResolvedProviderAuth } from "./model-auth-runtime-shared.js";
 export type ProviderCredentialPrecedence = "profile-first" | "env-first";
 
@@ -857,4 +858,26 @@ export function applyAuthHeaderOverride<T extends Model<Api>>(
     ...model,
     headers,
   };
+}
+
+// Stage 4 compat stub: upstream gates runtime auth probing through this helper
+// (config + env + profile cooldown). Locally auth resolution happens later in
+// the request path, so report unknown availability — callers fall back to the
+// real provider attempt without short-circuiting.
+export function hasRuntimeAvailableProviderAuth(_params: {
+  provider?: string;
+  config?: OpenClawConfig;
+  env?: NodeJS.ProcessEnv;
+}): boolean {
+  return false;
+}
+
+// Stage 4 compat stub: upstream gates synthetic local provider auth (e.g. ollama
+// loopback) through this helper. Returning false makes callers fall back to the
+// real auth resolution path; tests mock this where it matters.
+export function hasSyntheticLocalProviderAuthConfig(_params: {
+  cfg?: OpenClawConfig;
+  provider?: string;
+}): boolean {
+  return false;
 }

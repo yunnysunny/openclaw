@@ -68,3 +68,10 @@ export function filterCodexDynamicTools<T extends { name: string }>(
     ? tools
     : tools.filter((tool) => !excludes.has(normalizeCodexDynamicToolName(tool.name)));
 }
+
+// Stage 4 compat stub: upstream-only dynamic tool profile post-processor.
+// Returns the input list unchanged so `run-attempt.ts` keeps the prepared
+// tools verbatim (no profile filtering applied here).
+export function applyCodexDynamicToolProfile<T>(tools: T, _pluginConfig?: CodexPluginConfig): T {
+  return tools;
+}

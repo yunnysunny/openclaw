@@ -591,3 +591,10 @@ export function buildAfterTurnRuntimeContextFromUsage(
     currentTokenCount: derivePromptTokens(params.lastCallUsage),
   });
 }
+
+// Stage 4 compat stub: upstream gates skipping a turn when only system noise
+// is present. Locally we treat any non-empty payload as submittable; the
+// stub returns true to preserve current behavior (no skip).
+export function hasPromptSubmissionContent(_params?: unknown): boolean {
+  return true;
+}

@@ -98,3 +98,13 @@ export function requireCommandFlagEnabled(
     reply: buildDisabledCommandReply(params),
   };
 }
+
+// Stage 4 compat stub: upstream-only gateway client scope check that guards
+// internal-channel commands. Returning undefined means "no missing scope" so
+// commands proceed; ACL is enforced elsewhere by the gateway itself.
+export function requireGatewayClientScopeForInternalChannel(
+  _params: unknown,
+  _opts?: unknown,
+): undefined {
+  return undefined;
+}

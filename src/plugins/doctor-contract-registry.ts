@@ -356,3 +356,13 @@ export function applyPluginDoctorCompatibilityMigrations(
   }
   return { config: nextCfg, changes };
 }
+
+// Stage 4 compat stub: upstream-only listing of plugin-supplied doctor route
+// owners. Locally route ownership comes from the static gateway map; return
+// an empty list so doctor-session-state-providers reports no plugin owners.
+export function listPluginDoctorSessionRouteStateOwners(_params: {
+  config?: unknown;
+  env?: NodeJS.ProcessEnv;
+}): unknown[] {
+  return [];
+}

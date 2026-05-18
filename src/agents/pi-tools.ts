@@ -834,3 +834,17 @@ export async function createOpenClawCodingToolsAsync(
     resolvedOpenClawTools,
   });
 }
+
+// Stage 4 compat stub: upstream-only scope key resolver for in-process tools.
+// Locally process-tool scope falls back to the session/agent ids; produce a
+// stable key so listActiveProcessSessionReferences stays addressable.
+export function resolveProcessToolScopeKey(params: {
+  sessionKey?: string;
+  sessionId?: string;
+  agentId?: string;
+}): string {
+  const parts = [params.agentId, params.sessionKey ?? params.sessionId].filter(
+    (value): value is string => Boolean(value && value.trim()),
+  );
+  return parts.length > 0 ? parts.join(":") : "default";
+}

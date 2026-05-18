@@ -312,3 +312,7 @@ export type RootFileOpenFailure = {
   error?: unknown;
 };
 
+
+// Stage 4 compat alias: upstream renamed canUseBoundaryFileOpen for the
+// root-file open variant. Same predicate, different name.
+export const canUseRootFileOpen = canUseBoundaryFileOpen;

@@ -574,3 +574,9 @@ export async function saveAuthProfileStoreAsync(
     setRuntimeAuthProfileStoreSnapshot(runtimeStore, agentDir);
   }
 }
+
+// Stage 4 compat stub: upstream-only owner-agent resolver. Returns undefined
+// so callers fall through to the configured agent dir; tests mock this.
+export function resolvePersistedAuthProfileOwnerAgentDir(_params?: unknown): undefined {
+  return undefined;
+}

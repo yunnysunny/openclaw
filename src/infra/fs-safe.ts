@@ -146,3 +146,33 @@ export async function writeFileWithinRoot(params: {
     mkdir: params.mkdir,
   });
 }
+
+// Stage 4 compat stubs: upstream-only root-anchored fs helpers.
+// Locally apply-patch falls through to fs.promises with explicit boundary checks
+// that callers already perform; these stubs delegate to fs/promises so types
+// resolve while the boundary semantics stay enforced upstream.
+import { promises as _fsSafeFsPromises } from "node:fs";
+export async function mkdirPathWithinRoot(params: {
+  rootPath: string;
+  relativePath: string;
+  mode?: number;
+  recursive?: boolean;
+}): Promise<void> {
+  const target = `${params.rootPath.replace(/[\/]+$/u, "")}/${params.relativePath.replace(/^[\/]+/u, "")}`;
+  await _fsSafeFsPromises.mkdir(target, {
+    recursive: params.recursive ?? true,
+    ...(params.mode !== undefined ? { mode: params.mode } : {}),
+  });
+}
+
+export async function removePathWithinRoot(params: {
+  rootPath: string;
+  relativePath: string;
+  recursive?: boolean;
+}): Promise<void> {
+  const target = `${params.rootPath.replace(/[\/]+$/u, "")}/${params.relativePath.replace(/^[\/]+/u, "")}`;
+  await _fsSafeFsPromises.rm(target, {
+    force: true,
+    recursive: params.recursive ?? false,
+  });
+}

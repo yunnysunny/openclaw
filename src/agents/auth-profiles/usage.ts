@@ -927,3 +927,14 @@ export async function clearAuthProfileCooldown(params: {
   updateUsageStatsEntry(store, profileId, (existing) => resetUsageStats(existing));
   authProfileUsageDeps.saveAuthProfileStore(store, agentDir);
 }
+
+// Stage 4 compat stub: upstream split `markAuthProfileGood` into success +
+// usage tracking; locally markAuthProfileGood already updates usage stats,
+// so this is a no-op shim for callers that invoke both.
+export async function markAuthProfileUsed(_params: {
+  store: unknown;
+  profileId?: string;
+  agentDir: string;
+}): Promise<void> {
+  // intentionally no-op
+}

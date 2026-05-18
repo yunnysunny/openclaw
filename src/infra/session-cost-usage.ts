@@ -1097,3 +1097,9 @@ export async function loadSessionLogs(params: {
 
   return sortedLogs;
 }
+
+// Stage 4 compat alias: upstream renamed loadCostUsageSummary to loadCostUsageSummaryFromCache.
+export const loadCostUsageSummaryFromCache = loadCostUsageSummary;
+
+// Stage 4 compat alias: upstream renamed loadSessionCostSummary to loadSessionCostSummaryFromCache.
+export const loadSessionCostSummaryFromCache = loadSessionCostSummary;

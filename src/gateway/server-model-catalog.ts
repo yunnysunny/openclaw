@@ -36,3 +36,10 @@ export async function loadGatewayModelCatalog(params?: {
   }
   return catalog;
 }
+
+// Stage 4 compat stub: upstream lets a config write force a model catalog
+// reload at the gateway boundary. Locally the catalog reloads on demand, so
+// this stub is a no-op; tests that mock it remain unaffected.
+export function markGatewayModelCatalogStaleForReload(_reason?: string): void {
+  // intentionally no-op
+}

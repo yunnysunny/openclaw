@@ -330,3 +330,25 @@ export function wrapProviderStreamFn(params: {
 }) {
   return resolveProviderHookPlugin(params)?.wrapStreamFn?.(params.context) ?? undefined;
 }
+
+// Stage 4 compat stub: upstream introduced a wider plugin handle that bundles
+// resolution metadata. Locally we resolve plugins on demand; the stub returns
+// the runtime plugin (or undefined) wrapped with placeholder metadata so
+// callers in `runtime-plan/build.ts` keep type-checking.
+export type ProviderRuntimePluginHandle = {
+  plugin: unknown;
+  provider: string;
+  pluginId?: string;
+};
+
+export function resolveProviderRuntimePluginHandle(_params: {
+  provider: string;
+  config?: unknown;
+  workspaceDir?: string;
+  env?: NodeJS.ProcessEnv;
+  applyAutoEnable?: boolean;
+  bundledProviderAllowlistCompat?: boolean;
+  bundledProviderVitestCompat?: boolean;
+}): ProviderRuntimePluginHandle | undefined {
+  return undefined;
+}

@@ -340,3 +340,6 @@ async function findLatestEquivalentAssistantMessageId(
 
 export { readLatestAssistantTextFromSessionTranscript } from "../sessions.js";
 
+
+// Stage 4 compat alias: upstream renamed readLatestAssistantTextFromSessionTranscript.
+export { readLatestAssistantTextFromSessionTranscript as readTailAssistantTextFromSessionTranscript } from "../sessions.js";

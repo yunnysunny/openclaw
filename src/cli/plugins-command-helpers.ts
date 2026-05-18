@@ -236,3 +236,16 @@ export function parseNpmPackPrefixPath(raw: string): string | null {
   }
   return trimmed.slice("npm-pack:".length).trim();
 }
+
+// Stage 4 compat stubs: upstream-only ClawHub preferred-spec helpers used by
+// install/update flows. Locally we rely on the explicit user spec, so the
+// preferred-spec path is undefined and the fallback decision is "none".
+export function buildPreferredClawHubSpec(_params?: unknown): undefined {
+  return undefined;
+}
+export function decidePreferredClawHubFallback(_params?: unknown): {
+  preferred?: undefined;
+  reason?: string;
+} {
+  return {};
+}

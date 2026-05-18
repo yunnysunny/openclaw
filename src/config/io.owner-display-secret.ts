@@ -19,3 +19,6 @@ export function retainGeneratedOwnerDisplaySecret(params: {
   state.pendingByPath.set(configPath, generatedSecret);
   return config;
 }
+
+// Stage 4 compat alias: upstream renamed retainGeneratedOwnerDisplaySecret.
+export const persistGeneratedOwnerDisplaySecret = retainGeneratedOwnerDisplaySecret;

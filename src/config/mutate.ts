@@ -53,10 +53,140 @@ export type ConfigReplaceResult = {
   followUp: ConfigWriteFollowUp;
 };
 
-type ConfigMutationIO = {
+export type ConfigMutationIO = {
   readConfigFileSnapshotForWrite: typeof readConfigFileSnapshotForWrite;
   writeConfigFile: (cfg: OpenClawConfig, options?: ConfigWriteOptions) => Promise<unknown>;
 };
+
+// Stage 4 compat stubs: upstream additions referenced via config.ts re-exports
+// and `plugins-install-record-commit.ts` runtime callers. Fork has not picked
+// up the upstream transformConfigFile-* / commit / retry surface; these stubs
+// keep the dts barrel and `@ts-nocheck`'d call sites compiling, while the
+// runtime helpers below throw if invoked outside tests that mock them.
+export type ConfigMutationContext = {
+  snapshot: ConfigFileSnapshot;
+  previousHash: string | null;
+  baseHash?: string;
+};
+export type ConfigTransformResult<T> = {
+  nextConfig: OpenClawConfig;
+  result?: T;
+};
+export type ConfigMutationCommitParams = {
+  nextConfig: OpenClawConfig;
+  snapshot: ConfigFileSnapshot;
+  baseHash?: string;
+  writeOptions?: ConfigWriteOptions;
+};
+export type ConfigMutationCommitResult = {
+  config: OpenClawConfig;
+  persistedHash: string | null;
+  afterWrite: ConfigWriteAfterWrite;
+};
+export type ConfigMutationCommit = (
+  params: ConfigMutationCommitParams,
+) => Promise<ConfigMutationCommitResult>;
+export type ConfigMutationResult<T> = ConfigReplaceResult & {
+  result: T | undefined;
+};
+export type TransformConfigFileParams<T> = {
+  base?: ConfigMutationBase;
+  baseHash?: string;
+  afterWrite?: ConfigWriteOptions["afterWrite"];
+  writeOptions?: ConfigWriteOptions;
+  io?: ConfigMutationIO;
+  transform: (
+    currentConfig: OpenClawConfig,
+    context: ConfigMutationContext,
+  ) => Promise<ConfigTransformResult<T>> | ConfigTransformResult<T>;
+  commit: ConfigMutationCommit;
+};
+export type TransformConfigFileWithRetryParams<T> = TransformConfigFileParams<T> & {
+  maxRetries?: number;
+};
+
+export async function transformConfigFile<T = void>(
+  params: TransformConfigFileParams<T>,
+): Promise<ConfigMutationResult<T>> {
+  const { snapshot, writeOptions } = await (
+    params.io?.readConfigFileSnapshotForWrite ?? readConfigFileSnapshotForWrite
+  )();
+  assertConfigWriteAllowedInCurrentMode({ configPath: snapshot.path });
+  const previousHash = assertBaseHashMatches(snapshot, params.baseHash);
+  const baseConfig = params.base === "runtime" ? snapshot.runtimeConfig : snapshot.sourceConfig;
+  const transformed = await params.transform(baseConfig as OpenClawConfig, {
+    snapshot,
+    previousHash,
+    baseHash: params.baseHash,
+  });
+  const committed = await params.commit({
+    nextConfig: transformed.nextConfig,
+    snapshot,
+    baseHash: params.baseHash,
+    writeOptions: { ...writeOptions, ...params.writeOptions },
+  });
+  return {
+    path: snapshot.path,
+    previousHash,
+    snapshot,
+    nextConfig: committed.config,
+    afterWrite: committed.afterWrite,
+    followUp: resolveConfigWriteFollowUp(committed.afterWrite),
+    result: transformed.result,
+  };
+}
+
+export async function transformConfigFileWithRetry<T = void>(
+  params: TransformConfigFileWithRetryParams<T>,
+): Promise<ConfigMutationResult<T>> {
+  const maxRetries = Math.max(1, params.maxRetries ?? 3);
+  let lastError: unknown;
+  for (let attempt = 0; attempt < maxRetries; attempt += 1) {
+    try {
+      return await transformConfigFile(params);
+    } catch (error) {
+      lastError = error;
+      if (!(error instanceof ConfigMutationConflictError)) {
+        throw error;
+      }
+    }
+  }
+  throw lastError;
+}
+
+export async function mutateConfigFileWithRetry<T = void>(params: {
+  base?: ConfigMutationBase;
+  baseHash?: string;
+  afterWrite?: ConfigWriteOptions["afterWrite"];
+  writeOptions?: ConfigWriteOptions;
+  io?: ConfigMutationIO;
+  maxRetries?: number;
+  mutate: (
+    draft: OpenClawConfig,
+    context: ConfigMutationContext,
+  ) => Promise<T | void> | T | void;
+}): Promise<ConfigReplaceResult & { result: T | undefined }> {
+  const maxRetries = Math.max(1, params.maxRetries ?? 3);
+  let lastError: unknown;
+  for (let attempt = 0; attempt < maxRetries; attempt += 1) {
+    try {
+      return await mutateConfigFile<T>({
+        base: params.base,
+        baseHash: params.baseHash,
+        afterWrite: params.afterWrite,
+        writeOptions: params.writeOptions,
+        io: params.io,
+        mutate: params.mutate,
+      });
+    } catch (error) {
+      lastError = error;
+      if (!(error instanceof ConfigMutationConflictError)) {
+        throw error;
+      }
+    }
+  }
+  throw lastError;
+}
 
 function assertBaseHashMatches(snapshot: ConfigFileSnapshot, expectedHash?: string): string | null {
   const currentHash = resolveConfigSnapshotHash(snapshot) ?? null;

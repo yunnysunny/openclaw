@@ -2494,3 +2494,16 @@ export async function updateCommand(opts: UpdateCommandOptions): Promise<void> {
     defaultRuntime.writeJson(resultWithPostUpdate);
   }
 }
+
+// Stage 4 compat stub: upstream split updateCommand into a finalize step that
+// runs doctor + plugin convergence post-restart. Locally updateCommand handles
+// the whole flow; this stub mirrors the option-bag signature so the dts barrel
+// and tests that mock it still resolve.
+export async function updateFinalizeCommand(_opts: {
+  json?: boolean;
+  yes?: boolean;
+  timeout?: string;
+  restart?: boolean;
+} = {}): Promise<void> {
+  // intentionally no-op
+}

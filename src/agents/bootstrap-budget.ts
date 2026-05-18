@@ -383,3 +383,21 @@ export function buildBootstrapTruncationReportMeta(params: {
     totalNearLimit: params.analysis.totalNearLimit,
   };
 }
+
+// Stage 4 compat stub: upstream renamed/inverted appendBootstrapPromptWarning
+// to prepend the warning before the bootstrap section so model attention gets
+// the budget signal first.
+export function prependBootstrapPromptWarning(
+  prompt: string | undefined,
+  warningLines?: string[],
+): string | undefined {
+  const trimmedPrompt = (prompt ?? "").trim();
+  const warning = buildBootstrapPromptWarningNotice(warningLines);
+  if (!warning) {
+    return prompt;
+  }
+  if (!trimmedPrompt) {
+    return warning;
+  }
+  return `${warning}\n\n${prompt ?? ""}`;
+}

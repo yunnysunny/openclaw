@@ -594,3 +594,8 @@ export async function loadGatewayPluginsAsync(params: {
 
 export const dispatchGatewayMethodInProcessRaw: ((...args: unknown[]) => Promise<unknown>) = async () => undefined;
 
+
+// Stage 4 compat alias: subagent-announce.runtime.ts re-exports under the
+// non-Raw name; both call sites accept the same loose signature.
+export const dispatchGatewayMethodInProcess: typeof dispatchGatewayMethodInProcessRaw =
+  dispatchGatewayMethodInProcessRaw;

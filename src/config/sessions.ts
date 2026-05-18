@@ -23,3 +23,9 @@ export async function readLatestAssistantTextFromSessionTranscript(
   return undefined;
 }
 
+export { purgeAgentSessionStoreEntries } from "./sessions/cleanup-service.js";
+export {
+  resolveSessionCleanupAction,
+  runSessionsCleanup,
+  serializeSessionCleanupResult,
+} from "./sessions/cleanup-service.js";

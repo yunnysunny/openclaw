@@ -491,3 +491,11 @@ export function getSessionCompactionCheckpoint(params: {
     (checkpoint) => checkpoint.checkpointId === checkpointId,
   );
 }
+
+// Stage 4 compat stub: synchronous variant of captureCompactionCheckpointSnapshotAsync.
+// Locally compaction always runs through the async path; this no-op shim keeps
+// `compact.ts` callsites resolving while leaving snapshot capture to the async
+// helper that actually persists state.
+export function captureCompactionCheckpointSnapshot(_params: unknown): undefined {
+  return undefined;
+}

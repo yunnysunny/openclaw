@@ -187,3 +187,12 @@ export const __testing = {
     messageActionTesting.resetLoggedMessageActionErrors();
   },
 };
+
+// Stage 4 compat stub: upstream renamed/re-shaped resolveChannelMessageToolHints.
+// Returning the same hint object via the new name keeps compaction callsites typed.
+export function resolveChannelMessageToolCapabilities(params: {
+  cfg?: OpenClawConfig;
+  channel?: string;
+}): unknown {
+  return resolveChannelMessageToolHints(params);
+}

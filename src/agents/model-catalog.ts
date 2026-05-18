@@ -23,6 +23,17 @@ export {
   modelSupportsInput,
 } from "./model-catalog-lookup.js";
 
+// Stage 4 compat stub: upstream introduced a manifest-only catalog reader.
+// Locally model-catalog discovery happens via loadModelCatalog; until the
+// manifest-only path is ported, return an empty array so callers fall back
+// to the dynamic catalog and tests can still mock this entry point.
+export function loadManifestModelCatalog(_params?: {
+  config?: OpenClawConfig;
+  workspaceDir?: string;
+}): ModelCatalogEntry[] {
+  return [];
+}
+
 type DiscoveredModel = {
   id: string;
   name?: string;

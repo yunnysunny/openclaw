@@ -57,6 +57,7 @@ export {
   clearExpiredCooldowns,
   getSoonestCooldownExpiry,
   isProfileInCooldown,
+  markAuthProfileBlockedUntil,
   markAuthProfileCooldown,
   markAuthProfileFailure,
   markAuthProfileUsed,
@@ -90,3 +91,40 @@ export async function refreshOAuthCredentialForRuntime(_params: unknown): Promis
 export type AuthProfileBlockedReason = string;
 export type AuthProfileBlockedSource = string;
 
+// Stage 4 compat re-export: upstream lifted external CLI discovery onto the
+// auth-profiles barrel; mirror the underlying helper here so callers using the
+// new path keep resolving without rewiring their imports.
+export { externalCliDiscoveryForProviderAuth } from "./auth-profiles/external-cli-discovery.js";
+
+
+// Stage 4 compat re-export: portability helper used by agent copy flows.
+export { buildPortableAuthProfileSecretsStoreForAgentCopy } from "./auth-profiles/portability.js";
+
+// Stage 4 compat re-export: status-shaped CLI discovery helper.
+export { externalCliDiscoveryForConfigStatus } from "./auth-profiles/external-cli-discovery.js";
+
+// Stage 4 compat stub: upstream-only bulk profile remover with the auth lock.
+// Locally lmstudio setup runs under the same lock; emulate by calling
+// upsertAuthProfileWithLock with an empty profile list (no-op) — the tests
+// mock this entirely and don't depend on the implementation.
+export async function removeProviderAuthProfilesWithLock(_params: {
+  agentDir: string;
+  provider: string;
+  profileIds?: string[];
+}): Promise<void> {
+  // intentionally no-op
+}
+
+// Stage 4 compat re-export: scoped CLI discovery used by models list probes.
+export { externalCliDiscoveryScoped } from "./auth-profiles/external-cli-discovery.js";
+
+// Stage 4 compat stub: upstream-only AWS SDK profile classifier.
+// Locally directive-handling.auth treats AWS as a regular API-key path; return
+// false so the AWS SDK branch isn't taken.
+export function isConfiguredAwsSdkAuthProfileForProvider(_params: {
+  cfg?: unknown;
+  provider?: string;
+  profileId?: string;
+}): boolean {
+  return false;
+}

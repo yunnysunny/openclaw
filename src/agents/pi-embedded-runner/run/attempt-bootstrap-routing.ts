@@ -85,3 +85,10 @@ export async function resolveAttemptWorkspaceBootstrapRouting(
     hasBootstrapFileAccess: params.hasBootstrapFileAccess || hasHookBootstrapContent,
   });
 }
+
+// Stage 4 compat stub: upstream gates whether to strip bootstrap content from
+// embedded contexts. Locally embedded runs always retain bootstrap (false) so
+// the prompt context isn't surprisingly trimmed; tests mock this when needed.
+export function shouldStripBootstrapFromEmbeddedContext(_params?: unknown): boolean {
+  return false;
+}

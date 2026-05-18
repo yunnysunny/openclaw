@@ -1060,3 +1060,13 @@ export async function syncPluginsForUpdateChannel(params: {
 
   return { config: next, changed, summary };
 }
+
+// Stage 4 compat stubs: upstream-only spec resolvers for trusted-source linked
+// installs. Locally we don't yet pin official sources, so return undefined to
+// signal "no trusted spec known" — callers fall back to their default checks.
+export function resolveTrustedSourceLinkedOfficialClawHubSpec(_params?: unknown): undefined {
+  return undefined;
+}
+export function resolveTrustedSourceLinkedOfficialNpmSpec(_params?: unknown): undefined {
+  return undefined;
+}

@@ -2352,3 +2352,7 @@ export async function listSessionsFromStoreAsync(params: {
     sessions,
   };
 }
+
+// Stage 4 compat alias: upstream prefers the sync-named export when callers
+// already await the result. Both names point at the same async reader.
+export { readSessionMessagesAsync as readSessionMessages } from "./session-utils.fs.js";

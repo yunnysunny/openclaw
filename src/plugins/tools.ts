@@ -370,3 +370,18 @@ export async function resolvePluginToolsAsync(params: {
 
   return tools;
 }
+
+// Stage 4 compat stub: upstream-only standalone registry preload hook.
+// Channel/MCP entry points call this before resolvePluginTools to warm a
+// per-channel plugin registry; locally we resolve on demand, so a no-op is
+// safe (resolvePluginTools/resolvePluginToolsAsync still drive discovery).
+export function ensureStandalonePluginToolRegistryLoaded(_params: {
+  context: OpenClawPluginToolContext;
+  toolAllowlist?: string[];
+  toolDenylist?: string[];
+  allowGatewaySubagentBinding?: boolean;
+  hasAuthForProvider?: (providerId: string) => boolean;
+  env?: NodeJS.ProcessEnv;
+}): void {
+  // intentionally no-op
+}

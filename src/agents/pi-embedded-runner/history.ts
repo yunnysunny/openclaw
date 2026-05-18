@@ -116,3 +116,13 @@ export function getHistoryLimitFromSessionKey(
 
   return undefined;
 }
+
+// Stage 4 compat stub: upstream split history limits per-DM.
+// Locally getHistoryLimitFromSessionKey already routes DM and channel cases;
+// this alias keeps compact.ts compiling without re-importing.
+export function getDmHistoryLimitFromSessionKey(
+  sessionKey: string,
+  config: unknown,
+): number | undefined {
+  return getHistoryLimitFromSessionKey(sessionKey, config as never);
+}
