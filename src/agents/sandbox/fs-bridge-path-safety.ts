@@ -75,6 +75,7 @@ export class SandboxFsPathGuard {
 
   async openReadableFile(
     target: SandboxResolvedFsPath,
+    // oxlint-disable-next-line typescript/no-redundant-type-constituents -- RootFileOpenResult is a stage4 stub.
   ): Promise<RootFileOpenResult & { ok: true }> {
     const opened = await this.openBoundaryWithinRequiredMount(target, "read files");
     if (!opened.ok) {

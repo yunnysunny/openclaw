@@ -158,7 +158,7 @@ export async function mkdirPathWithinRoot(params: {
   mode?: number;
   recursive?: boolean;
 }): Promise<void> {
-  const target = `${params.rootPath.replace(/[\/]+$/u, "")}/${params.relativePath.replace(/^[\/]+/u, "")}`;
+  const target = `${params.rootPath.replace(/\/+$/u, "")}/${params.relativePath.replace(/^\/+/u, "")}`;
   await _fsSafeFsPromises.mkdir(target, {
     recursive: params.recursive ?? true,
     ...(params.mode !== undefined ? { mode: params.mode } : {}),
@@ -170,7 +170,7 @@ export async function removePathWithinRoot(params: {
   relativePath: string;
   recursive?: boolean;
 }): Promise<void> {
-  const target = `${params.rootPath.replace(/[\/]+$/u, "")}/${params.relativePath.replace(/^[\/]+/u, "")}`;
+  const target = `${params.rootPath.replace(/\/+$/u, "")}/${params.relativePath.replace(/^\/+/u, "")}`;
   await _fsSafeFsPromises.rm(target, {
     force: true,
     recursive: params.recursive ?? false,

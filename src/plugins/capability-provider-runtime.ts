@@ -258,7 +258,9 @@ export function resolvePluginCapabilityProviders<K extends CapabilityProviderReg
   }
   const compatConfig = resolveCapabilityProviderConfig({ key: params.key, cfg: params.cfg });
   const loadOptions =
-    compatConfig === undefined ? undefined : { config: compatConfig, activate: false };
+    compatConfig === undefined
+      ? undefined
+      : { config: compatConfig, activate: false, cache: false };
   const registry = resolveRuntimePluginRegistry(loadOptions);
   const loadedProviders = registry?.[params.key] ?? [];
   if (params.key !== "memoryEmbeddingProviders") {

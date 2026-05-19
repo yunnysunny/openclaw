@@ -30,5 +30,6 @@ export async function startGatewayServer(
 
 export async function __resetModelCatalogCacheForTest(): Promise<void> {
   const mod = await loadServerImpl();
+  // oxlint-disable-next-line typescript/await-thenable -- impl may be sync stub or async; preserve await for parity.
   await mod.__resetModelCatalogCacheForTest();
 }

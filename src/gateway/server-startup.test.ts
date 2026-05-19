@@ -19,20 +19,6 @@ const resolveModelAsyncMock = vi.fn<
     api: "openai-codex-responses",
   },
 }));
-const resolveModelAsyncMock = vi.fn<
-  (
-    provider: unknown,
-    modelId: unknown,
-    agentDir: unknown,
-    cfg: unknown,
-  ) => Promise<{ model?: { id: string; provider: string; api: string }; error?: string }>
->(async () => ({
-  model: {
-    id: "gpt-5.4",
-    provider: "openai-codex",
-    api: "openai-codex-responses",
-  },
-}));
 const selectAgentHarnessMock = vi.fn((_params: unknown) => ({ id: "pi" }));
 const resolveEmbeddedAgentRuntimeMock = vi.fn(() => "auto");
 

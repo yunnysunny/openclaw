@@ -159,7 +159,7 @@ async function resolveBundledManifestContractsAsync(): Promise<PluginRegistratio
       pluginId: entry.pluginId,
       cliBackendIds: [...entry.cliBackendIds],
       providerIds: [...entry.providerIds],
-      providerAuthEnvVars: { ...(entry.providerAuthEnvVars ?? {}) },
+      providerAuthEnvVars: { ...entry.providerAuthEnvVars },
       speechProviderIds: [...entry.speechProviderIds],
       realtimeTranscriptionProviderIds: [...entry.realtimeTranscriptionProviderIds],
       realtimeVoiceProviderIds: [...entry.realtimeVoiceProviderIds],
@@ -197,7 +197,7 @@ async function resolveBundledManifestContractsAsync(): Promise<PluginRegistratio
       pluginId: plugin.id,
       cliBackendIds: uniqueStrings(plugin.cliBackends),
       providerIds: uniqueStrings(plugin.providers),
-      providerAuthEnvVars: { ...(plugin.providerAuthEnvVars ?? {}) },
+      providerAuthEnvVars: { ...plugin.providerAuthEnvVars },
       speechProviderIds: uniqueStrings(plugin.contracts?.speechProviders ?? []),
       realtimeTranscriptionProviderIds: uniqueStrings(
         plugin.contracts?.realtimeTranscriptionProviders ?? [],

@@ -178,6 +178,7 @@ export function createCachedPluginBoundaryModuleLoader<TModule>(
   };
 }
 
+// oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- TModule preserves caller-side return type assertion.
 export function loadPluginBoundaryModule<TModule>(
   modulePath: string,
   loaders: unknown,

@@ -338,8 +338,13 @@ async function findLatestEquivalentAssistantMessageId(
   return undefined;
 }
 
-export { readLatestAssistantTextFromSessionTranscript } from "../sessions.js";
-
+// Stage 5: inline the stage4 compat stub here to avoid the
+// sessions.ts <-> sessions/transcript.ts circular import chain.
+export async function readLatestAssistantTextFromSessionTranscript(
+  _sessionFile: string,
+): Promise<{ text: string } | undefined> {
+  return undefined;
+}
 
 // Stage 4 compat alias: upstream renamed readLatestAssistantTextFromSessionTranscript.
-export { readLatestAssistantTextFromSessionTranscript as readTailAssistantTextFromSessionTranscript } from "../sessions.js";
+export const readTailAssistantTextFromSessionTranscript = readLatestAssistantTextFromSessionTranscript;

@@ -156,6 +156,7 @@ describe("gateway server models + voicewake", () => {
   const setPiCatalog = async (entries: PiCatalogFixtureEntry[]) => {
     piSdkMock.enabled = true;
     piSdkMock.models = entries;
+    // oxlint-disable-next-line typescript/await-thenable -- impl may be sync stub or async; preserve await.
     await resetGatewayModelCatalogCacheForTest();
   };
 

@@ -1,7 +1,8 @@
 // @ts-nocheck
 import { getActiveEmbeddedRunCount } from "../agents/pi-embedded-runner/runs.js";
 import { getTotalPendingReplies } from "../auto-reply/reply/dispatcher-registry.js";
-import type { CanvasHostServer } from "../canvas-host/server.js";
+// Stage 4 stub: upstream canvas-host module is not ported on this fork.
+type CanvasHostServer = unknown;
 import { type ChannelId, listChannelPlugins } from "../channels/plugins/index.js";
 import { createDefaultDeps } from "../cli/deps.js";
 import { isRestartEnabled } from "../config/commands.flags.js";
@@ -457,6 +458,7 @@ export async function startGatewayServer(
 
   const deps = createDefaultDeps();
   let runtimeState: GatewayServerLiveState | null = null;
+  // oxlint-disable-next-line typescript/no-redundant-type-constituents -- CanvasHostServer is a stage4 stub.
   let canvasHostServer: CanvasHostServer | null = null;
   const gatewayTls = await startupTrace.measure("tls.runtime", () =>
     loadGatewayTlsRuntime(cfgAtStart.gateway?.tls, log.child("tls")),
@@ -709,6 +711,7 @@ export async function startGatewayServer(
       logChannels,
     });
 
+    // oxlint-disable-next-line typescript/no-unnecessary-type-assertion, typescript/no-redundant-type-constituents -- CanvasHostServer is a stage4 stub.
     const canvasHostServerPort = (canvasHostServer as CanvasHostServer | null)?.port;
 
     const unavailableGatewayMethods = new Set<string>(

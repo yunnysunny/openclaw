@@ -466,6 +466,7 @@ describe("gateway server agent", () => {
         input: ["text", "image"],
       },
     ];
+    // oxlint-disable-next-line typescript/await-thenable -- impl may be sync stub or async; preserve await.
     await resetGatewayModelCatalogCacheForTest();
 
     await setTestSessionStore({

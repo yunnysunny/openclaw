@@ -1039,6 +1039,7 @@ async function agentCommandInternal(
               storePath,
               allowTransientCooldownProbe: runOptions?.allowTransientCooldownProbe,
               sessionHasHistory:
+                // oxlint-disable-next-line typescript/await-thenable -- sessionFileHasContent is sync stub on this branch.
                 !isNewSession || (await attemptExecutionRuntime.sessionFileHasContent(sessionFile)),
               suppressPromptPersistenceOnRetry: isFallbackRetry && currentTurnUserMessagePersisted,
               onUserMessagePersisted: () => {

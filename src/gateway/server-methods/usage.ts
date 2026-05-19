@@ -387,6 +387,7 @@ async function loadCostUsageSummaryCached(params: {
 }
 
 function mergeUsageCacheStatus(
+  // oxlint-disable-next-line typescript/no-redundant-type-constituents -- UsageCacheStatus is a stage4 stub.
   target: UsageCacheStatus | undefined,
   source: UsageCacheStatus,
 ): UsageCacheStatus {
@@ -634,6 +635,7 @@ export const usageHandlers: GatewayRequestHandlers = {
       { date: string; count: number; sum: number; min: number; max: number; p95Max: number }
     >();
     const modelDailyMap = new Map<string, SessionDailyModelUsage>();
+    // oxlint-disable-next-line typescript/no-redundant-type-constituents -- UsageCacheStatus is a stage4 stub.
     let cacheStatus: UsageCacheStatus | undefined;
 
     const emptyTotals = (): CostUsageSummary["totals"] => ({

@@ -220,21 +220,34 @@ export function createTsdownOutputScanner(params = {}) {
   let hasIneffectiveDynamicImport = false;
   let fatalUnresolvedImport = null;
 
+  // Stage 5 allowlist: dynamic import in src/agents/tools/agent-step.ts is
+  // intentional — it's the only thing keeping commands/agent.js off the
+  // static-import graph (see scripts/check-import-cycles.ts). Suppress the
+  // INEFFECTIVE warning for that specific edge so build doesn't fail.
+  const STAGE5_ALLOWED_DYNAMIC_IMPORT_IMPORTERS = new Set([
+    "src/agents/tools/agent-step.ts",
+  ]);
+
   function scanLines(text) {
     const combined = pendingLine + text;
     const lines = combined.split(/\r?\n/u);
     pendingLine = lines.pop() ?? "";
     for (const line of lines) {
       fatalUnresolvedImport ??= findFatalUnresolvedImport([line]);
+      if (line.includes(INEFFECTIVE_DYNAMIC_IMPORT_MARKER)) {
+        const isAllowed = [...STAGE5_ALLOWED_DYNAMIC_IMPORT_IMPORTERS].some((importer) =>
+          line.includes(`dynamically imported by ${importer}`),
+        );
+        if (!isAllowed) {
+          hasIneffectiveDynamicImport = true;
+        }
+      }
     }
   }
 
   return {
     append(chunk) {
       const text = Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk);
-      if (text.includes(INEFFECTIVE_DYNAMIC_IMPORT_MARKER)) {
-        hasIneffectiveDynamicImport = true;
-      }
       scanLines(text);
       captured += text;
       if (captured.length > maxCaptureBytes) {

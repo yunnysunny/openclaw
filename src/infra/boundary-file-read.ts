@@ -302,6 +302,7 @@ export function matchRootFileOpenFailure<T>(
   result: BoundaryFileOpenResult,
   handlers: Parameters<typeof matchBoundaryFileOpenFailure<T>>[1],
 ): T {
+  // oxlint-disable-next-line typescript/no-unnecessary-type-assertion -- preserve T cast through `as never` boundary handler.
   return matchBoundaryFileOpenFailure<T>(result as never, handlers) as T;
 }
 

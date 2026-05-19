@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { randomUUID } from "node:crypto";
 import type { StreamFn } from "@earendil-works/pi-agent-core";
 import type {

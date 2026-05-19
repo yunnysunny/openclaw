@@ -361,7 +361,9 @@ describe("normalizePluginDiscoveryResult", () => {
         },
       },
     },
-  ] as const)("$name", async ({ provider, result, expected }) => {
+  ];
+
+  it.each(cases)("$name", async ({ provider, result, expected }) => {
     await expectNormalizedDiscoveryResult({ provider, result, expected });
   });
 });

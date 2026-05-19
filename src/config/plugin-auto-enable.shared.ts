@@ -434,6 +434,7 @@ export function configMayNeedPluginAutoEnable(
 export function resolvePluginAutoEnableCandidateReason(
   candidate: PluginAutoEnableCandidate,
 ): string {
+  // oxlint-disable-next-line typescript/switch-exhaustiveness-check -- web-search-provider-selected handled in default branch.
   switch (candidate.kind) {
     case "channel-configured":
       return `${candidate.channelId} configured`;

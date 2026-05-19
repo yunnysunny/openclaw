@@ -163,6 +163,7 @@ function renderAppliedSummaries(params: {
 
 async function maybeRunGatewayCleanup(
   opts: SessionsCleanupOptions,
+  // oxlint-disable-next-line typescript/no-redundant-type-constituents -- SessionsCleanupResult is a stage4 stub.
 ): Promise<SessionsCleanupResult | null> {
   if (opts.store || opts.dryRun) {
     return null;

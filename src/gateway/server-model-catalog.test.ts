@@ -37,6 +37,7 @@ const getConfig = () => ({}) as OpenClawConfig;
 
 describe("loadGatewayModelCatalog", () => {
   beforeEach(async () => {
+    // oxlint-disable-next-line typescript/await-thenable -- impl may be sync stub or async; preserve await.
     await __resetModelCatalogCacheForTest();
   });
 

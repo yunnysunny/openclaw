@@ -45,13 +45,23 @@ function registerMemoryFlushPlanResolverForTest(resolver: MemoryFlushPlanResolve
   registerMemoryCapability("memory-core", { flushPlanResolver: resolver });
 }
 
-const runEmbeddedPiAgentMock = vi.fn();
-const runCliAgentMock = vi.fn();
-const runWithModelFallbackMock = vi.fn();
-const runtimeErrorMock = vi.fn();
-const abortEmbeddedPiRunMock = vi.fn();
-const clearSessionQueuesMock = vi.fn();
-const refreshQueuedFollowupSessionMock = vi.fn();
+const {
+  runEmbeddedPiAgentMock,
+  runCliAgentMock,
+  runWithModelFallbackMock,
+  runtimeErrorMock,
+  abortEmbeddedPiRunMock,
+  clearSessionQueuesMock,
+  refreshQueuedFollowupSessionMock,
+} = vi.hoisted(() => ({
+  runEmbeddedPiAgentMock: vi.fn(),
+  runCliAgentMock: vi.fn(),
+  runWithModelFallbackMock: vi.fn(),
+  runtimeErrorMock: vi.fn(),
+  abortEmbeddedPiRunMock: vi.fn(),
+  clearSessionQueuesMock: vi.fn(),
+  refreshQueuedFollowupSessionMock: vi.fn(),
+}));
 const compactState = vi.hoisted(() => ({
   compactEmbeddedPiSessionMock: vi.fn(),
 }));

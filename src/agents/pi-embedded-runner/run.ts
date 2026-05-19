@@ -2049,6 +2049,7 @@ export async function runEmbeddedPiAgent(
                   source: "planning_only_retry",
                 },
               });
+              // oxlint-disable-next-line typescript/no-floating-promises -- best-effort agent event; see surrounding await chain.
               params.onAgentEvent?.({
                 stream: "plan",
                 data: {
