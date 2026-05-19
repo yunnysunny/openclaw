@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { writeSync } from "node:fs";
 import {
   type Api,

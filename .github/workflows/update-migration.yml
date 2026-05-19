@@ -43,4 +43,4 @@ jobs:
       published_upgrade_survivor_baselines: ${{ inputs.baselines }}
       published_upgrade_survivor_scenarios: ${{ inputs.scenarios }}
       telegram_mode: none
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit] reusable workflow lives in this repo and intentionally consumes the parent context.

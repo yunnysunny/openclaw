@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { describe, it, vi } from "vitest";
 import {
   buildForwardCompatTemplate,

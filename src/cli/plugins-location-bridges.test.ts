@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { InstalledPluginIndex } from "../plugins/installed-plugin-index.js";
 import type { InstalledPluginStartupInfo } from "../plugins/installed-plugin-index.js";

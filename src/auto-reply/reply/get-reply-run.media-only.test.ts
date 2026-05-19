@@ -46,6 +46,14 @@ vi.mock("../../globals.js", () => ({
 vi.mock("../../process/command-queue.js", () => ({
   clearCommandLane: vi.fn().mockReturnValue(0),
   getQueueSize: vi.fn().mockReturnValue(0),
+  getTotalQueueSize: vi.fn().mockReturnValue(0),
+  enqueueCommand: vi.fn(),
+  enqueueCommandInLane: vi.fn(),
+  getCommandLaneSnapshot: vi.fn(() => ({ lane: "main", running: 0, queued: 0 })),
+  getCommandLaneSnapshots: vi.fn(() => []),
+  resetCommandLane: vi.fn().mockReturnValue(0),
+  setCommandLaneConcurrency: vi.fn(),
+  markGatewayDraining: vi.fn(),
 }));
 
 vi.mock(import("../../routing/session-key.js"), async (importOriginal) => {

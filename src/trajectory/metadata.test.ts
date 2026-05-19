@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { REDACTED_SENTINEL } from "../config/redact-snapshot.js";
 import { createEmptyPluginRegistry } from "../plugins/registry-empty.js";

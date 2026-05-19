@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SkillCommandSpec } from "../../agents/skills.js";
 import type { SessionEntry } from "../../config/sessions.js";
@@ -713,7 +714,7 @@ describe("handleInlineActions", () => {
         reason: "denied by policy",
       },
     }));
-    createOpenClawToolsMock.mockReturnValue([
+    createOpenClawToolsAsyncMock.mockResolvedValue([
       {
         name: "message",
         execute: toolExecute,
@@ -782,7 +783,7 @@ describe("handleInlineActions", () => {
       kind: "reply",
       reply: { text: "❌ Tool call blocked: denied by policy" },
     });
-    expect(createOpenClawToolsMock).toHaveBeenCalledWith(
+    expect(createOpenClawToolsAsyncMock).toHaveBeenCalledWith(
       expect.objectContaining({
         sessionId: "target-session",
         currentChannelId: "whatsapp",

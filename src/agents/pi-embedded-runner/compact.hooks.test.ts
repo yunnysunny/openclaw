@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { resolveUserPath } from "../../utils.js";

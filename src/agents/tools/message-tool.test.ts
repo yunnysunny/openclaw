@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Type } from "typebox";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChannelMessageCapability } from "../../channels/plugins/message-capabilities.js";

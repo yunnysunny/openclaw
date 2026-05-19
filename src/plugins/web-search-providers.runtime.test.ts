@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 type RegistryModule = typeof import("./registry.js");

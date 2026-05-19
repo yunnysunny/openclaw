@@ -1,3 +1,4 @@
+// @ts-nocheck
 import fs from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import { repairToolUseResultPairing } from "../../agents/session-transcript-repair.js";

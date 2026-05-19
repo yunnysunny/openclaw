@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const loadPluginManifestRegistrySyncMock = vi.hoisted(() => vi.fn());

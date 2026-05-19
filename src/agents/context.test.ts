@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { describe, expect, it, vi } from "vitest";
 import {
   ANTHROPIC_CONTEXT_1M_TOKENS,

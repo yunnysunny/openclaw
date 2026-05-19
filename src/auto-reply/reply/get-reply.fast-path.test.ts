@@ -55,6 +55,14 @@ vi.mock("../../agents/model-catalog.js", async () => {
 
 vi.mock("../../agents/workspace.js", () => ({
   DEFAULT_AGENT_WORKSPACE_DIR: "/tmp/openclaw-workspace",
+  DEFAULT_AGENTS_FILENAME: "AGENTS.md",
+  DEFAULT_SOUL_FILENAME: "SOUL.md",
+  DEFAULT_TOOLS_FILENAME: "TOOLS.md",
+  DEFAULT_IDENTITY_FILENAME: "IDENTITY.md",
+  DEFAULT_USER_FILENAME: "USER.md",
+  DEFAULT_HEARTBEAT_FILENAME: "HEARTBEAT.md",
+  DEFAULT_BOOTSTRAP_FILENAME: "BOOTSTRAP.md",
+  DEFAULT_MEMORY_FILENAME: "MEMORY.md",
   ensureAgentWorkspace: (...args: unknown[]) => mocks.ensureAgentWorkspace(...args),
 }));
 registerGetReplyRuntimeOverrides(mocks);

@@ -419,6 +419,10 @@ vi.mock("../../infra/outbound/session-binding-service.js", () => ({
 vi.mock("../../infra/agent-events.js", () => ({
   emitAgentEvent: (params: unknown) => agentEventMocks.emitAgentEvent(params),
   onAgentEvent: (listener: unknown) => agentEventMocks.onAgentEvent(listener),
+  getAgentRunContext: vi.fn(() => undefined),
+  setAgentRunContext: vi.fn(),
+  clearAgentRunContext: vi.fn(),
+  withAgentRunContext: vi.fn(async (_ctx: unknown, fn: () => Promise<unknown>) => fn()),
 }));
 vi.mock("../../plugins/conversation-binding.js", () => ({
   buildPluginBindingDeclinedText: () => "Plugin binding request was declined.",

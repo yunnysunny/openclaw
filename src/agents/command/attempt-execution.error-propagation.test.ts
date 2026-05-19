@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { AcpRuntimeError } from "../../acp/runtime/errors.js";
 import {

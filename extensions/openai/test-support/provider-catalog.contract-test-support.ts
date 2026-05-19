@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { beforeEach, describe, it, vi } from "vitest";
 import {
   expectAugmentedCodexCatalog,

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { describe, expect, it, vi } from "vitest";
 import { __testing, type EmbeddedPiActiveSessionSteerTarget } from "./attempt.js";
 

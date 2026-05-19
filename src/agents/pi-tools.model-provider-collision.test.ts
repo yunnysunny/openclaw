@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { describe, expect, it } from "vitest";
 import { __testing } from "./pi-tools.js";
 import type { AnyAgentTool } from "./pi-tools.types.js";

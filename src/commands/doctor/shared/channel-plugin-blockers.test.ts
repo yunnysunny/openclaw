@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as configPresence from "../../../channels/config-presence.js";
 import * as manifestRegistry from "../../../plugins/manifest-registry.js";

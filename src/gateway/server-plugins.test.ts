@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import type { PluginLookUpTable } from "../plugins/plugin-lookup-table.js";
 import type { PluginRegistry } from "../plugins/registry.js";

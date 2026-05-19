@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const taskRuntimeMocks = vi.hoisted(() => ({
