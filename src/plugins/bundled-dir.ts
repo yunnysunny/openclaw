@@ -356,3 +356,17 @@ export async function resolveBundledPluginsDirAsync(
 
   return undefined;
 }
+
+// Stage 4 compat stub: upstream test seam that swaps the resolved bundled
+// plugins directory in-process. Locally callers read from env directly, so
+// keep the name available and mirror the env var so test cleanup paths work.
+export function setBundledPluginsDirOverrideForTest(dir: string | undefined): void {
+  if (process.env.VITEST !== "true" && process.env.NODE_ENV !== "test") {
+    throw new Error("setBundledPluginsDirOverrideForTest is only available in tests");
+  }
+  if (dir === undefined) {
+    delete process.env.OPENCLAW_BUNDLED_PLUGINS_DIR;
+  } else {
+    process.env.OPENCLAW_BUNDLED_PLUGINS_DIR = dir;
+  }
+}
