@@ -243,6 +243,8 @@ function installModelsListCommandForwardCompatMocks() {
   }));
 
   vi.doMock("../../agents/auth-profiles/store.js", () => ({
+    saveAuthProfileStore: vi.fn(),
+    saveAuthProfileStoreAsync: vi.fn(),
     loadAuthProfileStoreWithoutExternalProfiles: mocks.ensureAuthProfileStore,
   }));
 
