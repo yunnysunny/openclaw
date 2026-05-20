@@ -45,9 +45,21 @@ async function formatSnapshotFiles(root: string, files: PromptSnapshotFile[]) {
   if (filePaths.length === 0) {
     return;
   }
-  await execFileAsync(oxfmtPath, ["--write", "--threads=1", ...filePaths], {
-    cwd: repoRoot,
-  });
+  try {
+    await execFileAsync(oxfmtPath, ["--write", "--threads=1", ...filePaths], {
+      cwd: repoRoot,
+      shell: process.platform === "win32",
+    });
+  } catch (error) {
+    // Windows-only: child_process.spawn returns EINVAL for some long-arg
+    // .cmd invocations under recent Node releases. Skip formatting locally
+    // when we hit it; CI runs on Linux so the formatter still gates there.
+    if (process.platform === "win32" && hasErrorCode(error, "EINVAL")) {
+      console.warn("oxfmt skipped (Windows spawn EINVAL); CI Linux runner will reformat.");
+      return;
+    }
+    throw error;
+  }
 }
 
 async function readSnapshotFiles(root: string, files: PromptSnapshotFile[]) {

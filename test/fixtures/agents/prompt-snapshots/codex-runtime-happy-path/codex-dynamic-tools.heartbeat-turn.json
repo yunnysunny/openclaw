@@ -762,42 +762,6 @@
   },
   {
     "deferLoading": true,
-    "description": "Record heartbeat result. `notify=false` no visible send. `notify=true` needs concise notificationText.",
-    "inputSchema": {
-      "additionalProperties": false,
-      "properties": {
-        "nextCheck": {
-          "type": "string"
-        },
-        "notificationText": {
-          "type": "string"
-        },
-        "notify": {
-          "type": "boolean"
-        },
-        "outcome": {
-          "enum": ["no_change", "progress", "done", "blocked", "needs_attention"],
-          "type": "string"
-        },
-        "priority": {
-          "enum": ["low", "normal", "high"],
-          "type": "string"
-        },
-        "reason": {
-          "type": "string"
-        },
-        "summary": {
-          "type": "string"
-        }
-      },
-      "required": ["outcome", "notify", "summary"],
-      "type": "object"
-    },
-    "name": "heartbeat_respond",
-    "namespace": "openclaw"
-  },
-  {
-    "deferLoading": true,
     "description": "Use only for explicit audio intent (voice/speech/TTS) or active TTS config. Never use for ordinary text replies. Audio auto-delivered from tool result; after success follow reply instructions, no duplicate text/audio.",
     "inputSchema": {
       "properties": {
