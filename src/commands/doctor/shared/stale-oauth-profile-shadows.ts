@@ -183,6 +183,8 @@ function removeStaleProfilesFromStore(params: {
 }): { store: AuthProfileStore; removedProfileIds: string[] } {
   const removedProfileIds: string[] = [];
   const profiles = { ...params.store.profiles };
+  const order = params.store.order ? { ...params.store.order } : undefined;
+  const lastGood = params.store.lastGood ? { ...params.store.lastGood } : undefined;
   const usageStats = params.store.usageStats ? { ...params.store.usageStats } : undefined;
   for (const profileId of params.profileIds) {
     const local = profiles[profileId];
@@ -198,6 +200,37 @@ function removeStaleProfilesFromStore(params: {
       continue;
     }
     delete profiles[profileId];
+    if (order) {
+      for (const [providerId, profileOrder] of Object.entries(order)) {
+        const nextOrder = profileOrder.filter((entry) => entry !== profileId);
+        if (nextOrder.length > 0) {
+          order[providerId] = nextOrder;
+        } else {
+          delete order[providerId];
+        }
+      }
+    }
+    if (lastGood) {
+      for (const [providerId, lastGoodProfileId] of Object.entries(lastGood)) {
+        if (lastGoodProfileId === profileId) {
+          delete lastGood[providerId];
+        }
+      }
+    }
+    if (order) {
+      for (const providerId of Object.keys(order)) {
+        if (!order[providerId] || order[providerId].length === 0) {
+          delete order[providerId];
+        }
+      }
+    }
+    if (lastGood) {
+      for (const providerId of Object.keys(lastGood)) {
+        if (!lastGood[providerId]) {
+          delete lastGood[providerId];
+        }
+      }
+    }
     if (usageStats) {
       delete usageStats[profileId];
     }
@@ -207,6 +240,8 @@ function removeStaleProfilesFromStore(params: {
     store: {
       ...params.store,
       profiles,
+      ...(order && Object.keys(order).length > 0 ? { order } : { order: undefined }),
+      ...(lastGood && Object.keys(lastGood).length > 0 ? { lastGood } : { lastGood: undefined }),
       ...(usageStats && Object.keys(usageStats).length > 0
         ? { usageStats }
         : { usageStats: undefined }),
