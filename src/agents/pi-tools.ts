@@ -143,6 +143,7 @@ function applyModelProviderToolPolicy(
     modelId?: string;
     agentDir?: string;
     modelCompat?: ModelCompatConfig;
+    suppressManagedWebSearch?: boolean;
   },
 ): AnyAgentTool[] {
   if (params?.config?.agents?.defaults?.experimental?.localModelLean === true) {
@@ -151,6 +152,7 @@ function applyModelProviderToolPolicy(
   }
 
   if (
+    params?.suppressManagedWebSearch !== false &&
     shouldSuppressManagedWebSearchTool({
       config: params?.config,
       modelProvider: params?.modelProvider,

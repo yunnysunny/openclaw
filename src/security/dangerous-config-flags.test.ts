@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
+import { collectEnabledInsecureOrDangerousFlagsFromContracts } from "./dangerous-config-flags-core.js";
 import { collectEnabledInsecureOrDangerousFlags } from "./dangerous-config-flags.js";
 
 const { loadPluginManifestRegistrySyncMock } = vi.hoisted(() => ({
