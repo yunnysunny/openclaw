@@ -7,11 +7,11 @@ export type PluginRegistryIdNormalizerOptions = {
   lookUpTable?: Pick<{ manifestRegistry: PluginManifestRegistry }, "manifestRegistry">;
 };
 
-function normalizePluginRegistryAlias(value: string): string {
-  return value.trim();
+function normalizePluginRegistryAlias(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
 }
 
-function normalizePluginRegistryAliasKey(value: string): string {
+function normalizePluginRegistryAliasKey(value: unknown): string {
   return normalizePluginRegistryAlias(value).toLowerCase();
 }
 
@@ -19,7 +19,7 @@ function collectObjectKeys(value: Record<string, unknown> | undefined): readonly
   return value ? Object.keys(value) : [];
 }
 
-function listPluginRegistryNormalizerAliases(plugin: PluginManifestRecord): readonly string[] {
+function listPluginRegistryNormalizerAliases(plugin: PluginManifestRecord): readonly unknown[] {
   return [
     plugin.id,
     ...(plugin.providers ?? []),

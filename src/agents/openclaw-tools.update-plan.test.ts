@@ -17,6 +17,17 @@ function toolNames(tools: ReturnType<typeof createOpenClawTools>): string[] {
   return tools.map((tool) => tool.name);
 }
 
+function createCoreToolsForTest(
+  options: NonNullable<Parameters<typeof createOpenClawTools>[0]>,
+): ReturnType<typeof createOpenClawTools> {
+  return createOpenClawTools({
+    imageGenerationModelConfig: null,
+    musicGenerationModelConfig: null,
+    videoGenerationModelConfig: null,
+    ...options,
+  });
+}
+
 function expectToolNamed(
   tools: ReturnType<typeof createOpenClawTools>,
   name: string,
@@ -55,13 +66,13 @@ describe("openclaw-tools update_plan gating", () => {
   });
 
   it("does not expose update_plan from default tool construction", () => {
-    const defaultTools = createOpenClawTools({
+    const defaultTools = createCoreToolsForTest({
       config: {} as OpenClawConfig,
       disablePluginTools: true,
       modelProvider: "anthropic",
       modelId: "claude-sonnet-4-6",
     });
-    const emptyAllowlistTools = createOpenClawTools({
+    const emptyAllowlistTools = createCoreToolsForTest({
       config: {} as OpenClawConfig,
       disablePluginTools: true,
       pluginToolAllowlist: [],
@@ -74,11 +85,11 @@ describe("openclaw-tools update_plan gating", () => {
   });
 
   it("wraps constructed tools with before-tool-call hooks by default", () => {
-    const tools = createOpenClawTools({
+    const tools = createCoreToolsForTest({
       config: {} as OpenClawConfig,
       disablePluginTools: true,
     });
-    const unwrappedTools = createOpenClawTools({
+    const unwrappedTools = createCoreToolsForTest({
       config: {} as OpenClawConfig,
       disablePluginTools: true,
       wrapBeforeToolCallHook: false,
@@ -92,7 +103,7 @@ describe("openclaw-tools update_plan gating", () => {
 
   it("keeps message tool in embedded message-tool-only completions", () => {
     setEmbeddedMode(true);
-    const tools = createOpenClawTools({
+    const tools = createCoreToolsForTest({
       config: {} as OpenClawConfig,
       disablePluginTools: true,
       sourceReplyDeliveryMode: "message_tool_only",
@@ -103,16 +114,16 @@ describe("openclaw-tools update_plan gating", () => {
 
   it("keeps explicitly allowed message tool in embedded completions", () => {
     setEmbeddedMode(true);
-    const fromRuntimeAllowlist = createOpenClawTools({
+    const fromRuntimeAllowlist = createCoreToolsForTest({
       config: {} as OpenClawConfig,
       disablePluginTools: true,
       pluginToolAllowlist: ["message"],
     });
-    const fromGlobalAlsoAllow = createOpenClawTools({
+    const fromGlobalAlsoAllow = createCoreToolsForTest({
       config: { tools: { profile: "minimal", alsoAllow: ["message"] } } as OpenClawConfig,
       disablePluginTools: true,
     });
-    const denied = createOpenClawTools({
+    const denied = createCoreToolsForTest({
       config: {} as OpenClawConfig,
       disablePluginTools: true,
       pluginToolAllowlist: ["message"],
@@ -126,11 +137,11 @@ describe("openclaw-tools update_plan gating", () => {
 
   it("keeps subagent spawn available for trusted embedded gateway-bound runs", () => {
     setEmbeddedMode(true);
-    const defaultTools = createOpenClawTools({
+    const defaultTools = createCoreToolsForTest({
       config: {} as OpenClawConfig,
       disablePluginTools: true,
     });
-    const gatewayBoundTools = createOpenClawTools({
+    const gatewayBoundTools = createCoreToolsForTest({
       config: {} as OpenClawConfig,
       disablePluginTools: true,
       allowGatewaySubagentBinding: true,
@@ -156,7 +167,7 @@ describe("openclaw-tools update_plan gating", () => {
   });
 
   it("registers update_plan when the runtime allowlist explicitly requests it", () => {
-    const tools = createOpenClawTools({
+    const tools = createCoreToolsForTest({
       config: {} as OpenClawConfig,
       disablePluginTools: true,
       pluginToolAllowlist: ["update_plan"],
@@ -168,7 +179,7 @@ describe("openclaw-tools update_plan gating", () => {
   });
 
   it("registers update_plan when a config allowlist group includes it", () => {
-    const tools = createOpenClawTools({
+    const tools = createCoreToolsForTest({
       config: { tools: { allow: ["group:agents"] } } as OpenClawConfig,
       disablePluginTools: true,
       modelProvider: "anthropic",
@@ -179,7 +190,7 @@ describe("openclaw-tools update_plan gating", () => {
   });
 
   it("registers update_plan when a runtime allowlist group includes it", () => {
-    const tools = createOpenClawTools({
+    const tools = createCoreToolsForTest({
       config: {} as OpenClawConfig,
       disablePluginTools: true,
       pluginToolAllowlist: ["group:agents"],
@@ -191,7 +202,7 @@ describe("openclaw-tools update_plan gating", () => {
   });
 
   it("respects deny policy while constructing update_plan for grouped allowlists", () => {
-    const tools = createOpenClawTools({
+    const tools = createCoreToolsForTest({
       config: {} as OpenClawConfig,
       disablePluginTools: true,
       pluginToolAllowlist: ["group:agents"],

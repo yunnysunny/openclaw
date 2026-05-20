@@ -667,6 +667,9 @@ export function wrapToolWithBeforeToolCallHook(
   tool: AnyAgentTool,
   ctx?: HookContext,
 ): AnyAgentTool {
+  if (isToolWrappedWithBeforeToolCallHook(tool)) {
+    return tool;
+  }
   const execute = tool.execute;
   if (!execute) {
     return tool;

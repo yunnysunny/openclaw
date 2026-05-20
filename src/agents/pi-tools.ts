@@ -345,6 +345,8 @@ export function createOpenClawCodingTools(options?: {
   onYield?: (message: string) => Promise<void> | void;
   /** Internal: pre-resolved OpenClaw tools for async wrapper reuse. */
   resolvedOpenClawTools?: AnyAgentTool[];
+  /** If false, return OpenClaw tools without before_tool_call hook wrappers. */
+  wrapBeforeToolCallHook?: boolean;
 }): AnyAgentTool[] {
   const execToolName = "exec";
   const sandbox = options?.sandbox?.enabled ? options.sandbox : undefined;
@@ -636,6 +638,7 @@ export function createOpenClawCodingTools(options?: {
         sessionId: options?.sessionId,
         onYield: options?.onYield,
         allowGatewaySubagentBinding: options?.allowGatewaySubagentBinding,
+        wrapBeforeToolCallHook: options?.wrapBeforeToolCallHook,
       })),
   ];
   const toolsForMemoryFlush =

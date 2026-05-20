@@ -348,6 +348,7 @@ function createDynamicTools(params: {
     forceHeartbeatTool: params.trigger === "heartbeat",
     trigger: params.trigger,
     config: dynamicToolsConfig,
+    wrapBeforeToolCallHook: false,
   });
   const normalized = normalizeAgentRuntimeTools({
     tools,

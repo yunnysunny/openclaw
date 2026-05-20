@@ -28,6 +28,10 @@ function hasErrorCode(error: unknown, code: string): boolean {
   return Boolean(error && typeof error === "object" && "code" in error && error.code === code);
 }
 
+function getErrorCode(error: unknown): string {
+  return error && typeof error === "object" && "code" in error ? String(error.code) : "unknown";
+}
+
 async function writeSnapshotFiles(root: string, files: PromptSnapshotFile[]) {
   await Promise.all(
     files.map(async (file) => {
@@ -51,11 +55,16 @@ async function formatSnapshotFiles(root: string, files: PromptSnapshotFile[]) {
       shell: process.platform === "win32",
     });
   } catch (error) {
-    // Windows-only: child_process.spawn returns EINVAL for some long-arg
-    // .cmd invocations under recent Node releases. Skip formatting locally
-    // when we hit it; CI runs on Linux so the formatter still gates there.
-    if (process.platform === "win32" && hasErrorCode(error, "EINVAL")) {
-      console.warn("oxfmt skipped (Windows spawn EINVAL); CI Linux runner will reformat.");
+    // Windows-only: child_process.spawn can fail before oxfmt starts for some
+    // .cmd invocations under recent Node releases. Skip formatting locally when
+    // we hit it; CI runs on Linux so the formatter still gates there.
+    if (
+      process.platform === "win32" &&
+      (hasErrorCode(error, "EINVAL") || hasErrorCode(error, "EPERM"))
+    ) {
+      console.warn(
+        `oxfmt skipped (Windows spawn ${getErrorCode(error)}); CI Linux runner will reformat.`,
+      );
       return;
     }
     throw error;
