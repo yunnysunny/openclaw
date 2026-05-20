@@ -105,17 +105,22 @@ function sessionCacheKey(params: { agentId?: string; sessionFile: string }): str
 function withCacheStatus(
   summary: CostUsageSummary,
   status: NonNullable<CostUsageSummary["cacheStatus"]>["status"],
+  extras?: { cachedFiles?: number; pendingFiles?: number; staleFiles?: number },
 ): CostUsageSummary {
   return {
     ...summary,
     cacheStatus: {
       status,
-      cachedFiles: status === "fresh" || status === "refreshing" ? 1 : 0,
-      pendingFiles: status === "partial" || status === "stale" ? 1 : 0,
-      staleFiles: status === "fresh" || status === "refreshing" ? 0 : 1,
+      cachedFiles: extras?.cachedFiles ?? (status === "fresh" || status === "refreshing" ? 1 : 0),
+      pendingFiles: extras?.pendingFiles ?? (status === "partial" || status === "stale" ? 1 : 0),
+      staleFiles: extras?.staleFiles ?? (status === "fresh" || status === "refreshing" ? 0 : 1),
       refreshedAt: Date.now(),
     },
   };
+}
+
+function resolveCachedStatus(summary: CostUsageSummary): NonNullable<CostUsageSummary["cacheStatus"]>["status"] {
+  return summary.daily.length > 0 || summary.totals.totalTokens > 0 ? "fresh" : "stale";
 }
 
 const extractCostBreakdown = (usageRaw?: UsageLike | null): CostBreakdown | undefined => {
@@ -1205,7 +1210,11 @@ export async function loadCostUsageSummaryFromCache(params: {
   const key = usageCacheKey(params.agentId);
   const cached = costUsageSummaryCache.get(key);
   if (cached) {
-    return withCacheStatus(cached, pendingCostUsageRefreshes.has(key) ? "refreshing" : "fresh");
+    return withCacheStatus(cached, pendingCostUsageRefreshes.has(key) ? "refreshing" : "fresh", {
+      cachedFiles: 1,
+      pendingFiles: 0,
+      staleFiles: 0,
+    });
   }
   if (params.refreshMode === "sync-when-empty") {
     await refreshCostUsageCache({
@@ -1228,6 +1237,11 @@ export async function loadCostUsageSummaryFromCache(params: {
       agentId: params.agentId,
     }),
     pendingCostUsageRefreshes.has(key) ? "refreshing" : "stale",
+    {
+      cachedFiles: 0,
+      pendingFiles: pendingCostUsageRefreshes.has(key) ? 1 : 0,
+      staleFiles: 1,
+    },
   );
 }
 
@@ -1254,7 +1268,14 @@ export async function loadSessionCostSummaryFromCache(params: {
     cached.fileMtimeMs === stats.mtimeMs &&
     cached.fileSize === stats.size;
   if (fresh) {
-    return { summary: cached.summary, cacheStatus: withCacheStatus(emptySummary(), "fresh").cacheStatus! };
+    return {
+      summary: cached.summary,
+      cacheStatus: withCacheStatus(emptySummary(), "fresh", {
+        cachedFiles: 1,
+        pendingFiles: 0,
+        staleFiles: 0,
+      }).cacheStatus!,
+    };
   }
   if (params.refreshMode === "sync-when-empty") {
     const summary = await loadSessionCostSummary(params);
@@ -1263,7 +1284,14 @@ export async function loadSessionCostSummaryFromCache(params: {
       fileMtimeMs: stats?.mtimeMs,
       fileSize: stats?.size,
     });
-    return { summary, cacheStatus: withCacheStatus(emptySummary(), "fresh").cacheStatus! };
+    return {
+      summary,
+      cacheStatus: withCacheStatus(emptySummary(), "fresh", {
+        cachedFiles: 1,
+        pendingFiles: 0,
+        staleFiles: 0,
+      }).cacheStatus!,
+    };
   }
   if (params.requestRefresh !== false) {
     requestCostUsageCacheRefresh({
@@ -1277,6 +1305,11 @@ export async function loadSessionCostSummaryFromCache(params: {
     cacheStatus: withCacheStatus(
       emptySummary(),
       pendingCostUsageRefreshes.has(usageCacheKey(params.agentId)) ? "refreshing" : "stale",
+      {
+        cachedFiles: cached?.summary ? 1 : 0,
+        pendingFiles: pendingCostUsageRefreshes.has(usageCacheKey(params.agentId)) ? 1 : 0,
+        staleFiles: cached?.summary ? 0 : 1,
+      },
     ).cacheStatus!,
   };
 }

@@ -13,9 +13,13 @@ const ensureAuthProfileStore = vi.hoisted(() => vi.fn(() => ({ version: 1, profi
 const listProfilesForProvider = vi.hoisted(() =>
   vi.fn<(store: AuthProfileStore, provider: string) => string[]>(() => []),
 );
+const listProfilesForProviderAsync = vi.hoisted(() =>
+  vi.fn(async () => [] as string[]),
+);
 vi.mock("../agents/auth-profiles.js", () => ({
   ensureAuthProfileStore,
   listProfilesForProvider,
+  listProfilesForProviderAsync,
 }));
 
 const resolveEnvApiKey = vi.hoisted(() => vi.fn(() => undefined));
