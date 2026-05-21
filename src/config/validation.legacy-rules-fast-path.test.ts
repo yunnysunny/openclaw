@@ -22,6 +22,8 @@ vi.mock("../channels/plugins/legacy-config.js", () => ({
 }));
 
 vi.mock("../plugins/doctor-contract-registry.js", () => ({
+  collectRelevantDoctorPluginIds: () => [],
+  collectRelevantDoctorPluginIdsForTouchedPaths: () => [],
   listPluginDoctorLegacyConfigRules: listPluginDoctorLegacyConfigRulesMock,
 }));
 

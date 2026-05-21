@@ -106,6 +106,11 @@ const runStartupSessionMigration = vi.hoisted(() => vi.fn(async (_params: unknow
 vi.mock("../agents/agent-scope.js", () => ({
   resolveAgentWorkspaceDir: () => "/workspace",
   resolveDefaultAgentId: () => "default",
+  resolveSessionAgentIds: () => ({
+    defaultAgentId: "default",
+    requestedAgentId: "default",
+    sessionAgentId: "default",
+  }),
 }));
 
 vi.mock("../agents/subagent-registry.js", () => ({
@@ -152,6 +157,7 @@ vi.mock("./server-methods.js", () => ({
 
 vi.mock("./server-plugin-bootstrap.js", () => ({
   loadGatewayStartupPlugins: (params: unknown) => loadGatewayStartupPlugins(params),
+  loadGatewayStartupPluginsAsync: async (params: unknown) => loadGatewayStartupPlugins(params),
 }));
 
 vi.mock("./server-startup-session-migration.js", () => ({

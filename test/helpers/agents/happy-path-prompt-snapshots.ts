@@ -778,11 +778,11 @@ function renderReadme(scenarios: PromptScenario[]): string {
     "",
     "Codex model prompt fixtures:",
     "",
-    `- ${path.relative(
+    `- ${path.posix.relative(
       CODEX_RUNTIME_HAPPY_PATH_PROMPT_SNAPSHOT_DIR,
       CODEX_MODEL_PROMPT_FIXTURE_PATH,
     )}`,
-    `- ${path.relative(
+    `- ${path.posix.relative(
       CODEX_RUNTIME_HAPPY_PATH_PROMPT_SNAPSHOT_DIR,
       CODEX_MODEL_PROMPT_SOURCE_PATH,
     )}`,

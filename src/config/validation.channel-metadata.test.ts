@@ -158,6 +158,7 @@ vi.mock("../plugins/plugin-metadata-snapshot.js", () => ({
 
 vi.mock("../plugins/doctor-contract-registry.js", () => ({
   collectRelevantDoctorPluginIds: () => [],
+  collectRelevantDoctorPluginIdsForTouchedPaths: () => [],
   listPluginDoctorLegacyConfigRules: () => [],
   applyPluginDoctorCompatibilityMigrations: () => ({ next: null, changes: [] }),
 }));

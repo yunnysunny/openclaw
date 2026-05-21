@@ -36,6 +36,7 @@ export const clearPluginManifestRegistryCache: UnknownMock = vi.fn();
 export const loadPluginManifestRegistrySync: UnknownMock = vi.fn();
 export const buildPluginSnapshotReport: UnknownMock = vi.fn();
 export const buildPluginInspectReport: UnknownMock = vi.fn();
+export const buildAllPluginInspectReports: UnknownMock = vi.fn();
 export const buildPluginDiagnosticsReport: UnknownMock = vi.fn();
 export const buildPluginCompatibilityNotices: UnknownMock = vi.fn();
 export const applyExclusiveSlotSelection: UnknownMock = vi.fn();
@@ -88,6 +89,12 @@ vi.mock("../runtime.js", () => ({
 }));
 
 vi.mock("../config/config.js", () => ({
+  assertConfigWriteAllowedInCurrentMode: () => {
+    if (process.env.OPENCLAW_NIX_MODE === "1") {
+      throw new Error("OPENCLAW_NIX_MODE=1");
+    }
+  },
+  getRuntimeConfig: () => loadConfig(),
   loadConfig: () => loadConfig(),
   readConfigFileSnapshot: ((
     ...args: Parameters<(typeof import("../config/config.js"))["readConfigFileSnapshot"]>
@@ -158,6 +165,16 @@ vi.mock("../plugins/manifest-registry.js", () => ({
 }));
 
 vi.mock("../plugins/status.js", () => ({
+  buildAllPluginInspectReports: ((
+    ...args: Parameters<(typeof import("../plugins/status.js"))["buildAllPluginInspectReports"]>
+  ) =>
+    invokeMock<
+      Parameters<(typeof import("../plugins/status.js"))["buildAllPluginInspectReports"]>,
+      ReturnType<(typeof import("../plugins/status.js"))["buildAllPluginInspectReports"]>
+    >(
+      buildAllPluginInspectReports,
+      ...args,
+    )) as (typeof import("../plugins/status.js"))["buildAllPluginInspectReports"],
   buildPluginSnapshotReport: ((
     ...args: Parameters<(typeof import("../plugins/status.js"))["buildPluginSnapshotReport"]>
   ) =>

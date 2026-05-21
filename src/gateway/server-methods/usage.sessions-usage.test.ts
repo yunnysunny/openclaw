@@ -7,13 +7,15 @@ import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { withEnvAsync } from "../../test-utils/env.js";
 
 vi.mock("../../config/config.js", () => {
+  const runtimeConfig = {
+    agents: {
+      list: [{ id: "main" }, { id: "opus" }],
+    },
+    session: {},
+  };
   return {
-    getRuntimeConfig: vi.fn(() => ({
-      agents: {
-        list: [{ id: "main" }, { id: "opus" }],
-      },
-      session: {},
-    })),
+    getRuntimeConfig: vi.fn(() => runtimeConfig),
+    loadConfig: vi.fn(() => runtimeConfig),
   };
 });
 

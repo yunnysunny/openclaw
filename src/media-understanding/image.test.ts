@@ -121,6 +121,7 @@ vi.mock("../plugins/provider-runtime.js", async () => ({
 
 vi.mock("../agents/pi-embedded-runner/model.js", () => ({
   resolveModelAsync: resolveModelAsyncMock,
+  resolveModelWithRegistry: resolveModelWithRegistryMock,
 }));
 
 vi.mock("../plugin-sdk/provider-auth.js", () => ({

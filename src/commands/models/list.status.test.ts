@@ -166,6 +166,7 @@ vi.mock("../../agents/auth-profiles/profiles.js", () => ({
 vi.mock("../../agents/auth-profiles/store.js", () => ({
   ensureAuthProfileStore: mocks.ensureAuthProfileStore,
   ensureAuthProfileStoreWithoutExternalProfiles: mocks.ensureAuthProfileStore,
+  updateAuthProfileStoreWithLock: vi.fn(async () => mocks.store),
 }));
 vi.mock("../../agents/auth-profiles/usage.js", () => ({
   resolveProfileUnusableUntilForDisplay: mocks.resolveProfileUnusableUntilForDisplay,

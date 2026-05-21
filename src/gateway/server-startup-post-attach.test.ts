@@ -172,6 +172,11 @@ vi.mock("../agents/agent-scope.js", () => ({
   resolveDefaultAgentDir: hoisted.resolveDefaultAgentDir,
   resolveAgentWorkspaceDir: vi.fn(() => "/tmp/openclaw-workspace"),
   resolveDefaultAgentId: vi.fn(() => "default"),
+  resolveSessionAgentIds: vi.fn(() => ({
+    defaultAgentId: "default",
+    requestedAgentId: "default",
+    sessionAgentId: "default",
+  })),
 }));
 
 vi.mock("../agents/defaults.js", () => ({
