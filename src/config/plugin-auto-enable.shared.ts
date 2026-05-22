@@ -5,6 +5,7 @@ import {
   listPotentialConfiguredChannelIds,
 } from "../channels/config-presence.js";
 import { getChatChannelMeta, normalizeChatChannelId } from "../channels/registry.js";
+import { getCurrentPluginMetadataSnapshot } from "../plugins/current-plugin-metadata-snapshot.js";
 import {
   loadPluginManifestRegistryAsync,
   loadPluginManifestRegistrySync,
@@ -447,7 +448,7 @@ export function resolvePluginAutoEnableCandidateReason(
     case "provider-model-configured":
       return `${candidate.modelRef} model configured`;
     case "agent-harness-runtime-configured":
-      return `${candidate.runtime} agent harness runtime configured`;
+      return `${candidate.runtime} agent runtime configured`;
     case "web-fetch-provider-selected":
       return `${candidate.providerId} web fetch provider selected`;
     case "plugin-web-search-configured":
@@ -762,11 +763,21 @@ export function resolvePluginAutoEnableManifestRegistry(params: {
   env: NodeJS.ProcessEnv;
   manifestRegistry?: PluginManifestRegistry;
 }): PluginManifestRegistry {
+  if (params.manifestRegistry) {
+    return params.manifestRegistry;
+  }
+  const current = getCurrentPluginMetadataSnapshot({
+    config: params.config,
+    env: params.env,
+    allowWorkspaceScopedSnapshot: true,
+  });
+  if (current) {
+    return current.manifestRegistry;
+  }
   return (
-    params.manifestRegistry ??
-    (configMayNeedPluginManifestRegistry(params.config, params.env)
+    configMayNeedPluginManifestRegistry(params.config, params.env)
       ? loadPluginManifestRegistrySync({ config: params.config, env: params.env })
-      : EMPTY_PLUGIN_MANIFEST_REGISTRY)
+      : EMPTY_PLUGIN_MANIFEST_REGISTRY
   );
 }
 
@@ -779,11 +790,21 @@ export async function resolvePluginAutoEnableManifestRegistryAsync(params: {
   env: NodeJS.ProcessEnv;
   manifestRegistry?: PluginManifestRegistry;
 }): Promise<PluginManifestRegistry> {
+  if (params.manifestRegistry) {
+    return params.manifestRegistry;
+  }
+  const current = getCurrentPluginMetadataSnapshot({
+    config: params.config,
+    env: params.env,
+    allowWorkspaceScopedSnapshot: true,
+  });
+  if (current) {
+    return current.manifestRegistry;
+  }
   return (
-    params.manifestRegistry ??
-    (configMayNeedPluginManifestRegistry(params.config, params.env)
+    configMayNeedPluginManifestRegistry(params.config, params.env)
       ? await loadPluginManifestRegistryAsync({ config: params.config, env: params.env })
-      : EMPTY_PLUGIN_MANIFEST_REGISTRY)
+      : EMPTY_PLUGIN_MANIFEST_REGISTRY
   );
 }
 

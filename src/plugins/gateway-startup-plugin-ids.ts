@@ -172,13 +172,25 @@ type RegistryBackedPluginIdParams = {
   env: NodeJS.ProcessEnv;
 };
 
+function isPluginManifestRegistryLike(
+  value: unknown,
+): value is { plugins: PluginManifestRecord[]; diagnostics?: PluginManifestRegistry["diagnostics"] } {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    "plugins" in value &&
+    Array.isArray(value.plugins)
+  );
+}
+
 function resolveSyncManifestRegistry(params: RegistryBackedPluginIdParams): PluginManifestRegistry {
-  if (
-    params.manifestRegistry &&
-    typeof params.manifestRegistry === "object" &&
-    Array.isArray((params.manifestRegistry as { plugins?: unknown }).plugins)
-  ) {
-    return params.manifestRegistry as PluginManifestRegistry;
+  if (isPluginManifestRegistryLike(params.manifestRegistry)) {
+    return {
+      plugins: params.manifestRegistry.plugins,
+      diagnostics: Array.isArray(params.manifestRegistry.diagnostics)
+        ? params.manifestRegistry.diagnostics
+        : [],
+    };
   }
   return loadPluginManifestRegistrySync({
     config: params.config,
