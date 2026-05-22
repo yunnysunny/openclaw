@@ -495,7 +495,9 @@ function buildInstalledPluginIndex(
   const { candidates, registry } = resolveRegistry(params);
   const candidateByRootDir = buildCandidateLookup(candidates);
   const normalizedConfig = normalizePluginsConfig(params.config?.plugins);
-  const diagnostics: PluginDiagnostic[] = [...registry.diagnostics];
+  const diagnostics: PluginDiagnostic[] = Array.isArray(registry.diagnostics)
+    ? [...registry.diagnostics]
+    : [];
   const generatedAtMs = (params.now?.() ?? new Date()).getTime();
   const installRecords = copySafeInstallRecords(params.installRecords);
   const plugins = registry.plugins.map((record): InstalledPluginIndexRecord => {

@@ -75,13 +75,13 @@ export function loadPluginLookUpTable(params: LoadPluginLookUpTableParams): Plug
     manifestRegistry,
     config: params.config,
     env: params.env,
-  } as Parameters<typeof resolveChannelPluginIdsFromRegistry>[0]);
+  });
   const configuredDeferredChannelPluginIds = resolveConfiguredDeferredChannelPluginIdsFromRegistry({
     config: params.config,
     env: params.env,
     index,
     manifestRegistry,
-  } as Parameters<typeof resolveConfiguredDeferredChannelPluginIdsFromRegistry>[0]);
+  });
   const pluginIds = resolveGatewayStartupPluginIdsFromRegistry({
     config: params.config,
     ...(params.activationSourceConfig !== undefined
@@ -90,7 +90,7 @@ export function loadPluginLookUpTable(params: LoadPluginLookUpTableParams): Plug
     env: params.env,
     index,
     manifestRegistry,
-  } as Parameters<typeof resolveGatewayStartupPluginIdsFromRegistry>[0]);
+  });
   const startupPlanMs = performance.now() - startupPlanStartedAt;
   const startup = {
     channelPluginIds,

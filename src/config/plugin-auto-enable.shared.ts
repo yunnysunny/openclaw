@@ -32,6 +32,10 @@ export type {
   PluginAutoEnableCandidate,
   PluginAutoEnableResult,
 } from "./plugin-auto-enable.types.js";
+export {
+  resolvePluginSetupAutoEnableReasons,
+  resolvePluginSetupAutoEnableReasonsAsync,
+} from "../plugins/setup-registry.js";
 
 const EMPTY_PLUGIN_MANIFEST_REGISTRY: PluginManifestRegistry = {
   plugins: [],
