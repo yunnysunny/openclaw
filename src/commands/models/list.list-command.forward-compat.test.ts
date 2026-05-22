@@ -245,6 +245,7 @@ function installModelsListCommandForwardCompatMocks() {
   vi.doMock("../../agents/auth-profiles/store.js", () => ({
     saveAuthProfileStore: vi.fn(),
     saveAuthProfileStoreAsync: vi.fn(),
+    updateAuthProfileStoreWithLock: vi.fn(async () => mocks.ensureAuthProfileStore()),
     loadAuthProfileStoreWithoutExternalProfiles: mocks.ensureAuthProfileStore,
   }));
 

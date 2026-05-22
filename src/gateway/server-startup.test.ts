@@ -3,8 +3,27 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
 
 const ensureOpenClawModelsJsonMock = vi.fn<
-  (config: unknown, agentDir: unknown) => Promise<{ agentDir: string; wrote: boolean }>
+  (
+    config: unknown,
+    agentDir: unknown,
+    options?: unknown,
+  ) => Promise<{ agentDir: string; wrote: boolean }>
 >(async () => ({ agentDir: "/tmp/agent", wrote: false }));
+const resolveModelMock = vi.fn<
+  (
+    provider: unknown,
+    modelId: unknown,
+    agentDir: unknown,
+    cfg: unknown,
+    options?: unknown,
+  ) => { model?: { id: string; provider: string; api: string }; error?: string }
+>(() => ({
+  model: {
+    id: "gpt-5.4",
+    provider: "openai-codex",
+    api: "openai-codex-responses",
+  },
+}));
 const resolveModelAsyncMock = vi.fn<
   (
     provider: unknown,
@@ -27,9 +46,17 @@ vi.mock("../agents/agent-paths.js", () => ({
   resolveOpenClawAgentDir: () => "/tmp/agent",
 }));
 
+vi.mock("../agents/agent-scope.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../agents/agent-scope.js")>();
+  return {
+    ...actual,
+    resolveDefaultAgentDir: () => "/tmp/agent",
+  };
+});
+
 vi.mock("../agents/models-config.js", () => ({
-  ensureOpenClawModelsJson: (config: unknown, agentDir: unknown) =>
-    ensureOpenClawModelsJsonMock(config, agentDir),
+  ensureOpenClawModelsJson: (config: unknown, agentDir: unknown, options?: unknown) =>
+    ensureOpenClawModelsJsonMock(config, agentDir, options),
 }));
 
 vi.mock("../agents/harness/selection.js", () => ({
@@ -92,7 +119,10 @@ describe("gateway startup primary model warmup", () => {
       log: { warn: vi.fn() },
     });
 
-    expect(ensureOpenClawModelsJsonMock).toHaveBeenCalledWith(cfg, "/tmp/agent");
+    expect(ensureOpenClawModelsJsonMock).toHaveBeenCalledWith(cfg, "/tmp/agent", {
+      providerDiscoveryProviderIds: ["openai-codex"],
+      workspaceDir: undefined,
+    });
     expect(resolveModelAsyncMock).toHaveBeenCalledWith(
       "openai-codex",
       "gpt-5.4",
@@ -206,7 +236,10 @@ describe("gateway startup primary model warmup", () => {
       modelId: "gpt-5.4",
       config: cfg,
     });
-    expect(ensureOpenClawModelsJsonMock).toHaveBeenCalledWith(cfg, "/tmp/agent");
+    expect(ensureOpenClawModelsJsonMock).toHaveBeenCalledWith(cfg, "/tmp/agent", {
+      providerDiscoveryProviderIds: ["openai-codex"],
+      workspaceDir: undefined,
+    });
     expect(resolveModelAsyncMock).toHaveBeenCalled();
   });
 

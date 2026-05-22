@@ -600,6 +600,7 @@ export async function startGatewayServer(
       releasePluginRouteRegistry,
       stopChannel,
       pluginServices: runtimeState.pluginServices,
+      postReadySidecars: runtimeState.postReadySidecars,
       cron: runtimeState.cronState.cron,
       heartbeatRunner: runtimeState.heartbeatRunner,
       updateCheckStop: runtimeState.stopGatewayUpdateCheck,
@@ -855,6 +856,9 @@ export async function startGatewayServer(
         unavailableGatewayMethods,
         onPluginServices: (pluginServices) => {
           runtimeState.pluginServices = pluginServices;
+        },
+        onPostReadySidecars: (postReadySidecars) => {
+          runtimeState.postReadySidecars = postReadySidecars;
         },
         onSidecarsReady: () => {
           startupSidecarsReady = true;

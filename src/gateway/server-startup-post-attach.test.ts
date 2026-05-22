@@ -49,6 +49,13 @@ const hoisted = vi.hoisted(() => {
     allowed: true,
     inCatalog: true,
   }));
+  const selectAgentHarness = vi.fn(() => ({ id: "pi" }));
+  const resolveModelAsync = vi.fn(async () => ({
+    model: { provider: "openai", id: "gpt-5.4", api: "openai-responses" },
+  }));
+  const resolveModel = vi.fn(() => ({
+    model: { provider: "openai", id: "gpt-5.4", api: "openai-responses" },
+  }));
   const resolveEmbeddedAgentRuntime = vi.fn(() => "pi");
   const ensureOpenClawModelsJson = vi.fn(async () => {});
   return {
@@ -78,6 +85,9 @@ const hoisted = vi.hoisted(() => {
     resolveHooksGmailModel,
     loadModelCatalog,
     getModelRefStatus,
+    selectAgentHarness,
+    resolveModelAsync,
+    resolveModel,
     resolveEmbeddedAgentRuntime,
     ensureOpenClawModelsJson,
   };
@@ -172,6 +182,7 @@ vi.mock("../agents/agent-scope.js", () => ({
   resolveDefaultAgentDir: hoisted.resolveDefaultAgentDir,
   resolveAgentWorkspaceDir: vi.fn(() => "/tmp/openclaw-workspace"),
   resolveDefaultAgentId: vi.fn(() => "default"),
+  listAgentEntries: vi.fn((cfg) => cfg.agents?.list ?? []),
   resolveSessionAgentIds: vi.fn(() => ({
     defaultAgentId: "default",
     requestedAgentId: "default",
@@ -193,6 +204,15 @@ vi.mock("../agents/model-selection.js", () => ({
   isCliProvider: hoisted.isCliProvider,
   resolveConfiguredModelRef: hoisted.resolveConfiguredModelRef,
   resolveHooksGmailModel: hoisted.resolveHooksGmailModel,
+}));
+
+vi.mock("../agents/harness/selection.js", () => ({
+  selectAgentHarness: hoisted.selectAgentHarness,
+}));
+
+vi.mock("../agents/pi-embedded-runner/model.js", () => ({
+  resolveModel: hoisted.resolveModel,
+  resolveModelAsync: hoisted.resolveModelAsync,
 }));
 
 vi.mock("../agents/pi-embedded-runner/runtime.js", () => ({
@@ -328,6 +348,16 @@ describe("startGatewayPostAttachRuntime", () => {
       key: "openai/gpt-5.4",
       allowed: true,
       inCatalog: true,
+    });
+    hoisted.selectAgentHarness.mockReset();
+    hoisted.selectAgentHarness.mockReturnValue({ id: "pi" });
+    hoisted.resolveModel.mockReset();
+    hoisted.resolveModel.mockReturnValue({
+      model: { provider: "openai", id: "gpt-5.4", api: "openai-responses" },
+    });
+    hoisted.resolveModelAsync.mockReset();
+    hoisted.resolveModelAsync.mockResolvedValue({
+      model: { provider: "openai", id: "gpt-5.4", api: "openai-responses" },
     });
     hoisted.resolveEmbeddedAgentRuntime.mockReset();
     hoisted.resolveEmbeddedAgentRuntime.mockReturnValue("pi");
