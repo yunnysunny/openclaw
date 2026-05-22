@@ -134,7 +134,7 @@ export async function prepareGatewayPluginBootstrap(params: {
   if (!params.minimalTestGateway) {
     ({ pluginRegistry, gatewayMethods: baseGatewayMethods } = await loadGatewayStartupPluginsAsync({
       cfg: gatewayPluginConfigAtStart,
-      activationSourceConfig: params.cfgAtStart,
+      activationSourceConfig,
       workspaceDir: defaultWorkspaceDir,
       log: params.log,
       coreGatewayHandlers,
