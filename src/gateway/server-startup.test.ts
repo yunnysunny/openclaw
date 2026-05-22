@@ -244,14 +244,15 @@ describe("gateway startup primary model warmup", () => {
   });
 
   it("falls back to async model resolution before warning", async () => {
-    resolveModelMock.mockReturnValueOnce({ model: undefined } as never);
-    resolveModelAsyncMock.mockResolvedValueOnce({
-      model: {
-        id: "gpt-5.4",
-        provider: "codex",
-        api: "openai-codex-responses",
-      },
-    });
+    resolveModelAsyncMock
+      .mockResolvedValueOnce({ model: undefined } as never)
+      .mockResolvedValueOnce({
+        model: {
+          id: "gpt-5.4",
+          provider: "codex",
+          api: "openai-codex-responses",
+        },
+      });
     const warn = vi.fn();
     const cfg = {
       agents: {
@@ -265,12 +266,15 @@ describe("gateway startup primary model warmup", () => {
 
     await prewarmConfiguredPrimaryModel({ cfg, log: { warn } });
 
+    expect(resolveModelAsyncMock).toHaveBeenCalledWith("codex", "gpt-5.4", "/tmp/agent", cfg, {
+      skipProviderRuntimeHooks: true,
+    });
     expect(resolveModelAsyncMock).toHaveBeenCalledWith("codex", "gpt-5.4", "/tmp/agent", cfg);
     expect(warn).not.toHaveBeenCalled();
   });
 
   it("warns only when both static and async model resolution miss", async () => {
-    resolveModelMock.mockReturnValueOnce({ model: undefined, error: "static miss" } as never);
+    resolveModelAsyncMock.mockResolvedValueOnce({ model: undefined, error: "static miss" } as never);
     resolveModelAsyncMock.mockResolvedValueOnce({ error: "async miss" });
     const warn = vi.fn();
 

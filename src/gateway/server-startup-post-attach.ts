@@ -1,10 +1,13 @@
 // @ts-nocheck
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import type { CliDeps } from "../cli/deps.types.js";
 import type { GatewayTailscaleMode } from "../config/types.gateway.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { hasConfiguredInternalHooks } from "../hooks/configured.js";
 import { isTruthyEnvValue } from "../infra/env.js";
-import { hasRestartSentinel, type RestartSentinelPayload } from "../infra/restart-sentinel.js";
+import type { RestartSentinelPayload } from "../infra/restart-sentinel.js";
 import type { scheduleGatewayUpdateCheck } from "../infra/update-startup.js";
 import type { getGlobalHookRunner } from "../plugins/hook-runner-global.js";
 import type { PluginHookGatewayCronService } from "../plugins/hook-types.js";
@@ -21,6 +24,7 @@ import type { startGatewayTailscaleExposure } from "./server-tailscale.js";
 const SESSION_LOCK_STALE_MS = 30 * 60 * 1000;
 const PRIMARY_MODEL_PREWARM_TIMEOUT_MS = 10_000;
 const QMD_STARTUP_IDLE_DELAY_MS = 120_000;
+const RESTART_SENTINEL_FILENAME = "restart-sentinel.json";
 
 type Awaitable<T> = T | Promise<T>;
 type GatewayPostReadySidecarHandle = { stop: () => void };
@@ -90,10 +94,38 @@ async function hasGatewayStartupInternalHookListeners(): Promise<boolean> {
   return hasInternalHookListeners("gateway", "startup");
 }
 
+function normalizeEnvPath(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed && trimmed !== "undefined" && trimmed !== "null" ? trimmed : undefined;
+}
+
+function expandHomePath(input: string, home: string): string {
+  return input.replace(/^~(?=$|[\\/])/, home);
+}
+
+function resolveRestartSentinelStateDirFast(env: NodeJS.ProcessEnv): string {
+  const osHome = normalizeEnvPath(env.HOME) ?? normalizeEnvPath(env.USERPROFILE) ?? os.homedir();
+  const rawOpenClawHome = normalizeEnvPath(env.OPENCLAW_HOME);
+  const openClawHome = rawOpenClawHome
+    ? path.resolve(expandHomePath(rawOpenClawHome, osHome))
+    : path.resolve(osHome);
+  const stateDir = normalizeEnvPath(env.OPENCLAW_STATE_DIR);
+  if (stateDir) {
+    return path.resolve(expandHomePath(stateDir, openClawHome));
+  }
+  return path.join(openClawHome, ".openclaw");
+}
+
 async function hasRestartSentinelFileFast(
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<boolean> {
-  return await hasRestartSentinel(env);
+  const filePath = path.join(resolveRestartSentinelStateDirFast(env), RESTART_SENTINEL_FILENAME);
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function refreshLatestUpdateRestartSentinelIfPresent(): Promise<RestartSentinelPayload | null> {
@@ -130,7 +162,7 @@ async function prewarmConfiguredPrimaryModel(params: {
     { selectAgentHarness },
     { isCliProvider, resolveConfiguredModelRef },
     { ensureOpenClawModelsJson },
-    { resolveModel, resolveModelAsync },
+    { resolveModelAsync },
     { resolveEmbeddedAgentRuntime },
   ] = await Promise.all([
     import("../agents/agent-scope.js"),
@@ -162,7 +194,7 @@ async function prewarmConfiguredPrimaryModel(params: {
       workspaceDir: params.workspaceDir,
       providerDiscoveryProviderIds: [provider],
     });
-    const resolved = resolveModel(provider, model, agentDir, params.cfg, {
+    const resolved = await resolveModelAsync(provider, model, agentDir, params.cfg, {
       skipProviderRuntimeHooks: true,
     });
     if (!resolved.model) {
