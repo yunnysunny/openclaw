@@ -17,8 +17,6 @@ export {
   resolveConfiguredPluginAutoEnableCandidatesAsync,
   resolvePluginAutoEnableCandidateReason,
   resolvePluginAutoEnableManifestRegistryAsync,
-} from "./plugin-auto-enable.shared.js";
-export {
   resolvePluginSetupAutoEnableReasons,
   resolvePluginSetupAutoEnableReasonsAsync,
-} from "../plugins/setup-registry.js";
+} from "./plugin-auto-enable.shared.js";

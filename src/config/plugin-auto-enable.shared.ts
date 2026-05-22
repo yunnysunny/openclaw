@@ -15,8 +15,8 @@ import {
 } from "../plugins/manifest-registry.js";
 import { resolveOwningPluginIdsForModelRef } from "../plugins/providers.js";
 import {
-  resolvePluginSetupAutoEnableReasons,
-  resolvePluginSetupAutoEnableReasonsAsync,
+  resolvePluginSetupAutoEnableReasons as resolvePluginSetupAutoEnableReasonsFromRegistry,
+  resolvePluginSetupAutoEnableReasonsAsync as resolvePluginSetupAutoEnableReasonsAsyncFromRegistry,
 } from "../plugins/setup-registry.js";
 import { normalizeOptionalLowercaseString } from "../shared/string-coerce.js";
 import { isRecord } from "../utils.js";
@@ -33,10 +33,18 @@ export type {
   PluginAutoEnableCandidate,
   PluginAutoEnableResult,
 } from "./plugin-auto-enable.types.js";
-export {
-  resolvePluginSetupAutoEnableReasons,
-  resolvePluginSetupAutoEnableReasonsAsync,
-} from "../plugins/setup-registry.js";
+
+export const resolvePluginSetupAutoEnableReasons =
+  resolvePluginSetupAutoEnableReasonsFromRegistry;
+
+export async function resolvePluginSetupAutoEnableReasonsAsync(
+  params: Parameters<typeof resolvePluginSetupAutoEnableReasons>[0],
+): Promise<ReturnType<typeof resolvePluginSetupAutoEnableReasons>> {
+  if (typeof resolvePluginSetupAutoEnableReasonsAsyncFromRegistry === "function") {
+    return await resolvePluginSetupAutoEnableReasonsAsyncFromRegistry(params);
+  }
+  return resolvePluginSetupAutoEnableReasons(params);
+}
 
 const EMPTY_PLUGIN_MANIFEST_REGISTRY: PluginManifestRegistry = {
   plugins: [],
@@ -228,6 +236,29 @@ function resolvePluginIdForConfiguredWebFetchProvider(
   });
 }
 
+function resolvePluginIdForConfiguredWebSearchProvider(
+  providerId: string | undefined,
+  registry: PluginManifestRegistry,
+): string | undefined {
+  const normalized = normalizeOptionalLowercaseString(providerId);
+  if (!normalized) {
+    return undefined;
+  }
+  return registry.plugins.find((plugin) =>
+    (plugin.contracts?.webSearchProviders ?? []).some(
+      (value) => normalizeOptionalLowercaseString(value) === normalized,
+    ),
+  )?.id;
+}
+
+function resolveConfiguredWebSearchProvider(cfg: OpenClawConfig): string | undefined {
+  const search = cfg.tools?.web?.search;
+  if (!isRecord(search) || search.enabled === false) {
+    return undefined;
+  }
+  return typeof search.provider === "string" ? search.provider : undefined;
+}
+
 function buildChannelToPluginIdMap(registry: PluginManifestRegistry): Map<string, string> {
   const map = new Map<string, string>();
   for (const record of registry.plugins) {
@@ -266,6 +297,10 @@ function hasConfiguredWebSearchPluginEntry(cfg: OpenClawConfig): boolean {
       (entry) => isRecord(entry) && isRecord(entry.config) && isRecord(entry.config.webSearch),
     )
   );
+}
+
+function hasSelectedWebSearchProvider(cfg: OpenClawConfig): boolean {
+  return resolveConfiguredWebSearchProvider(cfg) !== undefined;
 }
 
 function hasConfiguredWebFetchPluginEntry(cfg: OpenClawConfig): boolean {
@@ -421,7 +456,11 @@ export function configMayNeedPluginAutoEnable(
   if (hasConfiguredProviderModelOrHarness(cfg, env)) {
     return true;
   }
-  if (hasConfiguredWebSearchPluginEntry(cfg) || hasConfiguredWebFetchPluginEntry(cfg)) {
+  if (
+    hasSelectedWebSearchProvider(cfg) ||
+    hasConfiguredWebSearchPluginEntry(cfg) ||
+    hasConfiguredWebFetchPluginEntry(cfg)
+  ) {
     return true;
   }
   if (!hasSetupAutoEnableRelevantConfig(cfg)) {
@@ -439,7 +478,6 @@ export function configMayNeedPluginAutoEnable(
 export function resolvePluginAutoEnableCandidateReason(
   candidate: PluginAutoEnableCandidate,
 ): string {
-  // oxlint-disable-next-line typescript/switch-exhaustiveness-check -- web-search-provider-selected handled in default branch.
   switch (candidate.kind) {
     case "channel-configured":
       return `${candidate.channelId} configured`;
@@ -449,6 +487,8 @@ export function resolvePluginAutoEnableCandidateReason(
       return `${candidate.modelRef} model configured`;
     case "agent-harness-runtime-configured":
       return `${candidate.runtime} agent runtime configured`;
+    case "web-search-provider-selected":
+      return `${candidate.providerId} web search provider selected`;
     case "web-fetch-provider-selected":
       return `${candidate.providerId} web fetch provider selected`;
     case "plugin-web-search-configured":
@@ -472,6 +512,9 @@ function collectBaseConfiguredPluginAutoEnableCandidates(params: {
   const channelToPluginId = buildChannelToPluginIdMap(params.registry);
   for (const channelId of collectCandidateChannelIds(params.config, params.env)) {
     const pluginId = resolvePluginIdForChannel(channelId, channelToPluginId);
+    if (!normalizeChatChannelId(pluginId) && !isKnownPluginId(pluginId, params.registry)) {
+      continue;
+    }
     if (isChannelConfigured(params.config, channelId, params.env)) {
       changes.push({ pluginId, kind: "channel-configured", channelId });
     }
@@ -518,6 +561,19 @@ function collectBaseConfiguredPluginAutoEnableCandidates(params: {
     typeof params.config.tools?.web?.fetch?.provider === "string"
       ? params.config.tools.web.fetch.provider
       : undefined;
+  const webSearchProvider = resolveConfiguredWebSearchProvider(params.config);
+  const webSearchPluginId = resolvePluginIdForConfiguredWebSearchProvider(
+    webSearchProvider,
+    params.registry,
+  );
+  if (webSearchPluginId) {
+    changes.push({
+      pluginId: webSearchPluginId,
+      kind: "web-search-provider-selected",
+      providerId: normalizeOptionalLowercaseString(webSearchProvider) ?? "",
+    });
+  }
+
   const webFetchPluginId = resolvePluginIdForConfiguredWebFetchProvider(
     webFetchProvider,
     params.env,

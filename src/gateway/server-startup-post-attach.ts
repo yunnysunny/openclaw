@@ -517,7 +517,7 @@ export async function startGatewaySidecars(params: {
               if (backend?.healthy?.() === true) {
                 params.startupTrace?.detail?.("sidecars.acp.runtime-ready", [
                   ["readyCount", 1],
-                  ["backend", String(backend.id ?? params.cfg.acp?.backend ?? "")],
+                  ["backend", backend.id ?? params.cfg.acp?.backend ?? ""],
                 ]);
                 return;
               }
