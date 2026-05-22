@@ -20,6 +20,7 @@ import {
   loadPluginManifestRegistryAsync,
   loadPluginManifestRegistrySync,
   type PluginManifestRecord,
+  type PluginManifestRegistry,
 } from "./manifest-registry.js";
 import { hasKind } from "./slots.js";
 
@@ -163,27 +164,38 @@ function canStartConfiguredChannelPlugin(params: {
   return activationState.enabled && activationState.explicitlyEnabled;
 }
 
-export function resolveChannelPluginIds(params: {
+type RegistryBackedPluginIdParams = {
   manifestRegistry?: unknown;
   index?: unknown;
   config: OpenClawConfig;
   workspaceDir?: string;
   env: NodeJS.ProcessEnv;
-}): string[] {
+};
+
+function resolveSyncManifestRegistry(params: RegistryBackedPluginIdParams): PluginManifestRegistry {
+  if (
+    params.manifestRegistry &&
+    typeof params.manifestRegistry === "object" &&
+    Array.isArray((params.manifestRegistry as { plugins?: unknown }).plugins)
+  ) {
+    return params.manifestRegistry as PluginManifestRegistry;
+  }
   return loadPluginManifestRegistrySync({
     config: params.config,
     workspaceDir: params.workspaceDir,
     env: params.env,
-  })
+  });
+}
+
+export function resolveChannelPluginIds(params: RegistryBackedPluginIdParams): string[] {
+  return resolveSyncManifestRegistry(params)
     .plugins.filter((plugin) => plugin.channels.length > 0)
     .map((plugin) => plugin.id);
 }
 
-export function resolveConfiguredDeferredChannelPluginIds(params: {
-  config: OpenClawConfig;
-  workspaceDir?: string;
-  env: NodeJS.ProcessEnv;
-}): string[] {
+export function resolveConfiguredDeferredChannelPluginIds(
+  params: RegistryBackedPluginIdParams,
+): string[] {
   const configuredChannelIds = new Set(listPotentialEnabledChannelIds(params.config, params.env));
   if (configuredChannelIds.size === 0) {
     return [];
@@ -192,11 +204,7 @@ export function resolveConfiguredDeferredChannelPluginIds(params: {
   const activationSource = createPluginActivationSource({
     config: params.config,
   });
-  return loadPluginManifestRegistrySync({
-    config: params.config,
-    workspaceDir: params.workspaceDir,
-    env: params.env,
-  })
+  return resolveSyncManifestRegistry(params)
     .plugins.filter(
       (plugin) =>
         hasConfiguredStartupChannel({ plugin, configuredChannelIds }) &&
@@ -211,11 +219,8 @@ export function resolveConfiguredDeferredChannelPluginIds(params: {
     .map((plugin) => plugin.id);
 }
 
-export function resolveGatewayStartupPluginIds(params: {
-  config: OpenClawConfig;
+export function resolveGatewayStartupPluginIds(params: RegistryBackedPluginIdParams & {
   activationSourceConfig?: OpenClawConfig;
-  workspaceDir?: string;
-  env: NodeJS.ProcessEnv;
 }): string[] {
   const configuredChannelIds = new Set(listPotentialEnabledChannelIds(params.config, params.env));
   const pluginsConfig = normalizePluginsConfig(params.config.plugins);
@@ -246,11 +251,7 @@ export function resolveGatewayStartupPluginIds(params: {
   const explicitMemorySlotStartupPluginId = resolveExplicitMemorySlotStartupPluginId(
     params.activationSourceConfig ?? params.config,
   );
-  return loadPluginManifestRegistrySync({
-    config: params.config,
-    workspaceDir: params.workspaceDir,
-    env: params.env,
-  })
+  return resolveSyncManifestRegistry(params)
     .plugins.filter((plugin) => {
       if (hasConfiguredStartupChannel({ plugin, configuredChannelIds })) {
         return canStartConfiguredChannelPlugin({
@@ -397,4 +398,3 @@ export function loadGatewayStartupPluginPlan(_params: unknown): GatewayStartupPl
 export function resolveGatewayStartupPluginPlanFromRegistry(_params: unknown): GatewayStartupPluginPlan {
   return { pluginIds: [], channelPluginIds: [] };
 }
-
