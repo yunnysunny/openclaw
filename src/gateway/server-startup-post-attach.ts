@@ -4,7 +4,7 @@ import type { GatewayTailscaleMode } from "../config/types.gateway.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { hasConfiguredInternalHooks } from "../hooks/configured.js";
 import { isTruthyEnvValue } from "../infra/env.js";
-import { hasRestartSentinel } from "../infra/restart-sentinel.js";
+import { hasRestartSentinel, type RestartSentinelPayload } from "../infra/restart-sentinel.js";
 import type { scheduleGatewayUpdateCheck } from "../infra/update-startup.js";
 import type { getGlobalHookRunner } from "../plugins/hook-runner-global.js";
 import type { PluginHookGatewayCronService } from "../plugins/hook-types.js";
@@ -96,7 +96,7 @@ async function hasRestartSentinelFileFast(
   return await hasRestartSentinel(env);
 }
 
-async function refreshLatestUpdateRestartSentinelIfPresent(): Promise<unknown | null> {
+async function refreshLatestUpdateRestartSentinelIfPresent(): Promise<RestartSentinelPayload | null> {
   if (!(await hasRestartSentinelFileFast())) {
     return null;
   }
@@ -581,7 +581,7 @@ type GatewayPostAttachRuntimeDeps = {
   startGatewayTailscaleExposure: (
     ...args: Parameters<typeof startGatewayTailscaleExposure>
   ) => ReturnType<typeof startGatewayTailscaleExposure>;
-  refreshLatestUpdateRestartSentinel: () => Awaitable<unknown | null>;
+  refreshLatestUpdateRestartSentinel: () => Awaitable<RestartSentinelPayload | null>;
 };
 
 const defaultGatewayPostAttachRuntimeDeps: GatewayPostAttachRuntimeDeps = {
