@@ -4,11 +4,18 @@ import { runChannelPluginStartupMaintenance } from "../channels/plugins/lifecycl
 import { applyPluginAutoEnable } from "../config/plugin-auto-enable.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import {
+  loadPluginLookUpTable,
+  type PluginLookUpTable,
+} from "../plugins/plugin-lookup-table.js";
+import type { PluginMetadataSnapshot } from "../plugins/plugin-metadata-snapshot.js";
+import {
   resolveConfiguredDeferredChannelPluginIds,
   resolveGatewayStartupPluginIds,
 } from "../plugins/channel-plugin-ids.js";
 import { createEmptyPluginRegistry } from "../plugins/registry.js";
 import { getActivePluginRegistry, setActivePluginRegistry } from "../plugins/runtime.js";
+import { listCoreGatewayMethodNames } from "./methods/core-descriptors.js";
+import { mergeActivationSectionsIntoRuntimeConfig } from "./plugin-activation-runtime-config.js";
 import { listGatewayMethods } from "./server-methods-list.js";
 import { coreGatewayHandlers } from "./server-methods.js";
 import { loadGatewayStartupPluginsAsync } from "./server-plugin-bootstrap.js";
@@ -23,10 +30,13 @@ type GatewayPluginBootstrapLog = {
 
 export async function prepareGatewayPluginBootstrap(params: {
   cfgAtStart: OpenClawConfig;
+  activationSourceConfig?: OpenClawConfig;
   startupRuntimeConfig: OpenClawConfig;
+  pluginMetadataSnapshot?: PluginMetadataSnapshot;
   minimalTestGateway: boolean;
   log: GatewayPluginBootstrapLog;
 }) {
+  const activationSourceConfig = params.activationSourceConfig ?? params.cfgAtStart;
   const startupMaintenanceConfig =
     params.cfgAtStart.channels === undefined && params.startupRuntimeConfig.channels !== undefined
       ? {
@@ -59,29 +69,62 @@ export async function prepareGatewayPluginBootstrap(params: {
 
   initSubagentRegistry();
 
-  const gatewayPluginConfigAtStart = params.minimalTestGateway
-    ? params.cfgAtStart
+  const autoEnabled = params.minimalTestGateway
+    ? undefined
     : applyPluginAutoEnable({
-        config: params.cfgAtStart,
+        config: activationSourceConfig,
         env: process.env,
-      }).config;
+        ...(params.pluginMetadataSnapshot?.manifestRegistry
+          ? { manifestRegistry: params.pluginMetadataSnapshot.manifestRegistry }
+          : {}),
+      });
+  const gatewayPluginConfigAtStart =
+    params.minimalTestGateway || !autoEnabled
+      ? params.cfgAtStart
+      : activationSourceConfig === params.startupRuntimeConfig
+        ? autoEnabled.config
+        : mergeActivationSectionsIntoRuntimeConfig({
+            runtimeConfig: params.startupRuntimeConfig,
+            activationConfig: autoEnabled.config,
+          });
   const defaultAgentId = resolveDefaultAgentId(gatewayPluginConfigAtStart);
   const defaultWorkspaceDir = resolveAgentWorkspaceDir(gatewayPluginConfigAtStart, defaultAgentId);
+  const pluginsGloballyDisabled = gatewayPluginConfigAtStart.plugins?.enabled === false;
+  const pluginLookUpTable: PluginLookUpTable | undefined =
+    params.minimalTestGateway || pluginsGloballyDisabled
+      ? undefined
+      : loadPluginLookUpTable({
+          config: gatewayPluginConfigAtStart,
+          activationSourceConfig,
+          workspaceDir: defaultWorkspaceDir,
+          env: process.env,
+          ...(params.pluginMetadataSnapshot
+            ? { metadataSnapshot: params.pluginMetadataSnapshot }
+            : {}),
+        });
   const deferredConfiguredChannelPluginIds = params.minimalTestGateway
     ? []
-    : resolveConfiguredDeferredChannelPluginIds({
-        config: gatewayPluginConfigAtStart,
-        workspaceDir: defaultWorkspaceDir,
-        env: process.env,
-      });
+    : pluginLookUpTable
+      ? [...pluginLookUpTable.startup.configuredDeferredChannelPluginIds]
+      : pluginsGloballyDisabled
+        ? []
+        : resolveConfiguredDeferredChannelPluginIds({
+            config: gatewayPluginConfigAtStart,
+            workspaceDir: defaultWorkspaceDir,
+            env: process.env,
+          });
   const startupPluginIds = params.minimalTestGateway
     ? []
-    : resolveGatewayStartupPluginIds({
-        config: gatewayPluginConfigAtStart,
-        activationSourceConfig: params.cfgAtStart,
-        workspaceDir: defaultWorkspaceDir,
-        env: process.env,
-      });
+    : pluginLookUpTable
+      ? [...pluginLookUpTable.startup.pluginIds]
+      : pluginsGloballyDisabled
+        ? []
+        : resolveGatewayStartupPluginIds({
+            config: gatewayPluginConfigAtStart,
+            activationSourceConfig,
+            workspaceDir: defaultWorkspaceDir,
+            env: process.env,
+          });
 
   const baseMethods = listGatewayMethods();
   const emptyPluginRegistry = createEmptyPluginRegistry();
@@ -95,8 +138,10 @@ export async function prepareGatewayPluginBootstrap(params: {
       workspaceDir: defaultWorkspaceDir,
       log: params.log,
       coreGatewayHandlers,
+      coreGatewayMethodNames: listCoreGatewayMethodNames(),
       baseMethods,
       pluginIds: startupPluginIds,
+      pluginLookUpTable,
       preferSetupRuntimeForChannelPlugins: deferredConfiguredChannelPluginIds.length > 0,
       suppressPluginInfoLogs: deferredConfiguredChannelPluginIds.length > 0,
     }));
@@ -111,6 +156,7 @@ export async function prepareGatewayPluginBootstrap(params: {
     deferredConfiguredChannelPluginIds,
     startupPluginIds,
     baseMethods,
+    pluginLookUpTable,
     pluginRegistry,
     baseGatewayMethods,
   };

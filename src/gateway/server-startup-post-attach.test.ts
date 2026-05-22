@@ -390,7 +390,7 @@ describe("startGatewayPostAttachRuntime", () => {
     expect(hoisted.setInternalHooksEnabled).not.toHaveBeenCalled();
     expect(hoisted.logGatewayStartup).toHaveBeenCalledTimes(1);
     expect(firstStartupLog().loadedPluginIds).toEqual(["beta", "alpha"]);
-    expect(log.info).toHaveBeenCalledWith("gateway ready");
+    expect(log.info).toHaveBeenCalledWith("starting channels and sidecars...");
     expect(hoisted.startGatewayMemoryBackend).not.toHaveBeenCalled();
   });
 

@@ -269,7 +269,13 @@ describe("gateway startup primary model warmup", () => {
     expect(resolveModelAsyncMock).toHaveBeenCalledWith("codex", "gpt-5.4", "/tmp/agent", cfg, {
       skipProviderRuntimeHooks: true,
     });
-    expect(resolveModelAsyncMock).toHaveBeenCalledWith("codex", "gpt-5.4", "/tmp/agent", cfg);
+    expect(resolveModelAsyncMock).toHaveBeenCalledWith(
+      "codex",
+      "gpt-5.4",
+      "/tmp/agent",
+      cfg,
+      undefined,
+    );
     expect(warn).not.toHaveBeenCalled();
   });
 

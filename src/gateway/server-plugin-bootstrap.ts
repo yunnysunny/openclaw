@@ -134,8 +134,17 @@ export async function prepareGatewayPluginLoadAsync(
   const autoEnabled = applyPluginAutoEnable({
     config: activationSourceConfig,
     env: process.env,
+    ...(params.pluginLookUpTable?.manifestRegistry
+      ? { manifestRegistry: params.pluginLookUpTable.manifestRegistry }
+      : {}),
   });
-  const resolvedConfig = autoEnabled.config;
+  const resolvedConfig =
+    activationSourceConfig === params.cfg
+      ? autoEnabled.config
+      : mergeActivationSectionsIntoRuntimeConfig({
+          runtimeConfig: params.cfg,
+          activationConfig: autoEnabled.config,
+        });
   installGatewayPluginRuntimeEnvironment(resolvedConfig);
   const loaded = await loadGatewayPluginsAsync({
     cfg: resolvedConfig,
