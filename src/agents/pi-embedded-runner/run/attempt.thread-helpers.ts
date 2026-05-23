@@ -37,17 +37,7 @@ export function resolveAttemptSpawnWorkspaceDir(params: {
     : undefined;
 }
 
-export function shouldUseOpenAIWebSocketTransport(params: {
-  provider: string;
-  modelApi?: string | null;
-}): boolean {
-  // openai-codex normalizes to the ChatGPT backend HTTP path, not the public
-  // OpenAI Responses websocket endpoint. Keep it on HTTP until a provider-
-  // specific websocket target exists and is verified end-to-end.
-  return params.modelApi === "openai-responses" && params.provider === "openai";
-}
-
-export function shouldAppendAttemptCacheTtl(params: {
+function shouldAppendAttemptCacheTtl(params: {
   timedOutDuringCompaction: boolean;
   compactionOccurredThisAttempt: boolean;
   config?: OpenClawConfig;
@@ -103,4 +93,17 @@ export function shouldPersistCompletedBootstrapTurn(params: {
     return false;
   }
   return true;
+}
+
+// Stage 4 compat stub: upstream gates the OpenAI WebSocket transport behind a
+// helper that consults provider config, env, and cooldown state. Locally the
+// transport stays HTTP/SSE, so this stub returns false to keep attempt.ts
+// resolving the helper without enabling a transport we don't yet support.
+export function shouldUseOpenAIWebSocketTransport(_params: {
+  provider?: string;
+  modelId?: string;
+  config?: OpenClawConfig;
+  env?: NodeJS.ProcessEnv;
+}): boolean {
+  return false;
 }

@@ -3,30 +3,31 @@ import { vi } from "vitest";
 const registryJitiMocks = vi.hoisted(() => ({
   createJiti: vi.fn(),
   discoverOpenClawPlugins: vi.fn(),
-  loadPluginManifestRegistry: vi.fn(),
-}));
-
-vi.mock("jiti", () => ({
-  createJiti: (...args: Parameters<typeof registryJitiMocks.createJiti>) =>
-    registryJitiMocks.createJiti(...args),
+  loadPluginManifestRegistrySync: vi.fn(),
 }));
 
 vi.mock("../discovery.js", () => ({
   discoverOpenClawPlugins: (
     ...args: Parameters<typeof registryJitiMocks.discoverOpenClawPlugins>
   ) => registryJitiMocks.discoverOpenClawPlugins(...args),
+  discoverOpenClawPluginsAsync: (
+    ...args: Parameters<typeof registryJitiMocks.discoverOpenClawPlugins>
+  ) => Promise.resolve(registryJitiMocks.discoverOpenClawPlugins(...args)),
 }));
 
 vi.mock("../manifest-registry.js", () => ({
-  loadPluginManifestRegistry: (
-    ...args: Parameters<typeof registryJitiMocks.loadPluginManifestRegistry>
-  ) => registryJitiMocks.loadPluginManifestRegistry(...args),
+  loadPluginManifestRegistrySync: (
+    ...args: Parameters<typeof registryJitiMocks.loadPluginManifestRegistrySync>
+  ) => registryJitiMocks.loadPluginManifestRegistrySync(...args),
+  loadPluginManifestRegistryAsync: (
+    ...args: Parameters<typeof registryJitiMocks.loadPluginManifestRegistrySync>
+  ) => Promise.resolve(registryJitiMocks.loadPluginManifestRegistrySync(...args)),
 }));
 
 export function resetRegistryJitiMocks(): void {
   registryJitiMocks.createJiti.mockReset();
   registryJitiMocks.discoverOpenClawPlugins.mockReset();
-  registryJitiMocks.loadPluginManifestRegistry.mockReset();
+  registryJitiMocks.loadPluginManifestRegistrySync.mockReset();
   registryJitiMocks.discoverOpenClawPlugins.mockReturnValue({
     candidates: [],
     diagnostics: [],

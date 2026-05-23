@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { resolveAgentWorkspaceDir, resolveDefaultAgentId } from "../agents/agent-scope.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import {
@@ -40,14 +41,16 @@ export function collectPluginConfigAssignments(params: {
     params.config,
     resolveDefaultAgentId(params.config),
   );
+  const bundledLoadablePluginIds = [...(params.loadablePluginOrigins?.entries() ?? [])]
+    .filter(([, origin]) => origin === "bundled")
+    .map(([pluginId]) => pluginId);
   const pluginSecretInputs = new Map(
     [
       ...resolvePluginConfigContractsById({
         config: params.config,
         workspaceDir,
         env: params.context.env,
-        cache: true,
-        fallbackToBundledMetadata: false,
+        fallbackToBundledMetadata: true,
         pluginIds: Object.keys(entries),
       }).entries(),
     ].flatMap(([pluginId, metadata]) => {

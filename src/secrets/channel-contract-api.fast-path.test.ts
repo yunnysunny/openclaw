@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { loadPluginManifestRegistryMock } = vi.hoisted(() => ({
-  loadPluginManifestRegistryMock: vi.fn(() => {
+const { loadPluginManifestRegistrySyncMock } = vi.hoisted(() => ({
+  loadPluginManifestRegistrySyncMock: vi.fn(() => {
     throw new Error("manifest registry should stay off the explicit bundled channel fast path");
   }),
 }));
@@ -34,7 +34,7 @@ const { loadBundledPluginPublicArtifactModuleSyncMock } = vi.hoisted(() => ({
 }));
 
 vi.mock("../plugins/manifest-registry.js", () => ({
-  loadPluginManifestRegistry: loadPluginManifestRegistryMock,
+  loadPluginManifestRegistrySync: loadPluginManifestRegistrySyncMock,
 }));
 
 vi.mock("../plugins/public-surface-loader.js", () => ({
@@ -48,7 +48,7 @@ import {
 
 describe("channel contract api explicit fast path", () => {
   beforeEach(() => {
-    loadPluginManifestRegistryMock.mockClear();
+    loadPluginManifestRegistrySyncMock.mockClear();
   });
 
   it("resolves bundled channel secret contracts by explicit channel id without manifest scans", () => {
@@ -66,7 +66,7 @@ describe("channel contract api explicit fast path", () => {
         }),
       ]),
     );
-    expect(loadPluginManifestRegistryMock).not.toHaveBeenCalled();
+    expect(loadPluginManifestRegistrySyncMock).not.toHaveBeenCalled();
   });
 
   it("resolves bundled channel security contracts by explicit channel id without manifest scans", () => {
@@ -80,6 +80,6 @@ describe("channel contract api explicit fast path", () => {
       dirName: "whatsapp",
       artifactBasename: "security-contract-api.js",
     });
-    expect(loadPluginManifestRegistryMock).not.toHaveBeenCalled();
+    expect(loadPluginManifestRegistrySyncMock).not.toHaveBeenCalled();
   });
 });

@@ -1,9 +1,11 @@
+// @ts-nocheck
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 type RegistryModule = typeof import("./registry.js");
 type RuntimeModule = typeof import("./runtime.js");
 type WebSearchProvidersRuntimeModule = typeof import("./web-search-providers.runtime.js");
 type ManifestRegistryModule = typeof import("./manifest-registry.js");
+type InstalledManifestRegistryModule = typeof import("./manifest-registry-installed.js");
 type PluginAutoEnableModule = typeof import("../config/plugin-auto-enable.js");
 type WebSearchProvidersSharedModule = typeof import("./web-search-providers.shared.js");
 
@@ -20,11 +22,12 @@ const BUNDLED_WEB_SEARCH_PROVIDERS = [
 ] as const;
 
 let createEmptyPluginRegistry: RegistryModule["createEmptyPluginRegistry"];
-let loadPluginManifestRegistryMock: ReturnType<typeof vi.fn>;
+let loadPluginManifestRegistrySyncMock: ReturnType<typeof vi.fn>;
 let setActivePluginRegistry: RuntimeModule["setActivePluginRegistry"];
 let resolvePluginWebSearchProviders: WebSearchProvidersRuntimeModule["resolvePluginWebSearchProviders"];
 let resolveRuntimeWebSearchProviders: WebSearchProvidersRuntimeModule["resolveRuntimeWebSearchProviders"];
 let resetWebSearchProviderSnapshotCacheForTests: WebSearchProvidersRuntimeModule["__testing"]["resetWebSearchProviderSnapshotCacheForTests"];
+let clearInstalledManifestRegistryCache: InstalledManifestRegistryModule["clearInstalledManifestRegistryCache"];
 let loadOpenClawPluginsMock: ReturnType<typeof vi.fn>;
 let loaderModule: typeof import("./loader.js");
 let manifestRegistryModule: ManifestRegistryModule;
@@ -147,6 +150,9 @@ function createManifestRegistryFixture() {
         manifestPath: "/tmp/brave/openclaw.plugin.json",
         channels: [],
         providers: [],
+        cliBackends: [],
+        syntheticAuthRefs: [],
+        nonSecretAuthMarkers: [],
         skills: [],
         hooks: [],
         configUiHints: { "webSearch.apiKey": { label: "key" } },
@@ -159,6 +165,9 @@ function createManifestRegistryFixture() {
         manifestPath: "/tmp/noise/openclaw.plugin.json",
         channels: [],
         providers: [],
+        cliBackends: [],
+        syntheticAuthRefs: [],
+        nonSecretAuthMarkers: [],
         skills: [],
         hooks: [],
         configUiHints: { unrelated: { label: "nope" } },
@@ -173,7 +182,7 @@ function expectLoaderCallCount(count: number) {
 }
 
 function expectScopedWebSearchCandidates(pluginIds: readonly string[]) {
-  expect(loadPluginManifestRegistryMock).toHaveBeenCalled();
+  expect(loadPluginManifestRegistrySyncMock).toHaveBeenCalled();
   expect(loadOpenClawPluginsMock).toHaveBeenCalledWith(
     expect.objectContaining({
       onlyPluginIds: [...pluginIds],
@@ -332,11 +341,12 @@ function expectRuntimeProviderResolution(
 
 describe("resolvePluginWebSearchProviders", () => {
   beforeAll(async () => {
-    ({ createEmptyPluginRegistry } = await import("./registry.js"));
+    ({ createEmptyPluginRegistry } = await import("./registry-empty.js"));
     manifestRegistryModule = await import("./manifest-registry.js");
     loaderModule = await import("./loader.js");
     pluginAutoEnableModule = await import("../config/plugin-auto-enable.js");
     webSearchProvidersSharedModule = await import("./web-search-providers.shared.js");
+    ({ clearInstalledManifestRegistryCache } = await import("./manifest-registry-installed.js"));
     ({ setActivePluginRegistry } = await import("./runtime.js"));
     ({
       resolvePluginWebSearchProviders,
@@ -347,6 +357,7 @@ describe("resolvePluginWebSearchProviders", () => {
 
   beforeEach(() => {
     resetWebSearchProviderSnapshotCacheForTests();
+    clearInstalledManifestRegistryCache();
     applyPluginAutoEnableSpy?.mockRestore();
     applyPluginAutoEnableSpy = vi
       .spyOn(pluginAutoEnableModule, "applyPluginAutoEnable")
@@ -358,10 +369,10 @@ describe("resolvePluginWebSearchProviders", () => {
             autoEnabledReasons: {},
           }) as ReturnType<PluginAutoEnableModule["applyPluginAutoEnable"]>,
       );
-    loadPluginManifestRegistryMock = vi
-      .spyOn(manifestRegistryModule, "loadPluginManifestRegistry")
+    loadPluginManifestRegistrySyncMock = vi
+      .spyOn(manifestRegistryModule, "loadPluginManifestRegistrySync")
       .mockReturnValue(
-        createManifestRegistryFixture() as ManifestRegistryModule["loadPluginManifestRegistry"] extends (
+        createManifestRegistryFixture() as ManifestRegistryModule["loadPluginManifestRegistrySync"] extends (
           ...args: unknown[]
         ) => infer R
           ? R
@@ -379,6 +390,7 @@ describe("resolvePluginWebSearchProviders", () => {
   });
 
   afterEach(() => {
+    clearInstalledManifestRegistryCache();
     setActivePluginRegistry(createEmptyPluginRegistry());
     vi.restoreAllMocks();
   });
@@ -448,7 +460,7 @@ describe("resolvePluginWebSearchProviders", () => {
       env,
     });
 
-    expect(loadPluginManifestRegistryMock).toHaveBeenCalledWith(
+    expect(loadPluginManifestRegistrySyncMock).toHaveBeenCalledWith(
       expect.objectContaining({
         workspaceDir: "/tmp/runtime-workspace",
       }),

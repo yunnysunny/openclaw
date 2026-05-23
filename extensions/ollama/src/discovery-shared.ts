@@ -23,7 +23,7 @@ type OllamaDiscoveryContext = {
     };
   };
   env: NodeJS.ProcessEnv;
-  resolveProviderApiKey: (providerId: string) => { apiKey?: unknown };
+  resolveProviderApiKey: (providerId: string) => Promise<{ apiKey?: unknown }>;
 };
 
 function normalizeOptionalString(value: unknown): string | undefined {
@@ -107,7 +107,7 @@ export async function resolveOllamaDiscoveryResult(params: {
   if (!hasExplicitModels && discoveryEnabled === false) {
     return null;
   }
-  const ollamaKey = params.ctx.resolveProviderApiKey(OLLAMA_PROVIDER_ID).apiKey;
+  const ollamaKey = (await params.ctx.resolveProviderApiKey(OLLAMA_PROVIDER_ID)).apiKey;
   const hasRealOllamaKey =
     typeof ollamaKey === "string" &&
     ollamaKey.trim().length > 0 &&
@@ -155,3 +155,8 @@ export async function resolveOllamaDiscoveryResult(params: {
     },
   };
 }
+
+export function shouldUseSyntheticOllamaAuth(_providerConfig: unknown): boolean {
+  return false;
+}
+

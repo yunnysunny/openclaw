@@ -1,7 +1,11 @@
 import { resolveProviderAuthAliasMap } from "../agents/provider-auth-aliases.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
-import { loadPluginManifestRegistry } from "../plugins/manifest-registry.js";
-import type { PluginManifestRecord } from "../plugins/manifest-registry.js";
+import {
+  loadPluginManifestRegistryAsync,
+  loadPluginManifestRegistrySync,
+  type PluginManifestRegistry,
+  type PluginManifestRecord,
+} from "../plugins/manifest-registry.js";
 import {
   isWorkspacePluginAllowedByConfig,
   normalizePluginConfigId,
@@ -18,6 +22,7 @@ const CORE_PROVIDER_AUTH_ENV_VAR_CANDIDATES = {
 } as const;
 
 const CORE_PROVIDER_SETUP_ENV_VAR_OVERRIDES = {
+  minimax: ["MINIMAX_API_KEY"],
   "minimax-cn": ["MINIMAX_API_KEY"],
 } as const;
 
@@ -72,26 +77,24 @@ function appendUniqueEnvVarCandidates(
   }
 }
 
-function resolveManifestProviderAuthEnvVarCandidates(
+function collectManifestProviderAuthEnvVarCandidates(
+  registry: PluginManifestRegistry,
   params?: ProviderEnvVarLookupParams,
 ): Record<string, string[]> {
-  const registry = loadPluginManifestRegistry({
-    config: params?.config,
-    workspaceDir: params?.workspaceDir,
-    env: params?.env,
-  });
   const candidates: Record<string, string[]> = {};
   for (const plugin of registry.plugins) {
     if (!shouldUsePluginProviderEnvVars(plugin, params)) {
       continue;
     }
-    if (!plugin.providerAuthEnvVars) {
-      continue;
+    if (plugin.providerAuthEnvVars) {
+      for (const [providerId, keys] of Object.entries(plugin.providerAuthEnvVars).toSorted(
+        ([left], [right]) => left.localeCompare(right),
+      )) {
+        appendUniqueEnvVarCandidates(candidates, providerId, keys);
+      }
     }
-    for (const [providerId, keys] of Object.entries(plugin.providerAuthEnvVars).toSorted(
-      ([left], [right]) => left.localeCompare(right),
-    )) {
-      appendUniqueEnvVarCandidates(candidates, providerId, keys);
+    for (const provider of plugin.setup?.providers ?? []) {
+      appendUniqueEnvVarCandidates(candidates, provider.id, provider.envVars ?? []);
     }
   }
   const aliases = resolveProviderAuthAliasMap(params);
@@ -106,11 +109,42 @@ function resolveManifestProviderAuthEnvVarCandidates(
   return candidates;
 }
 
+function resolveManifestProviderAuthEnvVarCandidates(
+  params?: ProviderEnvVarLookupParams,
+): Record<string, string[]> {
+  const registry = loadPluginManifestRegistrySync({
+    config: params?.config,
+    workspaceDir: params?.workspaceDir,
+    env: params?.env,
+  });
+  return collectManifestProviderAuthEnvVarCandidates(registry, params);
+}
+
+async function resolveManifestProviderAuthEnvVarCandidatesAsync(
+  params?: ProviderEnvVarLookupParams,
+): Promise<Record<string, string[]>> {
+  const registry = await loadPluginManifestRegistryAsync({
+    config: params?.config,
+    workspaceDir: params?.workspaceDir,
+    env: params?.env,
+  });
+  return collectManifestProviderAuthEnvVarCandidates(registry, params);
+}
+
 export function resolveProviderAuthEnvVarCandidates(
   params?: ProviderEnvVarLookupParams,
 ): Record<string, readonly string[]> {
   return {
     ...resolveManifestProviderAuthEnvVarCandidates(params),
+    ...CORE_PROVIDER_AUTH_ENV_VAR_CANDIDATES,
+  };
+}
+
+export async function resolveProviderAuthEnvVarCandidatesAsync(
+  params?: ProviderEnvVarLookupParams,
+): Promise<Record<string, readonly string[]>> {
+  return {
+    ...(await resolveManifestProviderAuthEnvVarCandidatesAsync(params)),
     ...CORE_PROVIDER_AUTH_ENV_VAR_CANDIDATES,
   };
 }
@@ -203,14 +237,12 @@ export function getProviderEnvVars(
   providerId: string,
   params?: ProviderEnvVarLookupParams,
 ): string[] {
-  const providerEnvVars = resolveProviderEnvVars(params);
+  const providerEnvVars = params ? resolveProviderEnvVars(params) : PROVIDER_ENV_VARS;
   const envVars = Object.hasOwn(providerEnvVars, providerId)
     ? providerEnvVars[providerId]
     : undefined;
   return Array.isArray(envVars) ? [...envVars] : [];
 }
-
-const EXTRA_PROVIDER_AUTH_ENV_VARS = ["MINIMAX_CODE_PLAN_KEY", "MINIMAX_CODING_API_KEY"] as const;
 
 // OPENCLAW_API_KEY authenticates the local OpenClaw bridge itself and must
 // remain available to child bridge/runtime processes.
@@ -219,7 +251,6 @@ export function listKnownProviderAuthEnvVarNames(params?: ProviderEnvVarLookupPa
     ...new Set([
       ...Object.values(resolveProviderAuthEnvVarCandidates(params)).flatMap((keys) => keys),
       ...Object.values(resolveProviderEnvVars(params)).flatMap((keys) => keys),
-      ...EXTRA_PROVIDER_AUTH_ENV_VARS,
     ]),
   ];
 }

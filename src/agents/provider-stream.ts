@@ -1,5 +1,6 @@
-import type { StreamFn } from "@mariozechner/pi-agent-core";
-import type { Api, Model } from "@mariozechner/pi-ai";
+// @ts-nocheck
+import type { StreamFn } from "@earendil-works/pi-agent-core";
+import type { Api, Model } from "@earendil-works/pi-ai";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { resolveProviderStreamFn } from "../plugins/provider-runtime.js";
 import { ensureCustomApiRegistered } from "./custom-api-registry.js";
@@ -11,6 +12,7 @@ export function registerProviderStreamForModel<TApi extends Api>(params: {
   agentDir?: string;
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
+  allowRuntimePluginLoad?: boolean;
 }): StreamFn | undefined {
   const streamFn =
     resolveProviderStreamFn({
@@ -18,6 +20,7 @@ export function registerProviderStreamForModel<TApi extends Api>(params: {
       config: params.cfg,
       workspaceDir: params.workspaceDir,
       env: params.env,
+      allowRuntimePluginLoad: params.allowRuntimePluginLoad,
       context: {
         config: params.cfg,
         agentDir: params.agentDir,

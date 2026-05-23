@@ -10,8 +10,11 @@ import {
 import { resolvePluginWebSearchConfig } from "../config/plugin-web-search-config.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
-import { resolveManifestContractPluginIds } from "../plugins/manifest-registry.js";
-import { normalizeProviderModelIdWithPlugin } from "../plugins/provider-runtime.js";
+import {
+  resolveManifestContractPluginIds,
+  resolveManifestContractPluginIdsAsync,
+} from "../plugins/manifest-registry.js";
+import { normalizeProviderModelIdWithPluginAsync } from "../plugins/provider-runtime.js";
 import { normalizeOptionalString, resolvePrimaryStringValue } from "../shared/string-coerce.js";
 import {
   clearGatewayModelPricingCacheState,
@@ -40,7 +43,7 @@ const OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models";
 const LITELLM_PRICING_URL =
   "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json";
 const CACHE_TTL_MS = 24 * 60 * 60_000;
-const FETCH_TIMEOUT_MS = 15_000;
+const FETCH_TIMEOUT_MS = 30_000;
 const MAX_PRICING_CATALOG_BYTES = 5 * 1024 * 1024;
 const PROVIDER_ALIAS_TO_OPENROUTER: Record<string, string> = {
   "google-gemini-cli": "google",
@@ -96,6 +99,31 @@ function parseNumberString(value: unknown): number | null {
   }
   const parsed = Number(trimmed);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatTimeoutSeconds(timeoutMs: number): string {
+  const seconds = timeoutMs / 1000;
+  return Number.isInteger(seconds) ? `${seconds}s` : `${seconds.toFixed(1)}s`;
+}
+
+function readErrorName(error: unknown): string | undefined {
+  return error && typeof error === "object" && "name" in error
+    ? String((error as { name?: unknown }).name)
+    : undefined;
+}
+
+function isTimeoutError(error: unknown): boolean {
+  if (readErrorName(error) === "TimeoutError") {
+    return true;
+  }
+  return /\bTimeoutError\b/u.test(String(error));
+}
+
+function formatPricingFetchFailure(source: "LiteLLM" | "OpenRouter", error: unknown): string {
+  if (isTimeoutError(error)) {
+    return `${source} pricing fetch failed (timeout ${formatTimeoutSeconds(FETCH_TIMEOUT_MS)}): ${String(error)}`;
+  }
+  return `${source} pricing fetch failed: ${String(error)}`;
 }
 
 function toPricePerMillion(value: number | null): number {
@@ -260,7 +288,7 @@ function canonicalizeOpenRouterProvider(provider: string): string {
   return PROVIDER_ALIAS_TO_OPENROUTER[normalized] ?? normalized;
 }
 
-function canonicalizeOpenRouterLookupId(id: string): string {
+export async function canonicalizeOpenRouterLookupIdAsync(id: string): Promise<string> {
   const trimmed = id.trim();
   if (!trimmed) {
     return "";
@@ -280,17 +308,20 @@ function canonicalizeOpenRouterLookupId(id: string): string {
       .replace(/^claude-([a-z]+)-(\d+)\.(\d+)$/u, "claude-$1-$2-$3");
   }
   model =
-    normalizeProviderModelIdWithPlugin({
+    (await normalizeProviderModelIdWithPluginAsync({
       provider,
       context: {
         provider,
         modelId: model,
       },
-    }) ?? model;
+    })) ?? model;
   return `${provider}/${model}`;
 }
 
-function buildOpenRouterExactCandidates(ref: ModelRef, seen = new Set<string>()): string[] {
+async function buildOpenRouterExactCandidatesAsync(
+  ref: ModelRef,
+  seen = new Set<string>(),
+): Promise<string[]> {
   const refKey = modelKey(ref.provider, ref.model);
   if (seen.has(refKey)) {
     return [];
@@ -300,7 +331,9 @@ function buildOpenRouterExactCandidates(ref: ModelRef, seen = new Set<string>())
 
   const candidates = new Set<string>();
   const canonicalProvider = canonicalizeOpenRouterProvider(ref.provider);
-  const canonicalFullId = canonicalizeOpenRouterLookupId(modelKey(canonicalProvider, ref.model));
+  const canonicalFullId = await canonicalizeOpenRouterLookupIdAsync(
+    modelKey(canonicalProvider, ref.model),
+  );
   if (canonicalFullId) {
     candidates.add(canonicalFullId);
   }
@@ -317,7 +350,7 @@ function buildOpenRouterExactCandidates(ref: ModelRef, seen = new Set<string>())
   if (WRAPPER_PROVIDERS.has(ref.provider) && ref.model.includes("/")) {
     const nestedRef = parseModelRef(ref.model, DEFAULT_PROVIDER);
     if (nestedRef) {
-      for (const candidate of buildOpenRouterExactCandidates(nestedRef, nextSeen)) {
+      for (const candidate of await buildOpenRouterExactCandidatesAsync(nestedRef, nextSeen)) {
         candidates.add(candidate);
       }
     }
@@ -397,6 +430,23 @@ function addConfiguredWebSearchPluginModels(params: {
   }
 }
 
+export async function addConfiguredWebSearchPluginModelsAsync(params: {
+  config: OpenClawConfig;
+  aliasIndex: ReturnType<typeof buildModelAliasIndex>;
+  refs: Map<string, ModelRef>;
+}): Promise<void> {
+  for (const pluginId of await resolveManifestContractPluginIdsAsync({
+    contract: "webSearchProviders",
+    config: params.config,
+  })) {
+    addResolvedModelRef({
+      raw: resolvePluginWebSearchConfig(params.config, pluginId)?.model as string | undefined,
+      aliasIndex: params.aliasIndex,
+      refs: params.refs,
+    });
+  }
+}
+
 export function collectConfiguredModelPricingRefs(config: OpenClawConfig): ModelRef[] {
   const refs = new Map<string, ModelRef>();
   const aliasIndex = buildModelAliasIndex({
@@ -454,6 +504,65 @@ export function collectConfiguredModelPricingRefs(config: OpenClawConfig): Model
   return Array.from(refs.values());
 }
 
+export async function collectConfiguredModelPricingRefsAsync(
+  config: OpenClawConfig,
+): Promise<ModelRef[]> {
+  const refs = new Map<string, ModelRef>();
+  const aliasIndex = buildModelAliasIndex({
+    cfg: config,
+    defaultProvider: DEFAULT_PROVIDER,
+  });
+
+  addModelListLike({ value: config.agents?.defaults?.model, aliasIndex, refs });
+  addModelListLike({ value: config.agents?.defaults?.imageModel, aliasIndex, refs });
+  addModelListLike({ value: config.agents?.defaults?.pdfModel, aliasIndex, refs });
+  addResolvedModelRef({ raw: config.agents?.defaults?.compaction?.model, aliasIndex, refs });
+  addResolvedModelRef({ raw: config.agents?.defaults?.heartbeat?.model, aliasIndex, refs });
+  addModelListLike({ value: config.tools?.subagents?.model, aliasIndex, refs });
+  addResolvedModelRef({ raw: config.messages?.tts?.summaryModel, aliasIndex, refs });
+  addResolvedModelRef({ raw: config.hooks?.gmail?.model, aliasIndex, refs });
+
+  for (const agent of config.agents?.list ?? []) {
+    addModelListLike({ value: agent.model, aliasIndex, refs });
+    addModelListLike({ value: agent.subagents?.model, aliasIndex, refs });
+    addResolvedModelRef({ raw: agent.heartbeat?.model, aliasIndex, refs });
+  }
+
+  for (const mapping of config.hooks?.mappings ?? []) {
+    addResolvedModelRef({ raw: mapping.model, aliasIndex, refs });
+  }
+
+  for (const channelMap of Object.values(config.channels?.modelByChannel ?? {})) {
+    if (!channelMap || typeof channelMap !== "object") {
+      continue;
+    }
+    for (const raw of Object.values(channelMap)) {
+      addResolvedModelRef({
+        raw: typeof raw === "string" ? raw : undefined,
+        aliasIndex,
+        refs,
+      });
+    }
+  }
+
+  await addConfiguredWebSearchPluginModelsAsync({ config, aliasIndex, refs });
+
+  for (const entry of config.tools?.media?.models ?? []) {
+    addProviderModelPair({ provider: entry.provider, model: entry.model, refs });
+  }
+  for (const entry of config.tools?.media?.image?.models ?? []) {
+    addProviderModelPair({ provider: entry.provider, model: entry.model, refs });
+  }
+  for (const entry of config.tools?.media?.audio?.models ?? []) {
+    addProviderModelPair({ provider: entry.provider, model: entry.model, refs });
+  }
+  for (const entry of config.tools?.media?.video?.models ?? []) {
+    addProviderModelPair({ provider: entry.provider, model: entry.model, refs });
+  }
+
+  return Array.from(refs.values());
+}
+
 async function fetchOpenRouterPricingCatalog(
   fetchImpl: typeof fetch,
 ): Promise<Map<string, OpenRouterPricingEntry>> {
@@ -479,19 +588,20 @@ async function fetchOpenRouterPricingCatalog(
   return catalog;
 }
 
-function resolveCatalogPricingForRef(params: {
+async function resolveCatalogPricingForRefAsync(params: {
   ref: ModelRef;
   catalogById: Map<string, OpenRouterPricingEntry>;
   catalogByNormalizedId: Map<string, OpenRouterPricingEntry>;
-}): CachedModelPricing | undefined {
-  for (const candidate of buildOpenRouterExactCandidates(params.ref)) {
+}): Promise<CachedModelPricing | undefined> {
+  const candidates = await buildOpenRouterExactCandidatesAsync(params.ref);
+  for (const candidate of candidates) {
     const exact = params.catalogById.get(candidate);
     if (exact) {
       return exact.pricing;
     }
   }
-  for (const candidate of buildOpenRouterExactCandidates(params.ref)) {
-    const normalized = canonicalizeOpenRouterLookupId(candidate);
+  for (const candidate of candidates) {
+    const normalized = await canonicalizeOpenRouterLookupIdAsync(candidate);
     if (!normalized) {
       continue;
     }
@@ -522,7 +632,7 @@ export async function refreshGatewayModelPricingCache(params: {
   }
   const fetchImpl = params.fetchImpl ?? fetch;
   inFlightRefresh = (async () => {
-    const refs = collectConfiguredModelPricingRefs(params.config);
+    const refs = await collectConfiguredModelPricingRefsAsync(params.config);
     if (refs.length === 0) {
       replaceGatewayModelPricingCache(new Map());
       clearRefreshTimer();
@@ -535,12 +645,12 @@ export async function refreshGatewayModelPricingCache(params: {
     let litellmFailed = false;
     const [catalogById, litellmCatalog] = await Promise.all([
       fetchOpenRouterPricingCatalog(fetchImpl).catch((error: unknown) => {
-        log.warn(`OpenRouter pricing fetch failed: ${String(error)}`);
+        log.warn(formatPricingFetchFailure("OpenRouter", error));
         openRouterFailed = true;
         return new Map<string, OpenRouterPricingEntry>();
       }),
       fetchLiteLLMPricingCatalog(fetchImpl).catch((error: unknown) => {
-        log.warn(`LiteLLM pricing fetch failed: ${String(error)}`);
+        log.warn(formatPricingFetchFailure("LiteLLM", error));
         litellmFailed = true;
         return new Map<string, CachedModelPricing>() as LiteLLMPricingCatalog;
       }),
@@ -548,7 +658,7 @@ export async function refreshGatewayModelPricingCache(params: {
 
     const catalogByNormalizedId = new Map<string, OpenRouterPricingEntry>();
     for (const entry of catalogById.values()) {
-      const normalizedId = canonicalizeOpenRouterLookupId(entry.id);
+      const normalizedId = await canonicalizeOpenRouterLookupIdAsync(entry.id);
       if (!normalizedId || catalogByNormalizedId.has(normalizedId)) {
         continue;
       }
@@ -558,7 +668,7 @@ export async function refreshGatewayModelPricingCache(params: {
     const nextPricing = new Map<string, CachedModelPricing>();
     for (const ref of refs) {
       // 1. Try OpenRouter first (existing behavior — flat pricing)
-      const openRouterPricing = resolveCatalogPricingForRef({
+      const openRouterPricing = await resolveCatalogPricingForRefAsync({
         ref,
         catalogById,
         catalogByNormalizedId,
@@ -630,10 +740,17 @@ export function startGatewayModelPricingRefresh(params: {
   config: OpenClawConfig;
   fetchImpl?: typeof fetch;
 }): () => void {
-  void refreshGatewayModelPricingCache(params).catch((error: unknown) => {
-    log.warn(`pricing bootstrap failed: ${String(error)}`);
+  let stopped = false;
+  queueMicrotask(() => {
+    if (stopped) {
+      return;
+    }
+    void refreshGatewayModelPricingCache(params).catch((error: unknown) => {
+      log.warn(`pricing bootstrap failed: ${String(error)}`);
+    });
   });
   return () => {
+    stopped = true;
     clearRefreshTimer();
   };
 }

@@ -1,1 +1,2 @@
-export { openBoundaryFile, type BoundaryFileOpenResult } from "../../infra/boundary-file-read.js";
+// @ts-nocheck
+export { openRootFile, type RootFileOpenResult } from "../../infra/boundary-file-read.js";

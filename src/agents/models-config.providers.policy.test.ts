@@ -4,17 +4,19 @@ type NormalizeProviderSpecificConfig =
   typeof import("./models-config.providers.policy.js").normalizeProviderSpecificConfig;
 type ResolveProviderConfigApiKeyResolver =
   typeof import("./models-config.providers.policy.js").resolveProviderConfigApiKeyResolver;
+type ResolveProviderConfigApiKeyResolverAsync =
+  typeof import("./models-config.providers.policy.js").resolveProviderConfigApiKeyResolverAsync;
+type NormalizeProviderSpecificConfigAsync =
+  typeof import("./models-config.providers.policy.js").normalizeProviderSpecificConfigAsync;
 
 const GOOGLE_BASE_URL = "https://generativelanguage.googleapis.com";
 let normalizeProviderSpecificConfig: NormalizeProviderSpecificConfig;
+let normalizeProviderSpecificConfigAsync: NormalizeProviderSpecificConfigAsync;
 let resolveProviderConfigApiKeyResolver: ResolveProviderConfigApiKeyResolver;
+let resolveProviderConfigApiKeyResolverAsync: ResolveProviderConfigApiKeyResolverAsync;
 
-vi.mock("../plugins/provider-runtime.js", () => ({
-  applyProviderNativeStreamingUsageCompatWithPlugin: () => undefined,
-  normalizeProviderConfigWithPlugin: (params: {
-    provider: string;
-    context: { providerConfig?: { baseUrl?: string } };
-  }) => {
+const mockNormalizeProviderConfigWithPlugin = vi.hoisted(() => {
+  return (params: { provider: string; context: { providerConfig?: { baseUrl?: string } } }) => {
     if (params.provider !== "google") {
       return undefined;
     }
@@ -29,8 +31,30 @@ vi.mock("../plugins/provider-runtime.js", () => ({
           ? `${GOOGLE_BASE_URL}/v1beta`
           : params.context.providerConfig?.baseUrl,
     };
-  },
+  };
+});
+
+vi.mock("../plugins/provider-runtime.js", () => ({
+  applyProviderNativeStreamingUsageCompatWithPlugin: () => undefined,
+  normalizeProviderConfigWithPlugin: mockNormalizeProviderConfigWithPlugin,
+  normalizeProviderConfigWithPluginAsync: async (
+    params: Parameters<typeof mockNormalizeProviderConfigWithPlugin>[0],
+  ) => mockNormalizeProviderConfigWithPlugin(params),
   resolveProviderConfigApiKeyWithPlugin: (params: {
+    provider: string;
+    context: { env: NodeJS.ProcessEnv };
+  }) => {
+    if (params.provider === "amazon-bedrock") {
+      return params.context.env.AWS_PROFILE?.trim() ? "AWS_PROFILE" : undefined;
+    }
+    if (params.provider === "anthropic-vertex") {
+      return params.context.env.ANTHROPIC_VERTEX_USE_GCP_METADATA === "true"
+        ? "gcp-vertex-credentials"
+        : undefined;
+    }
+    return undefined;
+  },
+  resolveProviderConfigApiKeyWithPluginAsync: async (params: {
     provider: string;
     context: { env: NodeJS.ProcessEnv };
   }) => {
@@ -48,8 +72,12 @@ vi.mock("../plugins/provider-runtime.js", () => ({
 
 beforeEach(async () => {
   vi.resetModules();
-  ({ normalizeProviderSpecificConfig, resolveProviderConfigApiKeyResolver } =
-    await import("./models-config.providers.policy.js"));
+  ({
+    normalizeProviderSpecificConfig,
+    normalizeProviderSpecificConfigAsync,
+    resolveProviderConfigApiKeyResolver,
+    resolveProviderConfigApiKeyResolverAsync,
+  } = await import("./models-config.providers.policy.js"));
 });
 
 describe("models-config.providers.policy", () => {
@@ -61,6 +89,16 @@ describe("models-config.providers.policy", () => {
 
     expect(resolver).toBeTypeOf("function");
     expect(resolver?.(env)).toBe("AWS_PROFILE");
+  });
+
+  it("resolveProviderConfigApiKeyResolverAsync matches sync resolver", async () => {
+    const env = {
+      AWS_PROFILE: "default",
+    } as NodeJS.ProcessEnv;
+    const asyncResolver = await resolveProviderConfigApiKeyResolverAsync("amazon-bedrock");
+    const syncResolver = resolveProviderConfigApiKeyResolver("amazon-bedrock");
+    expect(asyncResolver).toBeTypeOf("function");
+    expect(await asyncResolver?.(env)).toBe(syncResolver?.(env));
   });
 
   it("resolves anthropic-vertex ADC markers through provider plugin hooks", async () => {
@@ -85,6 +123,17 @@ describe("models-config.providers.policy", () => {
       api: "google-generative-ai",
       baseUrl: "https://generativelanguage.googleapis.com/v1beta",
     });
+  });
+
+  it("normalizeProviderSpecificConfigAsync matches sync Google normalization", async () => {
+    const provider = {
+      api: "google-generative-ai" as const,
+      baseUrl: "https://generativelanguage.googleapis.com",
+      models: [],
+    };
+    expect(await normalizeProviderSpecificConfigAsync("google", provider)).toEqual(
+      normalizeProviderSpecificConfig("google", provider),
+    );
   });
 
   it("does not treat generic transport APIs as provider plugin ids", () => {

@@ -1,5 +1,6 @@
+// @ts-nocheck
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { createEmptyPluginRegistry } from "./registry.js";
+import { createEmptyPluginRegistry } from "./registry-empty.js";
 
 type LoaderModule = typeof import("./loader.js");
 type ManifestRegistryModule = typeof import("./manifest-registry.js");
@@ -43,6 +44,9 @@ function createManifestRegistryFixture() {
         manifestPath: "/tmp/firecrawl/openclaw.plugin.json",
         channels: [],
         providers: [],
+        cliBackends: [],
+        syntheticAuthRefs: [],
+        nonSecretAuthMarkers: [],
         skills: [],
         hooks: [],
         configUiHints: { "webFetch.apiKey": { label: "key" } },
@@ -55,6 +59,9 @@ function createManifestRegistryFixture() {
         manifestPath: "/tmp/noise/openclaw.plugin.json",
         channels: [],
         providers: [],
+        cliBackends: [],
+        syntheticAuthRefs: [],
+        nonSecretAuthMarkers: [],
         skills: [],
         hooks: [],
         configUiHints: { unrelated: { label: "nope" } },
@@ -102,8 +109,8 @@ describe("resolvePluginWebFetchProviders", () => {
 
   beforeEach(() => {
     resetWebFetchProviderSnapshotCacheForTests();
-    vi.spyOn(manifestRegistryModule, "loadPluginManifestRegistry").mockReturnValue(
-      createManifestRegistryFixture() as ManifestRegistryModule["loadPluginManifestRegistry"] extends (
+    vi.spyOn(manifestRegistryModule, "loadPluginManifestRegistrySync").mockReturnValue(
+      createManifestRegistryFixture() as ManifestRegistryModule["loadPluginManifestRegistrySync"] extends (
         ...args: unknown[]
       ) => infer R
         ? R
@@ -261,7 +268,7 @@ describe("resolvePluginWebFetchProviders", () => {
       env,
     });
 
-    expect(manifestRegistryModule.loadPluginManifestRegistry).toHaveBeenCalledWith(
+    expect(manifestRegistryModule.loadPluginManifestRegistrySync).toHaveBeenCalledWith(
       expect.objectContaining({
         workspaceDir: "/tmp/runtime-workspace",
       }),

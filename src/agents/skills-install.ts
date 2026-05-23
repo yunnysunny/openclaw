@@ -1,7 +1,9 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { resolveBrewExecutable as defaultResolveBrewExecutable } from "../infra/brew.js";
+import { isContainerEnvironment as defaultIsContainerEnvironment } from "../infra/container-environment.js";
 import { formatErrorMessage } from "../infra/errors.js";
 import {
   type InstallSafetyOverrides,
@@ -35,14 +37,18 @@ export type { SkillInstallResult } from "./skills-install.types.js";
 type SkillsInstallDeps = {
   hasBinary: (bin: string) => boolean;
   loadWorkspaceSkillEntries: typeof defaultLoadWorkspaceSkillEntries;
+  resolveNodeInstallStateDir: () => string;
   resolveBrewExecutable: () => string | undefined;
+  isContainerEnvironment: () => boolean;
   resolveSkillsInstallPreferences: typeof defaultResolveSkillsInstallPreferences;
 };
 
 const defaultSkillsInstallDeps: SkillsInstallDeps = {
   hasBinary: defaultHasBinary,
   loadWorkspaceSkillEntries: defaultLoadWorkspaceSkillEntries,
+  resolveNodeInstallStateDir: resolveDefaultNodeInstallStateDir,
   resolveBrewExecutable: defaultResolveBrewExecutable,
+  isContainerEnvironment: defaultIsContainerEnvironment,
   resolveSkillsInstallPreferences: defaultResolveSkillsInstallPreferences,
 };
 
@@ -107,6 +113,37 @@ function buildNodeInstallCommand(packageName: string, prefs: SkillsInstallPrefer
   }
 }
 
+function resolveDefaultNodeInstallStateDir({
+  cwd = process.cwd(),
+  getuid = process.getuid?.bind(process),
+  homedir = os.homedir,
+  platform = process.platform,
+}: {
+  cwd?: string;
+  getuid?: () => number;
+  homedir?: () => string;
+  platform?: NodeJS.Platform;
+} = {}): string {
+  if (platform !== "win32" && getuid?.() === 0) {
+    return path.join(path.parse(cwd).root, "var", "lib", "openclaw");
+  }
+  return path.join(homedir(), ".openclaw");
+}
+
+async function buildNodeInstallEnv(prefs: SkillsInstallPreferences): Promise<NodeJS.ProcessEnv> {
+  if (prefs.nodeManager !== "npm") {
+    return {};
+  }
+
+  const stateDir = getSkillsInstallDeps().resolveNodeInstallStateDir();
+  const prefix = path.join(stateDir, "tools", "node", "npm");
+  await fs.promises.mkdir(prefix, { recursive: true, mode: 0o700 });
+  return {
+    NPM_CONFIG_PREFIX: prefix,
+    npm_config_prefix: prefix,
+  };
+}
+
 // Strict allowlist patterns to prevent option injection and malicious package names.
 const SAFE_BREW_FORMULA = /^[a-z0-9][a-z0-9+._@-]*(\/[a-z0-9][a-z0-9+._@-]*){0,2}$/;
 const SAFE_NODE_PACKAGE = /^(@[a-z0-9._-]+\/)?[a-z0-9._-]+(@[a-z0-9^~>=<.*|-]+)?$/;
@@ -123,6 +160,15 @@ function assertSafeInstallerValue(value: string, kind: string, pattern: RegExp):
     return `${kind} value contains invalid characters: ${trimmed}`;
   }
   return null;
+}
+
+async function pathExists(targetPath: string): Promise<boolean> {
+  try {
+    await fs.promises.access(targetPath);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function buildInstallCommand(
@@ -200,18 +246,9 @@ async function resolveBrewBinDir(timeoutMs: number, brewExe?: string): Promise<s
     }
   }
 
-  const envPrefix = process.env.HOMEBREW_PREFIX?.trim();
-  if (envPrefix) {
-    return path.join(envPrefix, "bin");
-  }
-
   for (const candidate of ["/opt/homebrew/bin", "/usr/local/bin"]) {
-    try {
-      if (fs.existsSync(candidate)) {
-        return candidate;
-      }
-    } catch {
-      // ignore
+    if (await pathExists(candidate)) {
+      return candidate;
     }
   }
   return undefined;
@@ -277,6 +314,11 @@ async function runBestEffortCommand(
 
 function resolveBrewMissingFailure(spec: SkillInstallSpec): SkillInstallResult {
   const formula = spec.formula ?? "this package";
+  if (process.platform === "linux" && getSkillsInstallDeps().isContainerEnvironment()) {
+    return createInstallFailure({
+      message: `brew not installed — Homebrew is not installed in this Linux container. Build a custom image with Homebrew or install "${formula}" manually using a supported system package before enabling this skill.`,
+    });
+  }
   const hint =
     process.platform === "linux"
       ? `Homebrew is not installed. Install it from https://brew.sh or install "${formula}" manually using your system package manager (e.g. apt, dnf, pacman).`
@@ -524,6 +566,9 @@ export async function installSkill(params: SkillInstallRequest): Promise<SkillIn
   }
 
   const envOverrides: NodeJS.ProcessEnv = {};
+  if (spec.kind === "node") {
+    Object.assign(envOverrides, await buildNodeInstallEnv(prefs));
+  }
   if (spec.kind === "go" && brewExe) {
     const brewBin = await resolveBrewBinDir(timeoutMs, brewExe);
     if (brewBin) {
@@ -536,6 +581,7 @@ export async function installSkill(params: SkillInstallRequest): Promise<SkillIn
 }
 
 export const __testing = {
+  resolveDefaultNodeInstallStateDir,
   setDepsForTest(overrides?: Partial<SkillsInstallDeps>): void {
     skillsInstallDeps = {
       ...defaultSkillsInstallDeps,

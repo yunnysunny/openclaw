@@ -364,10 +364,11 @@ async function loadBundledConfigSchemaResponse(): Promise<ConfigSchemaResponse> 
     OPENCLAW_BUNDLED_PLUGINS_DIR: path.join(repoRoot, "extensions"),
   };
 
-  const manifestRegistry = runtime.loadPluginManifestRegistry({
+  const manifestRegistry = await runtime.loadPluginManifestRegistryAsync({
     cache: false,
     env,
     config: {},
+    bundledChannelConfigCollector: runtime.collectBundledChannelConfigs,
   });
   logConfigDocBaselineDebug(`loaded ${manifestRegistry.plugins.length} bundled plugin manifests`);
   const bundledRegistry = {

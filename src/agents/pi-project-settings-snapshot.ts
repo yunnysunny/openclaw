@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { SettingsManager } from "@mariozechner/pi-coding-agent";
+import type { SettingsManager } from "@earendil-works/pi-coding-agent";
 import { applyMergePatch } from "../config/merge-patch.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { openBoundaryFileSync } from "../infra/boundary-file-read.js";
@@ -10,7 +10,7 @@ import {
   normalizePluginsConfig,
   resolveEffectivePluginActivationState,
 } from "../plugins/config-state.js";
-import { loadPluginManifestRegistry } from "../plugins/manifest-registry.js";
+import { loadPluginManifestRegistrySync } from "../plugins/manifest-registry.js";
 import { isRecord } from "../utils.js";
 import { loadEmbeddedPiMcpConfig } from "./embedded-pi-mcp.js";
 
@@ -76,7 +76,7 @@ export function loadEnabledBundlePiSettingsSnapshot(params: {
   if (!workspaceDir) {
     return {};
   }
-  const registry = loadPluginManifestRegistry({
+  const registry = loadPluginManifestRegistrySync({
     workspaceDir,
     config: params.cfg,
   });

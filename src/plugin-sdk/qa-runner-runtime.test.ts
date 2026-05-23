@@ -9,13 +9,13 @@ import {
   restorePrivateQaCliEnv,
 } from "./qa-runtime.test-helpers.js";
 
-const loadPluginManifestRegistry = vi.hoisted(() => vi.fn());
+const loadPluginManifestRegistrySync = vi.hoisted(() => vi.fn());
 const loadBundledPluginPublicSurfaceModuleSync = vi.hoisted(() => vi.fn());
 const tryLoadActivatedBundledPluginPublicSurfaceModuleSync = vi.hoisted(() => vi.fn());
 const resolveOpenClawPackageRootSync = vi.hoisted(() => vi.fn());
 
 vi.mock("../plugins/manifest-registry.js", () => ({
-  loadPluginManifestRegistry,
+  loadPluginManifestRegistrySync,
 }));
 
 vi.mock("../infra/openclaw-root.js", () => ({
@@ -32,7 +32,7 @@ describe("plugin-sdk qa-runner-runtime", () => {
   const originalPrivateQaCli = process.env.OPENCLAW_ENABLE_PRIVATE_QA_CLI;
 
   beforeEach(() => {
-    loadPluginManifestRegistry.mockReset().mockReturnValue({
+    loadPluginManifestRegistrySync.mockReset().mockReturnValue({
       plugins: [],
       diagnostics: [],
     });
@@ -50,7 +50,7 @@ describe("plugin-sdk qa-runner-runtime", () => {
   it("stays cold until runner discovery is requested", async () => {
     await import("./qa-runner-runtime.js");
 
-    expect(loadPluginManifestRegistry).not.toHaveBeenCalled();
+    expect(loadPluginManifestRegistrySync).not.toHaveBeenCalled();
     expect(loadBundledPluginPublicSurfaceModuleSync).not.toHaveBeenCalled();
     expect(tryLoadActivatedBundledPluginPublicSurfaceModuleSync).not.toHaveBeenCalled();
   });
@@ -103,7 +103,7 @@ describe("plugin-sdk qa-runner-runtime", () => {
 
   it("returns activated runner registrations declared in plugin manifests", async () => {
     const register = vi.fn((qa: Command) => qa);
-    loadPluginManifestRegistry.mockReturnValue({
+    loadPluginManifestRegistrySync.mockReturnValue({
       plugins: [
         {
           id: "qa-matrix",
@@ -144,7 +144,7 @@ describe("plugin-sdk qa-runner-runtime", () => {
   });
 
   it("reports declared runners as blocked when the plugin is present but not activated", async () => {
-    loadPluginManifestRegistry.mockReturnValue({
+    loadPluginManifestRegistrySync.mockReturnValue({
       plugins: [
         {
           id: "qa-matrix",
@@ -173,7 +173,7 @@ describe("plugin-sdk qa-runner-runtime", () => {
     resolveOpenClawPackageRootSync.mockReturnValue(sourceRoot);
 
     const register = vi.fn((qa: Command) => qa);
-    loadPluginManifestRegistry.mockReturnValue({
+    loadPluginManifestRegistrySync.mockReturnValue({
       plugins: [
         {
           id: "qa-matrix",
@@ -201,7 +201,7 @@ describe("plugin-sdk qa-runner-runtime", () => {
         },
       },
     ]);
-    expect(loadPluginManifestRegistry).toHaveBeenCalledWith({
+    expect(loadPluginManifestRegistrySync).toHaveBeenCalledWith({
       cache: true,
       env: expect.objectContaining({
         OPENCLAW_ENABLE_PRIVATE_QA_CLI: "1",
@@ -219,7 +219,7 @@ describe("plugin-sdk qa-runner-runtime", () => {
   });
 
   it("fails fast when two plugins declare the same qa runner command", async () => {
-    loadPluginManifestRegistry.mockReturnValue({
+    loadPluginManifestRegistrySync.mockReturnValue({
       plugins: [
         {
           id: "alpha",
@@ -246,7 +246,7 @@ describe("plugin-sdk qa-runner-runtime", () => {
   });
 
   it("fails when runtime registrations include an undeclared command", async () => {
-    loadPluginManifestRegistry.mockReturnValue({
+    loadPluginManifestRegistrySync.mockReturnValue({
       plugins: [
         {
           id: "qa-matrix",

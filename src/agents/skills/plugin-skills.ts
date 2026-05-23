@@ -8,7 +8,7 @@ import {
   resolveMemorySlotDecision,
 } from "../../plugins/config-policy.js";
 import {
-  loadPluginManifestRegistry,
+  loadPluginManifestRegistrySync,
   type PluginManifestRegistry,
 } from "../../plugins/manifest-registry.js";
 import { hasKind } from "../../plugins/slots.js";
@@ -51,7 +51,7 @@ export function resolvePluginSkillDirs(params: {
   if (!workspaceDir) {
     return [];
   }
-  const registry = loadPluginManifestRegistry({
+  const registry = loadPluginManifestRegistrySync({
     workspaceDir,
     config: params.config,
   });
@@ -77,6 +77,7 @@ export function resolvePluginSkillDirs(params: {
       origin: record.origin,
       config: normalizedPlugins,
       rootConfig: params.config,
+      enabledByDefault: record.enabledByDefault,
     });
     if (!activationState.activated) {
       continue;

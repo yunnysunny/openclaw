@@ -1,10 +1,10 @@
-import { listPotentialConfiguredChannelIds } from "../../../channels/config-presence.js";
 import type { OpenClawConfig } from "../../../config/types.openclaw.js";
+import { listExplicitConfiguredChannelIdsForConfig } from "../../../plugins/channel-plugin-ids.js";
 import {
   normalizePluginsConfig,
   resolveEffectivePluginActivationState,
 } from "../../../plugins/config-state.js";
-import { loadPluginManifestRegistry } from "../../../plugins/manifest-registry.js";
+import { loadPluginManifestRegistrySync } from "../../../plugins/manifest-registry.js";
 import { sanitizeForLog } from "../../../terminal/ansi.js";
 
 export type ChannelPluginBlockerHit = {
@@ -39,15 +39,13 @@ export function scanConfiguredChannelPluginBlockers(
   if (!hasExplicitChannelPluginBlockerConfig(cfg)) {
     return [];
   }
-  const configuredChannelIds = new Set(
-    listPotentialConfiguredChannelIds(cfg, env).map((id) => id.trim()),
-  );
+  const configuredChannelIds = new Set(listExplicitConfiguredChannelIdsForConfig(cfg));
   if (configuredChannelIds.size === 0) {
     return [];
   }
 
   const pluginsConfig = normalizePluginsConfig(cfg.plugins);
-  const registry = loadPluginManifestRegistry({
+  const registry = loadPluginManifestRegistrySync({
     config: cfg,
     env,
   });

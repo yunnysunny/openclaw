@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { modelKey } from "../agents/model-selection.js";
 import type { OpenClawConfig } from "../config/config.js";
-import type { normalizeProviderModelIdWithPlugin } from "../plugins/provider-runtime.js";
+import { resetLogger, setLoggerOverride } from "../logging/logger.js";
+import { loggingState } from "../logging/state.js";
+import type {
+  normalizeProviderModelIdWithPlugin,
+  normalizeProviderModelIdWithPluginAsync,
+} from "../plugins/provider-runtime.js";
 import { withFetchPreconnect } from "../test-utils/fetch-mock.js";
 
 const normalizeProviderModelIdWithPluginMock = vi.hoisted(() =>
@@ -9,14 +14,21 @@ const normalizeProviderModelIdWithPluginMock = vi.hoisted(() =>
 );
 
 vi.mock("../plugins/provider-runtime.js", () => {
-  return { normalizeProviderModelIdWithPlugin: normalizeProviderModelIdWithPluginMock };
+  return {
+    normalizeProviderModelIdWithPlugin: normalizeProviderModelIdWithPluginMock,
+    normalizeProviderModelIdWithPluginAsync: vi.fn<typeof normalizeProviderModelIdWithPluginAsync>(
+      async (params) => normalizeProviderModelIdWithPluginMock(params),
+    ),
+  };
 });
 
 import {
   __resetGatewayModelPricingCacheForTest,
   collectConfiguredModelPricingRefs,
+  collectConfiguredModelPricingRefsAsync,
   getCachedGatewayModelPricing,
   refreshGatewayModelPricingCache,
+  startGatewayModelPricingRefresh,
 } from "./model-pricing-cache.js";
 
 describe("model-pricing-cache", () => {
@@ -26,6 +38,8 @@ describe("model-pricing-cache", () => {
 
   afterEach(() => {
     __resetGatewayModelPricingCacheForTest();
+    loggingState.rawConsole = null;
+    resetLogger();
   });
 
   it("collects configured model refs across defaults, aliases, overrides, and media tools", () => {
@@ -98,8 +112,64 @@ describe("model-pricing-cache", () => {
     expect(new Set(refs).size).toBe(refs.length);
   });
 
-  it("collects manifest-owned web search plugin model refs without a hardcoded plugin list", () => {
-    const refs = collectConfiguredModelPricingRefs({
+  it("collectConfiguredModelPricingRefsAsync matches collectConfiguredModelPricingRefs", async () => {
+    const config = {
+      agents: {
+        defaults: {
+          model: { primary: "gpt", fallbacks: ["anthropic/claude-sonnet-4-6"] },
+          imageModel: { primary: "google/gemini-3-pro" },
+          compaction: { model: "opus" },
+          heartbeat: { model: "xai/grok-4" },
+          models: {
+            "openai/gpt-5.4": { alias: "gpt" },
+            "anthropic/claude-opus-4-6": { alias: "opus" },
+          },
+        },
+        list: [
+          {
+            id: "router",
+            model: { primary: "openrouter/anthropic/claude-opus-4-6" },
+            subagents: { model: { primary: "openrouter/auto" } },
+            heartbeat: { model: "anthropic/claude-opus-4-6" },
+          },
+        ],
+      },
+      channels: {
+        modelByChannel: {
+          slack: {
+            C123: "gpt",
+          },
+        },
+      },
+      hooks: {
+        gmail: { model: "anthropic/claude-opus-4-6" },
+        mappings: [{ model: "zai/glm-5" }],
+      },
+      tools: {
+        subagents: { model: { primary: "anthropic/claude-haiku-4-5" } },
+        media: {
+          models: [{ provider: "google", model: "gemini-2.5-pro" }],
+          image: {
+            models: [{ provider: "xai", model: "grok-4" }],
+          },
+        },
+      },
+      messages: {
+        tts: {
+          summaryModel: "openai/gpt-5.4",
+        },
+      },
+    } as unknown as OpenClawConfig;
+
+    const toKeys = (refs: { provider: string; model: string }[]) =>
+      refs.map((ref) => modelKey(ref.provider, ref.model)).toSorted((a, b) => a.localeCompare(b));
+    const syncKeys = toKeys(collectConfiguredModelPricingRefs(config));
+    const asyncKeys = toKeys(await collectConfiguredModelPricingRefsAsync(config));
+    expect(asyncKeys).toEqual(syncKeys);
+  });
+
+  it("collects manifest-owned web search plugin model refs without a hardcoded plugin list", async () => {
+    const config = {
       plugins: {
         entries: {
           tavily: {
@@ -111,9 +181,14 @@ describe("model-pricing-cache", () => {
           },
         },
       },
-    } as OpenClawConfig).map((ref) => modelKey(ref.provider, ref.model));
+    } as OpenClawConfig;
 
-    expect(refs).toContain("tavily/search-preview");
+    const toSortedKeys = (refs: { provider: string; model: string }[]) =>
+      refs.map((ref) => modelKey(ref.provider, ref.model)).toSorted((a, b) => a.localeCompare(b));
+    const sync = toSortedKeys(collectConfiguredModelPricingRefs(config));
+    const asyncKeys = toSortedKeys(await collectConfiguredModelPricingRefsAsync(config));
+    expect(asyncKeys).toEqual(sync);
+    expect(sync).toContain("tavily/search-preview");
   });
 
   it("loads openrouter pricing and maps provider aliases, wrappers, and anthropic dotted ids", async () => {
@@ -513,6 +588,78 @@ describe("model-pricing-cache", () => {
       cacheRead: 0,
       cacheWrite: 0,
     });
+  });
+
+  it("defers bootstrap refresh work until after the starter returns", async () => {
+    const config = {
+      agents: {
+        defaults: {
+          model: { primary: "anthropic/claude-opus-4-6" },
+        },
+      },
+    } as unknown as OpenClawConfig;
+    const fetchImpl = withFetchPreconnect(
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url =
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+        if (url.includes("openrouter.ai")) {
+          return new Response(JSON.stringify({ data: [] }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        return new Response(JSON.stringify({}), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }),
+    );
+
+    const stop = startGatewayModelPricingRefresh({ config, fetchImpl });
+
+    expect(fetchImpl).not.toHaveBeenCalled();
+    await vi.dynamicImportSettled();
+    expect(fetchImpl).toHaveBeenCalled();
+    stop();
+  });
+
+  it("logs configured timeout seconds when pricing fetches time out", async () => {
+    const warnings: string[] = [];
+    loggingState.rawConsole = {
+      log: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn((message: string) => warnings.push(message)),
+      error: vi.fn(),
+    };
+    setLoggerOverride({ level: "silent", consoleLevel: "warn" });
+
+    const config = {
+      agents: {
+        defaults: {
+          model: { primary: "anthropic/claude-opus-4-6" },
+        },
+      },
+    } as unknown as OpenClawConfig;
+    const timeoutError = new DOMException(
+      "The operation was aborted due to timeout",
+      "TimeoutError",
+    );
+    const fetchImpl = withFetchPreconnect(async () => {
+      throw timeoutError;
+    });
+
+    await refreshGatewayModelPricingCache({ config, fetchImpl });
+
+    expect(warnings).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining(
+          "OpenRouter pricing fetch failed (timeout 30s): TimeoutError: The operation was aborted due to timeout",
+        ),
+        expect.stringContaining(
+          "LiteLLM pricing fetch failed (timeout 30s): TimeoutError: The operation was aborted due to timeout",
+        ),
+      ]),
+    );
   });
 
   it("treats oversized LiteLLM catalog responses as source failures", async () => {

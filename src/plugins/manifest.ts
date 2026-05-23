@@ -3,7 +3,12 @@ import path from "node:path";
 import JSON5 from "json5";
 import type { ChannelConfigRuntimeSchema } from "../channels/plugins/types.config.js";
 import { MANIFEST_KEY } from "../compat/legacy-names.js";
-import { matchBoundaryFileOpenFailure, openBoundaryFileSync } from "../infra/boundary-file-read.js";
+import {
+  matchBoundaryFileOpenFailure,
+  openBoundaryFile,
+  openBoundaryFileSync,
+} from "../infra/boundary-file-read.js";
+import { closeFileDescriptorAsync, readFileUtf8FromFd } from "../infra/fd-promise.js";
 import { normalizeOptionalString } from "../shared/string-coerce.js";
 import { normalizeTrimmedStringList } from "../shared/string-normalization.js";
 import { isRecord } from "../utils.js";
@@ -17,6 +22,11 @@ import type { PluginKind } from "./plugin-kind.types.js";
 export const PLUGIN_MANIFEST_FILENAME = "openclaw.plugin.json";
 export const PLUGIN_MANIFEST_FILENAMES = [PLUGIN_MANIFEST_FILENAME] as const;
 
+export type PluginManifestChannelCommandDefaults = {
+  nativeCommandsAutoEnabled?: boolean;
+  nativeSkillsAutoEnabled?: boolean;
+};
+
 export type PluginManifestChannelConfig = {
   schema: Record<string, unknown>;
   uiHints?: Record<string, PluginConfigUiHint>;
@@ -24,6 +34,7 @@ export type PluginManifestChannelConfig = {
   label?: string;
   description?: string;
   preferOver?: string[];
+  commands?: PluginManifestChannelCommandDefaults;
 };
 
 export type PluginManifestModelSupport = {
@@ -54,6 +65,10 @@ export type PluginManifestProviderEndpoint = {
 export type PluginManifestActivationCapability = "provider" | "channel" | "tool" | "hook";
 
 export type PluginManifestActivation = {
+  /** Explicit gateway startup activation flag. */
+  onStartup?: boolean;
+  /** Root-relative config paths that should activate this plugin. */
+  onConfigPaths?: string[];
   /**
    * Provider ids that should activate this plugin when explicitly requested.
    * This is metadata only; runtime loading still happens through the loader.
@@ -219,23 +234,57 @@ export type PluginManifest = {
    * compat wiring, and contract coverage without importing plugin runtime.
    */
   contracts?: PluginManifestContracts;
+  /** Optional model catalog metadata. */
+  modelCatalog?: PluginManifestModelCatalog;
+  /** Optional media-understanding-provider metadata. */
+  mediaUnderstandingProviderMetadata?: Record<string, PluginManifestMediaUnderstandingProviderMetadata>;
   /** Manifest-owned config behavior consumed by generic core helpers. */
   configContracts?: PluginManifestConfigContracts;
   channelConfigs?: Record<string, PluginManifestChannelConfig>;
 };
 
 export type PluginManifestContracts = {
+  embeddedExtensionFactories?: string[];
+  agentToolResultMiddleware?: string[];
+  externalAuthProviders?: string[];
+  migrationProviders?: string[];
+  gatewayMethodDispatch?: Record<string, unknown>;
   memoryEmbeddingProviders?: string[];
   speechProviders?: string[];
   realtimeTranscriptionProviders?: string[];
   realtimeVoiceProviders?: string[];
   mediaUnderstandingProviders?: string[];
+  documentExtractors?: string[];
   imageGenerationProviders?: string[];
   videoGenerationProviders?: string[];
   musicGenerationProviders?: string[];
+  webContentExtractors?: string[];
   webFetchProviders?: string[];
   webSearchProviders?: string[];
   tools?: string[];
+};
+
+export type PluginManifestMediaUnderstandingCapability = "image" | "audio" | "video";
+
+export type PluginManifestMediaUnderstandingProviderMetadata = {
+  capabilities?: PluginManifestMediaUnderstandingCapability[];
+  defaultModels?: Partial<Record<PluginManifestMediaUnderstandingCapability, string>>;
+  autoPriority?: Partial<Record<PluginManifestMediaUnderstandingCapability, number>>;
+  nativeDocumentInputs?: Array<"pdf">;
+};
+
+export type PluginManifestModelCatalog = {
+  providers?: Record<string, import("../model-catalog/index.js").ModelCatalogProvider>;
+  aliases?: Record<string, import("../model-catalog/index.js").ModelCatalogAlias>;
+  discovery?: Record<string, import("../model-catalog/index.js").ModelCatalogDiscovery>;
+  suppressions?: import("../model-catalog/index.js").ModelCatalogSuppression[];
+};
+
+export type PluginManifestModelIdNormalizationProvider = {
+  aliases?: Record<string, string>;
+  stripPrefixes?: string[];
+  prefixWhenBare?: string;
+  prefixWhenBareAfterAliasStartsWith?: Array<{ aliasPrefix?: string; modelPrefix?: string; prefix: string }>;
 };
 
 export type PluginManifestProviderAuthChoice = {
@@ -254,6 +303,8 @@ export type PluginManifestProviderAuthChoice = {
   assistantVisibility?: "visible" | "manual-only";
   /** Legacy choice ids that should point users at this replacement choice. */
   deprecatedChoiceIds?: string[];
+  /** Whether the choice is featured during onboarding. */
+  onboardingFeatured?: boolean;
   /** Optional grouping metadata for auth-choice pickers. */
   groupId?: string;
   groupLabel?: string;
@@ -312,6 +363,43 @@ function normalizeStringRecord(value: unknown): Record<string, string> | undefin
 }
 
 function normalizeManifestContracts(value: unknown): PluginManifestContracts | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const memoryEmbeddingProviders = normalizeTrimmedStringList(value.memoryEmbeddingProviders);
+  const speechProviders = normalizeTrimmedStringList(value.speechProviders);
+  const realtimeTranscriptionProviders = normalizeTrimmedStringList(
+    value.realtimeTranscriptionProviders,
+  );
+  const realtimeVoiceProviders = normalizeTrimmedStringList(value.realtimeVoiceProviders);
+  const mediaUnderstandingProviders = normalizeTrimmedStringList(value.mediaUnderstandingProviders);
+  const imageGenerationProviders = normalizeTrimmedStringList(value.imageGenerationProviders);
+  const videoGenerationProviders = normalizeTrimmedStringList(value.videoGenerationProviders);
+  const musicGenerationProviders = normalizeTrimmedStringList(value.musicGenerationProviders);
+  const webFetchProviders = normalizeTrimmedStringList(value.webFetchProviders);
+  const webSearchProviders = normalizeTrimmedStringList(value.webSearchProviders);
+  const tools = normalizeTrimmedStringList(value.tools);
+  const contracts = {
+    ...(memoryEmbeddingProviders.length > 0 ? { memoryEmbeddingProviders } : {}),
+    ...(speechProviders.length > 0 ? { speechProviders } : {}),
+    ...(realtimeTranscriptionProviders.length > 0 ? { realtimeTranscriptionProviders } : {}),
+    ...(realtimeVoiceProviders.length > 0 ? { realtimeVoiceProviders } : {}),
+    ...(mediaUnderstandingProviders.length > 0 ? { mediaUnderstandingProviders } : {}),
+    ...(imageGenerationProviders.length > 0 ? { imageGenerationProviders } : {}),
+    ...(videoGenerationProviders.length > 0 ? { videoGenerationProviders } : {}),
+    ...(musicGenerationProviders.length > 0 ? { musicGenerationProviders } : {}),
+    ...(webFetchProviders.length > 0 ? { webFetchProviders } : {}),
+    ...(webSearchProviders.length > 0 ? { webSearchProviders } : {}),
+    ...(tools.length > 0 ? { tools } : {}),
+  } satisfies PluginManifestContracts;
+
+  return Object.keys(contracts).length > 0 ? contracts : undefined;
+}
+
+async function normalizeManifestContractsAsync(
+  value: unknown,
+): Promise<PluginManifestContracts | undefined> {
   if (!isRecord(value)) {
     return undefined;
   }
@@ -478,7 +566,7 @@ function normalizeManifestProviderEndpoints(
   return endpoints.length > 0 ? endpoints : undefined;
 }
 
-function normalizeManifestActivation(value: unknown): PluginManifestActivation | undefined {
+export function normalizeManifestActivation(value: unknown): PluginManifestActivation | undefined {
   if (!isRecord(value)) {
     return undefined;
   }
@@ -635,6 +723,67 @@ function normalizeProviderAuthChoices(
   return normalized.length > 0 ? normalized : undefined;
 }
 
+async function normalizeProviderAuthChoicesAsync(
+  value: unknown,
+): Promise<PluginManifestProviderAuthChoice[] | undefined> {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const normalized: PluginManifestProviderAuthChoice[] = [];
+  for (const entry of value) {
+    if (!isRecord(entry)) {
+      continue;
+    }
+    const provider = normalizeOptionalString(entry.provider) ?? "";
+    const method = normalizeOptionalString(entry.method) ?? "";
+    const choiceId = normalizeOptionalString(entry.choiceId) ?? "";
+    if (!provider || !method || !choiceId) {
+      continue;
+    }
+    const choiceLabel = normalizeOptionalString(entry.choiceLabel) ?? "";
+    const choiceHint = normalizeOptionalString(entry.choiceHint) ?? "";
+    const assistantPriority =
+      typeof entry.assistantPriority === "number" && Number.isFinite(entry.assistantPriority)
+        ? entry.assistantPriority
+        : undefined;
+    const assistantVisibility =
+      entry.assistantVisibility === "manual-only" || entry.assistantVisibility === "visible"
+        ? entry.assistantVisibility
+        : undefined;
+    const deprecatedChoiceIds = normalizeTrimmedStringList(entry.deprecatedChoiceIds);
+    const groupId = normalizeOptionalString(entry.groupId) ?? "";
+    const groupLabel = normalizeOptionalString(entry.groupLabel) ?? "";
+    const groupHint = normalizeOptionalString(entry.groupHint) ?? "";
+    const optionKey = normalizeOptionalString(entry.optionKey) ?? "";
+    const cliFlag = normalizeOptionalString(entry.cliFlag) ?? "";
+    const cliOption = normalizeOptionalString(entry.cliOption) ?? "";
+    const cliDescription = normalizeOptionalString(entry.cliDescription) ?? "";
+    const onboardingScopes = normalizeTrimmedStringList(entry.onboardingScopes).filter(
+      (scope): scope is PluginManifestOnboardingScope =>
+        scope === "text-inference" || scope === "image-generation",
+    );
+    normalized.push({
+      provider,
+      method,
+      choiceId,
+      ...(choiceLabel ? { choiceLabel } : {}),
+      ...(choiceHint ? { choiceHint } : {}),
+      ...(assistantPriority !== undefined ? { assistantPriority } : {}),
+      ...(assistantVisibility ? { assistantVisibility } : {}),
+      ...(deprecatedChoiceIds.length > 0 ? { deprecatedChoiceIds } : {}),
+      ...(groupId ? { groupId } : {}),
+      ...(groupLabel ? { groupLabel } : {}),
+      ...(groupHint ? { groupHint } : {}),
+      ...(optionKey ? { optionKey } : {}),
+      ...(cliFlag ? { cliFlag } : {}),
+      ...(cliOption ? { cliOption } : {}),
+      ...(cliDescription ? { cliDescription } : {}),
+      ...(onboardingScopes.length > 0 ? { onboardingScopes } : {}),
+    });
+  }
+  return normalized.length > 0 ? normalized : undefined;
+}
+
 function normalizeChannelConfigs(
   value: unknown,
 ): Record<string, PluginManifestChannelConfig> | undefined {
@@ -683,6 +832,19 @@ export function resolvePluginManifestPath(rootDir: string): string {
   return path.join(rootDir, PLUGIN_MANIFEST_FILENAME);
 }
 
+export async function resolvePluginManifestPathAsync(rootDir: string): Promise<string> {
+  for (const filename of PLUGIN_MANIFEST_FILENAMES) {
+    const candidate = path.join(rootDir, filename);
+    try {
+      await fs.promises.access(candidate);
+      return candidate;
+    } catch {
+      continue;
+    }
+  }
+  return path.join(rootDir, PLUGIN_MANIFEST_FILENAME);
+}
+
 function parsePluginKind(raw: unknown): PluginKind | PluginKind[] | undefined {
   if (typeof raw === "string") {
     return raw as PluginKind;
@@ -693,43 +855,7 @@ function parsePluginKind(raw: unknown): PluginKind | PluginKind[] | undefined {
   return undefined;
 }
 
-export function loadPluginManifest(
-  rootDir: string,
-  rejectHardlinks = true,
-): PluginManifestLoadResult {
-  const manifestPath = resolvePluginManifestPath(rootDir);
-  const opened = openBoundaryFileSync({
-    absolutePath: manifestPath,
-    rootPath: rootDir,
-    boundaryLabel: "plugin root",
-    rejectHardlinks,
-  });
-  if (!opened.ok) {
-    return matchBoundaryFileOpenFailure(opened, {
-      path: () => ({
-        ok: false,
-        error: `plugin manifest not found: ${manifestPath}`,
-        manifestPath,
-      }),
-      fallback: (failure) => ({
-        ok: false,
-        error: `unsafe plugin manifest path: ${manifestPath} (${failure.reason})`,
-        manifestPath,
-      }),
-    });
-  }
-  let raw: unknown;
-  try {
-    raw = JSON5.parse(fs.readFileSync(opened.fd, "utf-8"));
-  } catch (err) {
-    return {
-      ok: false,
-      error: `failed to parse plugin manifest: ${String(err)}`,
-      manifestPath,
-    };
-  } finally {
-    fs.closeSync(opened.fd);
-  }
+function finalizePluginManifestLoad(raw: unknown, manifestPath: string): PluginManifestLoadResult {
   if (!isRecord(raw)) {
     return { ok: false, error: "plugin manifest must be an object", manifestPath };
   }
@@ -817,6 +943,177 @@ export function loadPluginManifest(
   };
 }
 
+async function finalizePluginManifestLoadAsync(
+  raw: unknown,
+  manifestPath: string,
+): Promise<PluginManifestLoadResult> {
+  if (!isRecord(raw)) {
+    return { ok: false, error: "plugin manifest must be an object", manifestPath };
+  }
+  const id = normalizeOptionalString(raw.id) ?? "";
+  if (!id) {
+    return { ok: false, error: "plugin manifest requires id", manifestPath };
+  }
+  const configSchema = isRecord(raw.configSchema) ? raw.configSchema : null;
+  if (!configSchema) {
+    return { ok: false, error: "plugin manifest requires configSchema", manifestPath };
+  }
+
+  const kind = parsePluginKind(raw.kind);
+  const enabledByDefault = raw.enabledByDefault === true;
+  const legacyPluginIds = normalizeTrimmedStringList(raw.legacyPluginIds);
+  const autoEnableWhenConfiguredProviders = normalizeTrimmedStringList(
+    raw.autoEnableWhenConfiguredProviders,
+  );
+  const name = normalizeOptionalString(raw.name);
+  const description = normalizeOptionalString(raw.description);
+  const version = normalizeOptionalString(raw.version);
+  const channels = normalizeTrimmedStringList(raw.channels);
+  const providers = normalizeTrimmedStringList(raw.providers);
+  const providerDiscoveryEntry = normalizeOptionalString(raw.providerDiscoveryEntry);
+  const modelSupport = normalizeManifestModelSupport(raw.modelSupport);
+  const providerEndpoints = normalizeManifestProviderEndpoints(raw.providerEndpoints);
+  const cliBackends = normalizeTrimmedStringList(raw.cliBackends);
+  const syntheticAuthRefs = normalizeTrimmedStringList(raw.syntheticAuthRefs);
+  const nonSecretAuthMarkers = normalizeTrimmedStringList(raw.nonSecretAuthMarkers);
+  const commandAliases = normalizeManifestCommandAliases(raw.commandAliases);
+  const providerAuthEnvVars = normalizeStringListRecord(raw.providerAuthEnvVars);
+  const providerAuthAliases = normalizeStringRecord(raw.providerAuthAliases);
+  const channelEnvVars = normalizeStringListRecord(raw.channelEnvVars);
+  const providerAuthChoices = await normalizeProviderAuthChoicesAsync(raw.providerAuthChoices);
+  const activation = normalizeManifestActivation(raw.activation);
+  const setup = normalizeManifestSetup(raw.setup);
+  const qaRunners = normalizeManifestQaRunners(raw.qaRunners);
+  const skills = normalizeTrimmedStringList(raw.skills);
+  const contracts = await normalizeManifestContractsAsync(raw.contracts);
+  const configContracts = normalizeManifestConfigContracts(raw.configContracts);
+  const channelConfigs = normalizeChannelConfigs(raw.channelConfigs);
+
+  let uiHints: Record<string, PluginConfigUiHint> | undefined;
+  if (isRecord(raw.uiHints)) {
+    uiHints = raw.uiHints as Record<string, PluginConfigUiHint>;
+  }
+
+  return {
+    ok: true,
+    manifest: {
+      id,
+      configSchema,
+      ...(enabledByDefault ? { enabledByDefault } : {}),
+      ...(legacyPluginIds.length > 0 ? { legacyPluginIds } : {}),
+      ...(autoEnableWhenConfiguredProviders.length > 0
+        ? { autoEnableWhenConfiguredProviders }
+        : {}),
+      kind,
+      channels,
+      providers,
+      providerDiscoveryEntry,
+      modelSupport,
+      providerEndpoints,
+      cliBackends,
+      syntheticAuthRefs,
+      nonSecretAuthMarkers,
+      commandAliases,
+      providerAuthEnvVars,
+      providerAuthAliases,
+      channelEnvVars,
+      providerAuthChoices,
+      activation,
+      setup,
+      qaRunners,
+      skills,
+      name,
+      description,
+      version,
+      uiHints,
+      contracts,
+      configContracts,
+      channelConfigs,
+    },
+    manifestPath,
+  };
+}
+
+export function loadPluginManifest(
+  rootDir: string,
+  rejectHardlinks = true,
+): PluginManifestLoadResult {
+  const manifestPath = resolvePluginManifestPath(rootDir);
+  const opened = openBoundaryFileSync({
+    absolutePath: manifestPath,
+    rootPath: rootDir,
+    boundaryLabel: "plugin root",
+    rejectHardlinks,
+  });
+  if (!opened.ok) {
+    return matchBoundaryFileOpenFailure(opened, {
+      path: () => ({
+        ok: false,
+        error: `plugin manifest not found: ${manifestPath}`,
+        manifestPath,
+      }),
+      fallback: (failure) => ({
+        ok: false,
+        error: `unsafe plugin manifest path: ${manifestPath} (${failure.reason})`,
+        manifestPath,
+      }),
+    });
+  }
+  let raw: unknown;
+  try {
+    raw = JSON5.parse(fs.readFileSync(opened.fd, "utf-8"));
+  } catch (err) {
+    return {
+      ok: false,
+      error: `failed to parse plugin manifest: ${String(err)}`,
+      manifestPath,
+    };
+  } finally {
+    fs.closeSync(opened.fd);
+  }
+  return finalizePluginManifestLoad(raw, manifestPath);
+}
+
+export async function loadPluginManifestAsync(
+  rootDir: string,
+  rejectHardlinks = true,
+): Promise<PluginManifestLoadResult> {
+  const manifestPath = await resolvePluginManifestPathAsync(rootDir);
+  const opened = await openBoundaryFile({
+    absolutePath: manifestPath,
+    rootPath: rootDir,
+    boundaryLabel: "plugin root",
+    rejectHardlinks,
+  });
+  if (!opened.ok) {
+    return matchBoundaryFileOpenFailure(opened, {
+      path: () => ({
+        ok: false,
+        error: `plugin manifest not found: ${manifestPath}`,
+        manifestPath,
+      }),
+      fallback: (failure) => ({
+        ok: false,
+        error: `unsafe plugin manifest path: ${manifestPath} (${failure.reason})`,
+        manifestPath,
+      }),
+    });
+  }
+  let raw: unknown;
+  try {
+    raw = JSON5.parse(await readFileUtf8FromFd(opened.fd));
+  } catch (err) {
+    return {
+      ok: false,
+      error: `failed to parse plugin manifest: ${String(err)}`,
+      manifestPath,
+    };
+  } finally {
+    await closeFileDescriptorAsync(opened.fd);
+  }
+  return finalizePluginManifestLoadAsync(raw, manifestPath);
+}
+
 // package.json "openclaw" metadata (used for setup/catalog)
 export type PluginPackageChannel = {
   id?: string;
@@ -852,14 +1149,32 @@ export type PluginPackageChannel = {
     specifier?: string;
     exportName?: string;
   };
+  cliAddOptions?: readonly PluginPackageChannelCliOption[];
+  doctorCapabilities?: PluginPackageChannelDoctorCapabilities;
+  commands?: Record<string, unknown>;
+};
+
+export type PluginPackageChannelCliOption = {
+  flags: string;
+  description: string;
+  defaultValue?: boolean | string;
+};
+
+export type PluginPackageChannelDoctorCapabilities = {
+  dmAllowFromMode?: "topOnly" | "topOrNested" | "nestedOnly";
+  groupModel?: "sender" | "route" | "hybrid";
+  groupAllowFromFallbackToAllowFrom?: boolean;
+  warnOnEmptyGroupSenderAllowlist?: boolean;
 };
 
 export type PluginPackageInstall = {
   npmSpec?: string;
+  clawhubSpec?: string;
   localPath?: string;
-  defaultChoice?: "npm" | "local";
+  defaultChoice?: "npm" | "local" | "clawhub";
   minHostVersion?: string;
   allowInvalidConfigRecovery?: boolean;
+  expectedIntegrity?: string;
 };
 
 export type OpenClawPackageStartup = {
@@ -873,15 +1188,19 @@ export type OpenClawPackageStartup = {
 export type OpenClawPackageSetupFeatures = {
   legacyStateMigrations?: boolean;
   legacySessionSurfaces?: boolean;
+  configPromotion?: boolean;
 };
 
 export type OpenClawPackageManifest = {
   extensions?: string[];
   setupEntry?: string;
+  runtimeSetupEntry?: string;
+  runtimeExtensions?: string[];
   setupFeatures?: OpenClawPackageSetupFeatures;
   channel?: PluginPackageChannel;
   install?: PluginPackageInstall;
   startup?: OpenClawPackageStartup;
+  plugin?: { id?: string; [key: string]: unknown };
 };
 
 export const DEFAULT_PLUGIN_ENTRY_CANDIDATES = [
@@ -926,3 +1245,13 @@ export function resolvePackageExtensionEntries(
   }
   return { status: "ok", entries };
 }
+
+export type PluginManifestCapabilityProviderAuthSignal = {
+  type: "oauth" | "api_key" | "token";
+  [key: string]: unknown;
+};
+export type PluginManifestCapabilityProviderConfigSignal = {
+  path: string;
+  [key: string]: unknown;
+};
+

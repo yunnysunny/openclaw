@@ -1,4 +1,4 @@
-import fs from "node:fs";
+import fs from "node:fs/promises";
 import path from "node:path";
 import { indexedDB as fakeIndexedDB } from "fake-indexeddb";
 import { withFileLock } from "openclaw/plugin-sdk/file-lock";
@@ -214,10 +214,19 @@ function resolveDefaultIdbSnapshotPath(): string {
   return path.join(stateDir, "matrix", "crypto-idb-snapshot.json");
 }
 
+async function pathExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function restoreIdbFromDisk(snapshotPath?: string): Promise<boolean> {
   const candidatePaths = snapshotPath ? [snapshotPath] : [resolveDefaultIdbSnapshotPath()];
   for (const resolvedPath of candidatePaths) {
-    if (!fs.existsSync(resolvedPath)) {
+    if (!(await pathExists(resolvedPath))) {
       continue;
     }
     try {
@@ -225,7 +234,7 @@ export async function restoreIdbFromDisk(snapshotPath?: string): Promise<boolean
         resolvedPath,
         MATRIX_IDB_SNAPSHOT_LOCK_OPTIONS,
         async () => {
-          const data = fs.readFileSync(resolvedPath, "utf8");
+          const data = await fs.readFile(resolvedPath, "utf8");
           const snapshot = parseSnapshotPayload(data);
           if (!snapshot) {
             return false;
@@ -259,7 +268,7 @@ export async function persistIdbToDisk(params?: {
 }): Promise<void> {
   const snapshotPath = params?.snapshotPath ?? resolveDefaultIdbSnapshotPath();
   try {
-    fs.mkdirSync(path.dirname(snapshotPath), { recursive: true });
+    await fs.mkdir(path.dirname(snapshotPath), { recursive: true });
     const persistedCount = await withFileLock(
       snapshotPath,
       MATRIX_IDB_SNAPSHOT_LOCK_OPTIONS,
@@ -268,8 +277,8 @@ export async function persistIdbToDisk(params?: {
         if (snapshot.length === 0) {
           return 0;
         }
-        fs.writeFileSync(snapshotPath, JSON.stringify(snapshot));
-        fs.chmodSync(snapshotPath, 0o600);
+        await fs.writeFile(snapshotPath, JSON.stringify(snapshot));
+        await fs.chmod(snapshotPath, 0o600);
         return snapshot.length;
       },
     );

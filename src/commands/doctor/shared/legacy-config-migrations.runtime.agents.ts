@@ -54,6 +54,73 @@ const LEGACY_SANDBOX_SCOPE_RULES: LegacyConfigRule[] = [
   },
 ];
 
+const LEGACY_AGENT_RUNTIME_POLICY_RULES: LegacyConfigRule[] = [
+  {
+    path: ["agents", "defaults", "agentRuntime", "fallback"],
+    message:
+      'agents.defaults.agentRuntime is ignored; set models.providers.<provider>.agentRuntime or a model-scoped agentRuntime instead. Run "openclaw doctor --fix".',
+  },
+  {
+    path: ["agents", "defaults", "embeddedHarness"],
+    message:
+      'agents.defaults.embeddedHarness is legacy and ignored; set provider/model runtime policy instead. Run "openclaw doctor --fix".',
+    match: (value) => getRecord(value) !== null,
+  },
+  {
+    path: ["agents", "defaults", "agentRuntime"],
+    message:
+      'agents.defaults.agentRuntime is ignored; set models.providers.<provider>.agentRuntime or a model-scoped agentRuntime instead. Run "openclaw doctor --fix".',
+    match: (value) => getRecord(value) !== null,
+  },
+  {
+    path: ["agents", "list"],
+    message:
+      'agents.list[].agentRuntime is ignored; set provider/model runtime policy instead. Run "openclaw doctor --fix".',
+    match: (value) => hasAgentListRuntimePolicy(value),
+  },
+  {
+    path: ["agents", "list"],
+    message:
+      'agents.list[].embeddedHarness is legacy and ignored; set provider/model runtime policy instead. Run "openclaw doctor --fix".',
+    match: (value) => hasLegacyAgentListEmbeddedHarness(value),
+  },
+];
+
+const LEGACY_AGENT_LLM_TIMEOUT_RULES: LegacyConfigRule[] = [
+  {
+    path: ["agents", "defaults", "llm"],
+    message:
+      'agents.defaults.llm is legacy; use models.providers.<id>.timeoutSeconds for slow model/provider timeouts. Run "openclaw doctor --fix".',
+    match: (value) => getRecord(value) !== null,
+  },
+];
+
+const SILENT_REPLY_LEGACY_RULES: LegacyConfigRule[] = [
+  {
+    path: ["agents", "defaults", "silentReplyRewrite"],
+    message:
+      'agents.defaults.silentReplyRewrite was removed; exact NO_REPLY is no longer rewritten to visible fallback text. Run "openclaw doctor --fix" to remove it.',
+  },
+  {
+    path: ["agents", "defaults", "silentReply"],
+    message:
+      'agents.defaults.silentReply.direct was removed; direct chats never receive NO_REPLY prompt guidance. Run "openclaw doctor --fix" to remove it.',
+    match: (value) => Object.prototype.hasOwnProperty.call(getRecord(value) ?? {}, "direct"),
+  },
+  {
+    path: ["surfaces"],
+    message:
+      'surfaces.*.silentReplyRewrite was removed; exact NO_REPLY is no longer rewritten to visible fallback text. Run "openclaw doctor --fix" to remove it.',
+    match: (value) => hasSurfaceSilentReplyRewrite(value),
+  },
+  {
+    path: ["surfaces"],
+    message:
+      'surfaces.*.silentReply.direct was removed; direct chats never receive NO_REPLY prompt guidance. Run "openclaw doctor --fix" to remove it.',
+    match: (value) => hasSurfaceSilentReplyDirect(value),
+  },
+];
+
 function sandboxScopeFromPerSession(perSession: boolean): "session" | "shared" {
   return perSession ? "session" : "shared";
 }
@@ -124,6 +191,20 @@ function hasLegacyAgentListSandboxPerSession(value: unknown): boolean {
   return value.some((agent) => hasLegacySandboxPerSession(getRecord(agent)?.sandbox));
 }
 
+function hasLegacyAgentListEmbeddedHarness(value: unknown): boolean {
+  if (!Array.isArray(value)) {
+    return false;
+  }
+  return value.some((agent) => getRecord(getRecord(agent)?.embeddedHarness) !== null);
+}
+
+function hasAgentListRuntimePolicy(value: unknown): boolean {
+  if (!Array.isArray(value)) {
+    return false;
+  }
+  return value.some((agent) => getRecord(getRecord(agent)?.agentRuntime) !== null);
+}
+
 function migrateLegacySandboxPerSession(
   sandbox: Record<string, unknown>,
   pathLabel: string,
@@ -145,7 +226,133 @@ function migrateLegacySandboxPerSession(
   delete sandbox.perSession;
 }
 
+function removeLegacyAgentRuntimePolicy(
+  container: Record<string, unknown>,
+  pathLabel: string,
+  changes: string[],
+): void {
+  if (getRecord(container.embeddedHarness) !== null) {
+    delete container.embeddedHarness;
+    changes.push(`Removed ${pathLabel}.embeddedHarness; runtime is now provider/model scoped.`);
+  }
+  if (getRecord(container.agentRuntime) !== null) {
+    delete container.agentRuntime;
+    changes.push(`Removed ${pathLabel}.agentRuntime; runtime is now provider/model scoped.`);
+  }
+}
+
+function hasOwnRecordProperty(value: unknown, key: string): boolean {
+  const record = getRecord(value);
+  return Boolean(record && Object.prototype.hasOwnProperty.call(record, key));
+}
+
+function hasSurfaceSilentReplyRewrite(value: unknown): boolean {
+  const surfaces = getRecord(value);
+  if (!surfaces) {
+    return false;
+  }
+  return Object.entries(surfaces).some(
+    ([surfaceId, surface]) =>
+      !isBlockedObjectKey(surfaceId) && hasOwnRecordProperty(surface, "silentReplyRewrite"),
+  );
+}
+
+function hasSurfaceSilentReplyDirect(value: unknown): boolean {
+  const surfaces = getRecord(value);
+  if (!surfaces) {
+    return false;
+  }
+  return Object.values(surfaces).some((surface) =>
+    Object.prototype.hasOwnProperty.call(
+      getRecord(getRecord(surface)?.silentReply) ?? {},
+      "direct",
+    ),
+  );
+}
+
+function removeLegacySilentReplyConfig(raw: Record<string, unknown>, changes: string[]): void {
+  const defaults = getRecord(getRecord(raw.agents)?.defaults);
+  const defaultSilentReply = getRecord(defaults?.silentReply);
+  if (defaultSilentReply && Object.prototype.hasOwnProperty.call(defaultSilentReply, "direct")) {
+    delete defaultSilentReply.direct;
+    changes.push("Removed agents.defaults.silentReply.direct; direct chats never use NO_REPLY.");
+  }
+  if (defaults && hasOwnRecordProperty(defaults, "silentReplyRewrite")) {
+    delete defaults.silentReplyRewrite;
+    changes.push("Removed agents.defaults.silentReplyRewrite.");
+  }
+
+  const surfaces = getRecord(raw.surfaces);
+  if (!surfaces) {
+    return;
+  }
+  for (const [surfaceId, surfaceValue] of Object.entries(surfaces)) {
+    if (isBlockedObjectKey(surfaceId)) {
+      continue;
+    }
+    const surface = getRecord(surfaceValue);
+    if (!surface) {
+      continue;
+    }
+    const silentReply = getRecord(surface.silentReply);
+    if (silentReply && Object.prototype.hasOwnProperty.call(silentReply, "direct")) {
+      delete silentReply.direct;
+      changes.push(
+        `Removed surfaces.${surfaceId}.silentReply.direct; direct chats never use NO_REPLY.`,
+      );
+    }
+    if (hasOwnRecordProperty(surface, "silentReplyRewrite")) {
+      delete surface.silentReplyRewrite;
+      changes.push(`Removed surfaces.${surfaceId}.silentReplyRewrite.`);
+    }
+  }
+}
+
 export const LEGACY_CONFIG_MIGRATIONS_RUNTIME_AGENTS: LegacyConfigMigrationSpec[] = [
+  defineLegacyConfigMigration({
+    id: "silentReplyRewrite-removed",
+    describe: "Remove legacy silent reply rewrite and direct-chat silent reply config",
+    legacyRules: SILENT_REPLY_LEGACY_RULES,
+    apply: removeLegacySilentReplyConfig,
+  }),
+  defineLegacyConfigMigration({
+    id: "agents.defaults.llm->models.providers.timeoutSeconds",
+    describe: "Remove legacy agents.defaults.llm timeout config",
+    legacyRules: LEGACY_AGENT_LLM_TIMEOUT_RULES,
+    apply: (raw, changes) => {
+      const defaults = getRecord(getRecord(raw.agents)?.defaults);
+      if (!defaults || getRecord(defaults.llm) === null) {
+        return;
+      }
+      delete defaults.llm;
+      changes.push(
+        "Removed agents.defaults.llm; model idle timeout now follows models.providers.<id>.timeoutSeconds within the agent/run timeout ceiling.",
+      );
+    },
+  }),
+  defineLegacyConfigMigration({
+    id: "agents.agentRuntime-ignored",
+    describe: "Remove ignored agent-wide runtime policy",
+    legacyRules: LEGACY_AGENT_RUNTIME_POLICY_RULES,
+    apply: (raw, changes) => {
+      const agents = getRecord(raw.agents);
+      const defaults = getRecord(agents?.defaults);
+      if (defaults) {
+        removeLegacyAgentRuntimePolicy(defaults, "agents.defaults", changes);
+      }
+
+      if (!Array.isArray(agents?.list)) {
+        return;
+      }
+      for (const [index, agent] of agents.list.entries()) {
+        const agentRecord = getRecord(agent);
+        if (!agentRecord) {
+          continue;
+        }
+        removeLegacyAgentRuntimePolicy(agentRecord, `agents.list.${index}`, changes);
+      }
+    },
+  }),
   defineLegacyConfigMigration({
     id: "agents.sandbox.perSession->scope",
     describe: "Move legacy agent sandbox perSession aliases to sandbox.scope",

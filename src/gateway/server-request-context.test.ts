@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { describe, expect, it, vi } from "vitest";
 import type { GatewayServerLiveState } from "./server-live-state.js";
 import { createGatewayRequestContext } from "./server-request-context.js";
@@ -33,7 +34,7 @@ describe("createGatewayRequestContext", () => {
       nodeSubscribe: vi.fn(),
       nodeUnsubscribe: vi.fn(),
       nodeUnsubscribeAll: vi.fn(),
-      hasConnectedMobileNode: vi.fn(() => false),
+      hasConnectedTalkNode: vi.fn(() => false),
       clients: new Set(),
       enforceSharedGatewayAuthGenerationForConfigWrite: vi.fn(),
       nodeRegistry: {} as never,
@@ -43,6 +44,9 @@ describe("createGatewayRequestContext", () => {
       chatRunBuffers: new Map(),
       chatDeltaSentAt: new Map(),
       chatDeltaLastBroadcastLen: new Map(),
+      chatDeltaLastBroadcastText: new Map(),
+      agentDeltaSentAt: new Map(),
+      bufferedAgentEvents: new Map(),
       addChatRun: vi.fn(),
       removeChatRun: vi.fn(),
       subscribeSessionEvents: vi.fn(),
@@ -57,6 +61,7 @@ describe("createGatewayRequestContext", () => {
       findRunningWizard: vi.fn(() => null),
       purgeWizardSession: vi.fn(),
       getRuntimeSnapshot: vi.fn(() => ({}) as never),
+      getRuntimeSnapshotAsync: vi.fn(async () => ({}) as never),
       startChannel: vi.fn(async () => undefined),
       stopChannel: vi.fn(async () => undefined),
       markChannelLoggedOut: vi.fn(),

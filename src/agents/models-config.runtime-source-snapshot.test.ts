@@ -12,7 +12,7 @@ import { enforceSourceManagedProviderSecrets } from "./models-config.providers.s
 
 vi.mock("../plugins/manifest-registry.js", () => ({
   clearPluginManifestRegistryCache: () => undefined,
-  loadPluginManifestRegistry: () => ({ plugins: [] }),
+  loadPluginManifestRegistrySync: () => ({ plugins: [] }),
 }));
 
 vi.mock("./model-auth-env-vars.js", () => ({
@@ -25,8 +25,10 @@ vi.mock("../plugins/provider-runtime.js", () => ({
   applyProviderConfigDefaultsWithPlugin: (config: OpenClawConfig) => config,
   applyProviderNativeStreamingUsageCompatWithPlugin: () => undefined,
   normalizeProviderConfigWithPlugin: () => undefined,
+  normalizeProviderConfigWithPluginAsync: async () => undefined,
   resetProviderRuntimeHookCacheForTest: () => undefined,
   resolveProviderConfigApiKeyWithPlugin: () => undefined,
+  resolveProviderConfigApiKeyWithPluginAsync: async () => undefined,
   resolveProviderSyntheticAuthWithPlugin: () => undefined,
 }));
 
@@ -220,7 +222,7 @@ function expectOpenAiHeaderMarkers(
 }
 
 describe("models-config runtime source snapshot", () => {
-  it("uses runtime source snapshot markers when passed the active runtime config", async () => {
+  it("uses runtime source snapshot markers when passed the active runtime config", () => {
     const sourceConfig: OpenClawConfig = {
       models: {
         providers: {

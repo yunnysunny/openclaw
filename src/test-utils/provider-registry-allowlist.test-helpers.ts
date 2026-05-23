@@ -1,11 +1,11 @@
 import { beforeEach, vi } from "vitest";
-import { createEmptyPluginRegistry } from "../plugins/registry.js";
+import { createEmptyPluginRegistry } from "../plugins/registry-empty.js";
 
 const providerRegistryAllowlistMocks = vi.hoisted(() => ({
   resolveRuntimePluginRegistry: vi.fn<
     (params?: unknown) => ReturnType<typeof createEmptyPluginRegistry> | undefined
   >(() => undefined),
-  loadPluginManifestRegistry: vi.fn(() => ({ plugins: [], diagnostics: [] })),
+  loadPluginManifestRegistrySync: vi.fn(() => ({ plugins: [], diagnostics: [] })),
   withBundledPluginEnablementCompat: vi.fn(({ config }) => config),
   withBundledPluginVitestCompat: vi.fn(({ config }) => config),
 }));
@@ -15,7 +15,7 @@ vi.mock("../plugins/loader.js", () => ({
 }));
 
 vi.mock("../plugins/manifest-registry.js", () => ({
-  loadPluginManifestRegistry: providerRegistryAllowlistMocks.loadPluginManifestRegistry,
+  loadPluginManifestRegistrySync: providerRegistryAllowlistMocks.loadPluginManifestRegistrySync,
 }));
 
 vi.mock("../plugins/bundled-compat.js", async (importOriginal) => {
@@ -42,8 +42,8 @@ export function installProviderRegistryAllowlistMockDefaults(): void {
   beforeEach(() => {
     providerRegistryAllowlistMocks.resolveRuntimePluginRegistry.mockReset();
     providerRegistryAllowlistMocks.resolveRuntimePluginRegistry.mockReturnValue(undefined);
-    providerRegistryAllowlistMocks.loadPluginManifestRegistry.mockReset();
-    providerRegistryAllowlistMocks.loadPluginManifestRegistry.mockReturnValue({
+    providerRegistryAllowlistMocks.loadPluginManifestRegistrySync.mockReset();
+    providerRegistryAllowlistMocks.loadPluginManifestRegistrySync.mockReturnValue({
       plugins: [],
       diagnostics: [],
     });
@@ -71,7 +71,7 @@ export function primeBundledProviderAllowlistFallback(params: {
     },
   };
 
-  providerRegistryAllowlistMocks.loadPluginManifestRegistry.mockReturnValue({
+  providerRegistryAllowlistMocks.loadPluginManifestRegistrySync.mockReturnValue({
     plugins: [
       {
         id: providerId,

@@ -1,10 +1,12 @@
 import type { QaProviderMode } from "./model-selection.js";
+import type { RuntimeId, RuntimeParityResult } from "./runtime-parity.js";
 
-export type QaSuiteSummaryScenario = {
+type QaSuiteSummaryScenario = {
   name: string;
   status: "pass" | "fail";
   steps: unknown[];
   details?: string;
+  runtimeParity?: RuntimeParityResult;
 };
 
 export type QaSuiteSummaryJson = {
@@ -13,6 +15,14 @@ export type QaSuiteSummaryJson = {
     total: number;
     passed: number;
     failed: number;
+  };
+  metrics?: {
+    wallMs: number;
+    gatewayProcessCpuMs?: number | null;
+    gatewayCpuCoreRatio?: number | null;
+    gatewayProcessRssStartBytes?: number | null;
+    gatewayProcessRssEndBytes?: number | null;
+    gatewayProcessRssDeltaBytes?: number | null;
   };
   run: {
     startedAt: string;
@@ -27,6 +37,7 @@ export type QaSuiteSummaryJson = {
     fastMode: boolean;
     concurrency: number;
     scenarioIds: string[] | null;
+    runtimePair?: [RuntimeId, RuntimeId] | null;
   };
 };
 

@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import { z } from "zod";
-import { loadPluginManifestRegistry } from "../plugins/manifest-registry.js";
+import { loadPluginManifestRegistrySync } from "../plugins/manifest-registry.js";
 import type { RuntimeEnv } from "../runtime.js";
 import { normalizeOptionalString } from "../shared/string-coerce.js";
 import { normalizeTrimmedStringList } from "../shared/string-normalization.js";
@@ -13,6 +13,7 @@ const LEGACY_MANIFEST_CONTRACT_KEYS = [
   "speechProviders",
   "mediaUnderstandingProviders",
   "imageGenerationProviders",
+  "tools",
 ] as const;
 
 type LegacyManifestContractMigration = {
@@ -85,7 +86,7 @@ export function collectLegacyPluginManifestContractMigrations(params?: {
   const seen = new Set<string>();
   const migrations: LegacyManifestContractMigration[] = [];
 
-  for (const plugin of loadPluginManifestRegistry({
+  for (const plugin of loadPluginManifestRegistrySync({
     cache: false,
     ...(params?.env ? { env: params.env } : {}),
   }).plugins) {

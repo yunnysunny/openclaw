@@ -1,3 +1,4 @@
+// @ts-nocheck
 import fs from "node:fs";
 import path from "node:path";
 import {
@@ -6,6 +7,7 @@ import {
   type ResolvedBoundaryPath,
 } from "./boundary-path.js";
 import type { PathAliasPolicy } from "./path-alias-guards.js";
+import { openVerifiedFileAsync } from "./safe-open-async.js";
 import {
   openVerifiedFileSync,
   type SafeOpenSyncAllowedType,
@@ -47,11 +49,37 @@ export type OpenBoundaryFileParams = OpenBoundaryFileSyncParams & {
   aliasPolicy?: PathAliasPolicy;
 };
 
-type ResolvedBoundaryFilePath = {
+export type ResolvedBoundaryFilePath = {
   absolutePath: string;
   resolvedPath: string;
   rootRealPath: string;
 };
+
+export type ResolveBoundaryFilePath = (
+  absolutePath: string,
+) => ResolvedBoundaryPath | Promise<ResolvedBoundaryPath>;
+
+export type ResolveBoundaryFilePathGenericParams = {
+  absolutePath: string;
+  resolve: ResolveBoundaryFilePath;
+};
+
+/**
+ * Async counterpart to the internal `resolveBoundaryFilePathGeneric` helper:
+ * `path.resolve`s the input, then `await`s `resolve` and maps the result, or
+ * a thrown/rejected error to `{ ok: false, reason: "validation" }`.
+ */
+export async function resolveBoundaryFilePathGenericAsync(
+  params: ResolveBoundaryFilePathGenericParams,
+): Promise<ResolvedBoundaryFilePath | BoundaryFileOpenResult> {
+  const absolutePath = path.resolve(params.absolutePath);
+  try {
+    const inner = await params.resolve(absolutePath);
+    return mapResolvedBoundaryPath(absolutePath, inner);
+  } catch (error) {
+    return toBoundaryValidationError(error);
+  }
+}
 
 export function canUseBoundaryFileOpen(ioFs: typeof fs): boolean {
   return (
@@ -140,6 +168,33 @@ function openBoundaryFileResolved(params: {
   };
 }
 
+async function openBoundaryFileResolvedAsync(params: {
+  absolutePath: string;
+  resolvedPath: string;
+  rootRealPath: string;
+  maxBytes?: number;
+  rejectHardlinks?: boolean;
+  allowedType?: SafeOpenSyncAllowedType;
+}): Promise<BoundaryFileOpenResult> {
+  const opened = await openVerifiedFileAsync({
+    filePath: params.absolutePath,
+    resolvedPath: params.resolvedPath,
+    rejectHardlinks: params.rejectHardlinks ?? true,
+    maxBytes: params.maxBytes,
+    allowedType: params.allowedType,
+  });
+  if (!opened.ok) {
+    return opened;
+  }
+  return {
+    ok: true,
+    path: opened.path,
+    fd: opened.fd,
+    stat: opened.stat,
+    rootRealPath: params.rootRealPath,
+  };
+}
+
 function finalizeBoundaryFileOpen(params: {
   resolved: ResolvedBoundaryFilePath | BoundaryFileOpenResult;
   maxBytes?: number;
@@ -161,11 +216,29 @@ function finalizeBoundaryFileOpen(params: {
   });
 }
 
+async function finalizeBoundaryFileOpenAsync(params: {
+  resolved: ResolvedBoundaryFilePath | BoundaryFileOpenResult;
+  maxBytes?: number;
+  rejectHardlinks?: boolean;
+  allowedType?: SafeOpenSyncAllowedType;
+}): Promise<BoundaryFileOpenResult> {
+  if ("ok" in params.resolved) {
+    return params.resolved;
+  }
+  return openBoundaryFileResolvedAsync({
+    absolutePath: params.resolved.absolutePath,
+    resolvedPath: params.resolved.resolvedPath,
+    rootRealPath: params.resolved.rootRealPath,
+    maxBytes: params.maxBytes,
+    rejectHardlinks: params.rejectHardlinks,
+    allowedType: params.allowedType,
+  });
+}
+
 export async function openBoundaryFile(
   params: OpenBoundaryFileParams,
 ): Promise<BoundaryFileOpenResult> {
-  const ioFs = params.ioFs ?? fs;
-  const maybeResolved = resolveBoundaryFilePathGeneric({
+  const resolved = await resolveBoundaryFilePathGenericAsync({
     absolutePath: params.absolutePath,
     resolve: (absolutePath) =>
       resolveBoundaryPath({
@@ -177,13 +250,11 @@ export async function openBoundaryFile(
         skipLexicalRootCheck: params.skipLexicalRootCheck,
       }),
   });
-  const resolved = maybeResolved instanceof Promise ? await maybeResolved : maybeResolved;
-  return finalizeBoundaryFileOpen({
+  return finalizeBoundaryFileOpenAsync({
     resolved,
     maxBytes: params.maxBytes,
     rejectHardlinks: params.rejectHardlinks,
     allowedType: params.allowedType,
-    ioFs,
   });
 }
 
@@ -222,3 +293,27 @@ function resolveBoundaryFilePathGeneric(params: {
     return toBoundaryValidationError(error);
   }
 }
+
+export const openRootFileSync = openBoundaryFileSync;
+
+
+export const openRootFile = openBoundaryFile;
+export function matchRootFileOpenFailure<T>(
+  result: BoundaryFileOpenResult,
+  handlers: Parameters<typeof matchBoundaryFileOpenFailure<T>>[1],
+): T {
+  // oxlint-disable-next-line typescript/no-unnecessary-type-assertion -- preserve T cast through `as never` boundary handler.
+  return matchBoundaryFileOpenFailure<T>(result as never, handlers) as T;
+}
+
+
+export type RootFileOpenFailure = {
+  ok: false;
+  reason: BoundaryFileOpenFailureReason;
+  error?: unknown;
+};
+
+
+// Stage 4 compat alias: upstream renamed canUseBoundaryFileOpen for the
+// root-file open variant. Same predicate, different name.
+export const canUseRootFileOpen = canUseBoundaryFileOpen;

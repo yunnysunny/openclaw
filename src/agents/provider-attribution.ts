@@ -1,4 +1,4 @@
-import { loadPluginManifestRegistry } from "../plugins/manifest-registry.js";
+import { loadPluginManifestRegistrySync } from "../plugins/manifest-registry.js";
 import {
   normalizeOptionalLowercaseString,
   normalizeOptionalString,
@@ -7,13 +7,13 @@ import type { RuntimeVersionEnv } from "../version.js";
 import { resolveRuntimeServiceVersion } from "../version.js";
 import { normalizeProviderId } from "./provider-id.js";
 
-export type ProviderAttributionVerification =
+type ProviderAttributionVerification =
   | "vendor-documented"
   | "vendor-hidden-api-spec"
   | "vendor-sdk-hook-only"
   | "internal-runtime";
 
-export type ProviderAttributionHook =
+type ProviderAttributionHook =
   | "request-headers"
   | "default-headers"
   | "user-agent-extra"
@@ -31,7 +31,7 @@ export type ProviderAttributionPolicy = {
   headers?: Record<string, string>;
 };
 
-export type ProviderAttributionIdentity = Pick<ProviderAttributionPolicy, "product" | "version">;
+type ProviderAttributionIdentity = Pick<ProviderAttributionPolicy, "product" | "version">;
 
 export type ProviderRequestTransport = "stream" | "websocket" | "http" | "media-understanding";
 export type ProviderRequestCapability = "llm" | "audio" | "image" | "video" | "other";
@@ -91,10 +91,7 @@ export type ProviderRequestPolicyResolution = {
 
 export type ProviderRequestCapabilitiesInput = ProviderRequestPolicyInput & {
   modelId?: string | null;
-  compat?: {
-    supportsStore?: boolean;
-    supportsPromptCacheKey?: boolean;
-  } | null;
+  compat?: unknown;
 };
 
 export type ProviderRequestCompatibilityFamily = "moonshot";
@@ -108,11 +105,25 @@ export type ProviderRequestCapabilities = ProviderRequestPolicyResolution & {
   allowsResponsesStore: boolean;
   shouldStripResponsesPromptCache: boolean;
   supportsNativeStreamingUsageCompat: boolean;
+  supportsOpenAICompletionsStreamingUsageCompat?: boolean;
   compatibilityFamily?: ProviderRequestCompatibilityFamily;
 };
 
+function readCompatBoolean(
+  compat: unknown,
+  key: "supportsStore" | "supportsPromptCacheKey",
+): boolean | undefined {
+  if (!compat || typeof compat !== "object") {
+    return undefined;
+  }
+  const value = (compat as Record<string, unknown>)[key];
+  return typeof value === "boolean" ? value : undefined;
+}
+
 const OPENCLAW_ATTRIBUTION_PRODUCT = "OpenClaw";
 const OPENCLAW_ATTRIBUTION_ORIGINATOR = "openclaw";
+const OPENROUTER_ATTRIBUTION_CATEGORIES =
+  "cli-agent,cloud-agent,programming-app,creative-writing,writing-assistant,general-chat,personal-agent";
 
 const LOCAL_ENDPOINT_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
 const MOONSHOT_NATIVE_BASE_URLS = new Set([
@@ -200,7 +211,7 @@ function isManifestProviderEndpointClass(value: string): value is ProviderEndpoi
 
 function loadManifestProviderEndpointCache(): ManifestProviderEndpointCacheEntry[] {
   if (!manifestProviderEndpointCache) {
-    const registry = loadPluginManifestRegistry({ cache: true });
+    const registry = loadPluginManifestRegistrySync({ cache: true });
     const entries: ManifestProviderEndpointCacheEntry[] = [];
     for (const plugin of registry.plugins) {
       for (const endpoint of plugin.providerEndpoints ?? []) {
@@ -375,7 +386,7 @@ function resolveKnownProviderFamily(provider: string | undefined): string {
   }
 }
 
-export function isOpenAIResponsesApi(api: string | null | undefined): boolean {
+function isOpenAIResponsesApi(api: string | null | undefined): boolean {
   const normalizedApi = normalizeOptionalLowercaseString(api);
   return normalizedApi !== undefined && OPENAI_RESPONSES_APIS.has(normalizedApi);
 }
@@ -404,7 +415,7 @@ function buildOpenRouterAttributionPolicy(
     headers: {
       "HTTP-Referer": "https://openclaw.ai",
       "X-OpenRouter-Title": identity.product,
-      "X-OpenRouter-Categories": "cli-agent",
+      "X-OpenRouter-Categories": OPENROUTER_ATTRIBUTION_CATEGORIES,
     },
   };
 }
@@ -532,7 +543,6 @@ export function resolveProviderRequestPolicy(
   const policy = resolveProviderAttributionPolicy(provider, env);
   const endpointResolution = resolveProviderEndpoint(input.baseUrl);
   const endpointClass = endpointResolution.endpointClass;
-  const api = normalizeOptionalLowercaseString(input.api);
   const usesConfiguredBaseUrl = endpointClass !== "default";
   const usesKnownNativeOpenAIEndpoint =
     endpointClass === "openai-public" ||
@@ -545,19 +555,9 @@ export function resolveProviderRequestPolicy(
   const usesExplicitProxyLikeEndpoint = usesConfiguredBaseUrl && !usesKnownNativeOpenAIEndpoint;
 
   let attributionProvider: string | undefined;
-  if (
-    provider === "openai" &&
-    (api === "openai-completions" ||
-      api === "openai-responses" ||
-      (input.capability === "audio" && api === "openai-audio-transcriptions")) &&
-    usesOpenAIPublicAttributionHost
-  ) {
+  if (provider === "openai" && usesOpenAIPublicAttributionHost) {
     attributionProvider = "openai";
-  } else if (
-    provider === "openai-codex" &&
-    (api === "openai-codex-responses" || api === "openai-responses") &&
-    usesOpenAICodexAttributionHost
-  ) {
+  } else if (provider === "openai-codex" && usesOpenAICodexAttributionHost) {
     attributionProvider = "openai-codex";
   } else if (provider === "openrouter" && policy?.enabledByDefault) {
     // OpenRouter attribution is documented, but only apply it to known
@@ -630,7 +630,7 @@ export function resolveProviderRequestCapabilities(
   }
 
   const isResponsesApi = isOpenAIResponsesApi(api);
-  const promptCacheKeySupport = input.compat?.supportsPromptCacheKey;
+  const promptCacheKeySupport = readCompatBoolean(input.compat, "supportsPromptCacheKey");
   // Default strip behavior (proxy-like endpoints with responses APIs) is
   // preserved as a safety net for providers that reject prompt_cache_key,
   // see #48155 (Volcano Engine DeepSeek). Operators running their payload
@@ -672,9 +672,10 @@ export function resolveProviderRequestCapabilities(
       (endpointClass === "default" || endpointClass === "anthropic-public"),
     // This is intentionally the gate for emitting `store: false` on Responses
     // transports, not just a statement about vendor support in the abstract.
-    supportsResponsesStoreField: input.compat?.supportsStore !== false && isResponsesApi,
+    supportsResponsesStoreField:
+      readCompatBoolean(input.compat, "supportsStore") !== false && isResponsesApi,
     allowsResponsesStore:
-      input.compat?.supportsStore !== false &&
+      readCompatBoolean(input.compat, "supportsStore") !== false &&
       provider !== undefined &&
       isResponsesApi &&
       OPENAI_RESPONSES_PROVIDERS.has(provider) &&

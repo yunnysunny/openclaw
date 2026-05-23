@@ -2,7 +2,15 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import "./fs-safe-defaults.js";
 import { isNotFoundPathError, isPathInside } from "./path-guards.js";
+export {
+  ROOT_PATH_ALIAS_POLICIES,
+  resolveRootPath,
+  resolveRootPathSync,
+  type ResolvedRootPath,
+  type RootPathAliasPolicy,
+} from "@openclaw/fs-safe/advanced";
 
 export type BoundaryPathIntent = "read" | "write" | "create" | "delete" | "stat";
 

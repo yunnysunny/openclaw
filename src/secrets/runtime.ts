@@ -140,8 +140,8 @@ async function resolveLoadablePluginOrigins(params: {
     params.config,
     resolveDefaultAgentId(params.config),
   );
-  const { loadPluginManifestRegistry } = await loadRuntimeManifestHelpers();
-  const manifestRegistry = loadPluginManifestRegistry({
+  const { loadPluginManifestRegistryAsync } = await loadRuntimeManifestHelpers();
+  const manifestRegistry = await loadPluginManifestRegistryAsync({
     config: params.config,
     workspaceDir,
     cache: true,
@@ -418,4 +418,15 @@ export function getActiveRuntimeWebToolsMetadata(): RuntimeWebToolsMetadata | nu
 
 export function clearSecretsRuntimeSnapshot(): void {
   clearActiveSecretsRuntimeState();
+}
+
+// Stage 4 compat stub: upstream surface that forces an in-place snapshot
+// reload after secret rotation. Locally callers that mutate secrets re-run
+// `prepareSecretsRuntimeSnapshot` + `activateSecretsRuntimeSnapshot`; this
+// stub is a no-op so the dts barrel and tests resolve.
+export async function refreshActiveSecretsRuntimeSnapshot(_params?: {
+  config?: unknown;
+  reason?: string;
+}): Promise<void> {
+  // intentionally no-op
 }

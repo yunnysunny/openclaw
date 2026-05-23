@@ -9,35 +9,47 @@ import { createProviderAuthResolver } from "./models-config.providers.secrets.js
 
 vi.mock("./model-auth-env.js", () => ({
   resolveEnvApiKey: () => null,
+  resolveEnvApiKeyAsync: async () => null,
 }));
 
 vi.mock("./provider-auth-aliases.js", () => ({
+  resolveProviderAuthAliasMap: () => ({}),
   resolveProviderIdForAuth: (provider: string) => provider.trim().toLowerCase(),
+  resolveProviderIdForAuthAsync: async (provider: string) => provider.trim().toLowerCase(),
 }));
 
 vi.mock("./model-auth-env-vars.js", () => ({
   PROVIDER_ENV_API_KEY_CANDIDATES: {},
   listKnownProviderEnvApiKeyNames: () => [],
   resolveProviderEnvApiKeyCandidates: () => ({}),
+  resolveProviderEnvAuthEvidence: () => ({}),
 }));
 
 vi.mock("../plugins/provider-runtime.js", () => ({
   resolveProviderSyntheticAuthWithPlugin: () => undefined,
+  resolveProviderSyntheticAuthWithPluginAsync: async () => undefined,
 }));
 
-vi.mock("./models-config.providers.js", () => ({
-  applyNativeStreamingUsageCompat: (providers: unknown) => providers,
-  enforceSourceManagedProviderSecrets: ({ providers }: { providers: unknown }) => providers,
-  normalizeProviders: ({ providers }: { providers: unknown }) => providers,
-  resolveImplicitProviders: async ({
-    explicitProviders,
-  }: {
-    explicitProviders?: Record<string, unknown>;
-  }) => explicitProviders ?? {},
-}));
+vi.mock("./models-config.providers.js", async () => {
+  const actual = await vi.importActual<typeof import("./models-config.providers.js")>(
+    "./models-config.providers.js",
+  );
+  return {
+    ...actual,
+    applyNativeStreamingUsageCompat: (providers: unknown) => providers,
+    enforceSourceManagedProviderSecrets: ({ providers }: { providers: unknown }) => providers,
+    normalizeProviders: ({ providers }: { providers: unknown }) => providers,
+    normalizeProvidersAsync: async ({ providers }: { providers: unknown }) => providers,
+    resolveImplicitProviders: async ({
+      explicitProviders,
+    }: {
+      explicitProviders?: Record<string, unknown>;
+    }) => explicitProviders ?? {},
+  };
+});
 
 describe("models-config", () => {
-  it("uses the first github-copilot profile when env tokens are missing", () => {
+  it("uses the first github-copilot profile when env tokens are missing", async () => {
     const auth = createProviderAuthResolver({} as NodeJS.ProcessEnv, {
       version: 1,
       profiles: {
@@ -54,7 +66,7 @@ describe("models-config", () => {
       },
     });
 
-    expect(auth("github-copilot")).toEqual({
+    await expect(auth("github-copilot")).resolves.toEqual({
       apiKey: "alpha-token",
       discoveryApiKey: "alpha-token",
       mode: "token",
@@ -191,7 +203,7 @@ describe("models-config", () => {
     expect(plan).toEqual({ action: "noop" });
   });
 
-  it("uses tokenRef env var when github-copilot profile omits plaintext token", () => {
+  it("uses tokenRef env var when github-copilot profile omits plaintext token", async () => {
     const auth = createProviderAuthResolver(
       {
         COPILOT_REF_TOKEN: "token-from-ref-env",
@@ -208,7 +220,7 @@ describe("models-config", () => {
       },
     );
 
-    expect(auth("github-copilot")).toEqual({
+    await expect(auth("github-copilot")).resolves.toEqual({
       apiKey: "COPILOT_REF_TOKEN",
       discoveryApiKey: "token-from-ref-env",
       mode: "token",

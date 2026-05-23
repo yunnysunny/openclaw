@@ -6,7 +6,15 @@ import {
 
 export { normalizeFastMode };
 
-export type ThinkLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "adaptive";
+export type ThinkLevel =
+  | "off"
+  | "minimal"
+  | "low"
+  | "medium"
+  | "high"
+  | "xhigh"
+  | "adaptive"
+  | "max";
 export type VerboseLevel = "off" | "on" | "full";
 export type TraceLevel = "off" | "on" | "raw";
 export type NoticeLevel = "off" | "on" | "full";
@@ -18,15 +26,22 @@ export type ThinkingCatalogEntry = {
   provider: string;
   id: string;
   reasoning?: boolean;
+  compat?: {
+    supportedReasoningEfforts?: readonly string[] | null;
+  } | null;
 };
 
-const BASE_THINKING_LEVELS: ThinkLevel[] = ["off", "minimal", "low", "medium", "high", "adaptive"];
-const NO_THINKING_LEVELS: ThinkLevel[] = [...BASE_THINKING_LEVELS];
-
-export function isBinaryThinkingProvider(provider?: string | null): boolean {
-  void provider;
-  return false;
-}
+export const BASE_THINKING_LEVELS: ThinkLevel[] = ["off", "minimal", "low", "medium", "high"];
+export const THINKING_LEVEL_RANKS: Record<ThinkLevel, number> = {
+  off: 0,
+  minimal: 10,
+  low: 20,
+  medium: 30,
+  high: 40,
+  adaptive: 30,
+  xhigh: 60,
+  max: 70,
+};
 
 // Normalize user-provided thinking level strings to the canonical enum.
 export function normalizeThinkLevel(raw?: string | null): ThinkLevel | undefined {
@@ -37,6 +52,9 @@ export function normalizeThinkLevel(raw?: string | null): ThinkLevel | undefined
   const collapsed = key.replace(/[\s_-]+/g, "");
   if (collapsed === "adaptive" || collapsed === "auto") {
     return "adaptive";
+  }
+  if (collapsed === "max") {
+    return "max";
   }
   if (collapsed === "xhigh" || collapsed === "extrahigh") {
     return "xhigh";
@@ -56,9 +74,7 @@ export function normalizeThinkLevel(raw?: string | null): ThinkLevel | undefined
   if (["mid", "med", "medium", "thinkharder", "think-harder", "harder"].includes(key)) {
     return "medium";
   }
-  if (
-    ["high", "ultra", "ultrathink", "think-hard", "thinkhardest", "highest", "max"].includes(key)
-  ) {
+  if (["high", "ultra", "ultrathink", "think-hard", "thinkhardest", "highest"].includes(key)) {
     return "high";
   }
   if (["think"].includes(key)) {
@@ -67,26 +83,12 @@ export function normalizeThinkLevel(raw?: string | null): ThinkLevel | undefined
   return undefined;
 }
 
-export function listThinkingLevels(
-  _provider?: string | null,
-  _model?: string | null,
-): ThinkLevel[] {
-  return [...NO_THINKING_LEVELS];
-}
-
-export function listThinkingLevelLabels(provider?: string | null, model?: string | null): string[] {
-  if (isBinaryThinkingProvider(provider)) {
-    return ["off", "on"];
+export function isSessionDefaultDirectiveValue(raw?: string | null): boolean {
+  const key = normalizeOptionalLowercaseString(raw);
+  if (!key) {
+    return false;
   }
-  return listThinkingLevels(provider, model);
-}
-
-export function formatThinkingLevels(
-  provider?: string | null,
-  model?: string | null,
-  separator = ", ",
-): string {
-  return listThinkingLevelLabels(provider, model).join(separator);
+  return ["default", "inherit", "inherited", "clear", "reset", "unpin"].includes(key);
 }
 
 export function formatXHighModelHint(): string {

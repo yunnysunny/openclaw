@@ -1,13 +1,18 @@
 import fs from "node:fs";
+import fsp from "node:fs/promises";
 import { withFileLock } from "../../infra/file-lock.js";
-import { saveJsonFile } from "../../infra/json-file.js";
+import { saveJsonFile, saveJsonFileAsync } from "../../infra/json-file.js";
 import {
   AUTH_STORE_LOCK_OPTIONS,
   AUTH_STORE_VERSION,
   EXTERNAL_CLI_SYNC_TTL_MS,
   log,
 } from "./constants.js";
-import { overlayExternalAuthProfiles, shouldPersistExternalAuthProfile } from "./external-auth.js";
+import {
+  overlayExternalAuthProfiles,
+  overlayExternalAuthProfilesAsync,
+  shouldPersistExternalAuthProfile,
+} from "./external-auth.js";
 import {
   ensureAuthStoreFile,
   resolveAuthStatePath,
@@ -18,9 +23,12 @@ import {
   applyLegacyAuthStore,
   buildPersistedAuthProfileSecretsStore,
   loadLegacyAuthProfileStore,
+  loadLegacyAuthProfileStoreAsync,
   loadPersistedAuthProfileStore,
+  loadPersistedAuthProfileStoreAsync,
   mergeAuthProfileStores,
   mergeOAuthFileIntoStore,
+  mergeOAuthFileIntoStoreAsync,
 } from "./persisted.js";
 import {
   clearRuntimeAuthProfileStoreSnapshots as clearRuntimeAuthProfileStoreSnapshotsImpl,
@@ -29,7 +37,7 @@ import {
   replaceRuntimeAuthProfileStoreSnapshots as replaceRuntimeAuthProfileStoreSnapshotsImpl,
   setRuntimeAuthProfileStoreSnapshot,
 } from "./runtime-snapshots.js";
-import { savePersistedAuthProfileState } from "./state.js";
+import { savePersistedAuthProfileState, savePersistedAuthProfileStateAsync } from "./state.js";
 import type { AuthProfileStore } from "./types.js";
 
 type LoadAuthProfileStoreOptions = {
@@ -86,6 +94,15 @@ function resolveRuntimeAuthProfileStore(agentDir?: string): AuthProfileStore | n
 function readAuthStoreMtimeMs(authPath: string): number | null {
   try {
     return fs.statSync(authPath).mtimeMs;
+  } catch {
+    return null;
+  }
+}
+
+async function readAuthStoreMtimeMsAsync(authPath: string): Promise<number | null> {
+  try {
+    const s = await fsp.stat(authPath);
+    return s.mtimeMs;
   } catch {
     return null;
   }
@@ -261,6 +278,100 @@ function loadAuthProfileStoreForAgent(
   return store;
 }
 
+async function loadAuthProfileStoreForAgentAsync(
+  agentDir?: string,
+  options?: LoadAuthProfileStoreOptions,
+): Promise<AuthProfileStore> {
+  const readOnly = options?.readOnly === true;
+  const authPath = resolveAuthStorePath(agentDir);
+  const statePath = resolveAuthStatePath(agentDir);
+  const authMtimeMs = await readAuthStoreMtimeMsAsync(authPath);
+  const stateMtimeMs = await readAuthStoreMtimeMsAsync(statePath);
+  if (!readOnly) {
+    const cached = readCachedAuthProfileStore({
+      authPath,
+      authMtimeMs,
+      stateMtimeMs,
+    });
+    if (cached) {
+      return cached;
+    }
+  }
+  const asStore = await loadPersistedAuthProfileStoreAsync(agentDir);
+  if (asStore) {
+    if (!readOnly) {
+      writeCachedAuthProfileStore({
+        authPath,
+        authMtimeMs: await readAuthStoreMtimeMsAsync(authPath),
+        stateMtimeMs: await readAuthStoreMtimeMsAsync(statePath),
+        store: asStore,
+      });
+    }
+    return asStore;
+  }
+
+  // Fallback: inherit auth-profiles from main agent if subagent has none
+  if (agentDir && !readOnly) {
+    const mainStore = await loadPersistedAuthProfileStoreAsync();
+    if (mainStore && Object.keys(mainStore.profiles).length > 0) {
+      // Clone only secret-bearing profiles to subagent directory for auth inheritance.
+      await saveJsonFileAsync(authPath, buildPersistedAuthProfileSecretsStore(mainStore));
+      log.info("inherited auth-profiles from main agent", { agentDir });
+      const inherited = { version: mainStore.version, profiles: { ...mainStore.profiles } };
+      writeCachedAuthProfileStore({
+        authPath,
+        authMtimeMs: await readAuthStoreMtimeMsAsync(authPath),
+        stateMtimeMs: await readAuthStoreMtimeMsAsync(statePath),
+        store: inherited,
+      });
+      return inherited;
+    }
+  }
+
+  const legacy = await loadLegacyAuthProfileStoreAsync(agentDir);
+  const store: AuthProfileStore = {
+    version: AUTH_STORE_VERSION,
+    profiles: {},
+  };
+  if (legacy) {
+    applyLegacyAuthStore(store, legacy);
+  }
+
+  const mergedOAuth = await mergeOAuthFileIntoStoreAsync(store);
+  const forceReadOnly = process.env.OPENCLAW_AUTH_STORE_READONLY === "1";
+  const shouldWrite = !readOnly && !forceReadOnly && (legacy !== null || mergedOAuth);
+  if (shouldWrite) {
+    await saveAuthProfileStoreAsync(store, agentDir);
+  }
+
+  // PR #368: legacy auth.json could get re-migrated from other agent dirs,
+  // overwriting fresh OAuth creds with stale tokens (fixes #363). Delete only
+  // after we've successfully written auth-profiles.json.
+  if (shouldWrite && legacy !== null) {
+    const legacyPath = resolveLegacyAuthStorePath(agentDir);
+    try {
+      await fsp.unlink(legacyPath);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException)?.code !== "ENOENT") {
+        log.warn("failed to delete legacy auth.json after migration", {
+          err,
+          legacyPath,
+        });
+      }
+    }
+  }
+
+  if (!readOnly) {
+    writeCachedAuthProfileStore({
+      authPath,
+      authMtimeMs: await readAuthStoreMtimeMsAsync(authPath),
+      stateMtimeMs: await readAuthStoreMtimeMsAsync(statePath),
+      store,
+    });
+  }
+  return store;
+}
+
 export function loadAuthProfileStoreForRuntime(
   agentDir?: string,
   options?: LoadAuthProfileStoreOptions,
@@ -299,22 +410,51 @@ export function ensureAuthProfileStore(
   agentDir?: string,
   options?: { allowKeychainPrompt?: boolean },
 ): AuthProfileStore {
+  return overlayExternalAuthProfiles(
+    ensureAuthProfileStoreWithoutExternalProfiles(agentDir, options),
+    { agentDir },
+  );
+}
+
+export function ensureAuthProfileStoreWithoutExternalProfiles(
+  agentDir?: string,
+  options?: { allowKeychainPrompt?: boolean },
+): AuthProfileStore {
   const runtimeStore = resolveRuntimeAuthProfileStore(agentDir);
   if (runtimeStore) {
-    return overlayExternalAuthProfiles(runtimeStore, { agentDir });
+    return runtimeStore;
   }
-
   const store = loadAuthProfileStoreForAgent(agentDir, options);
   const authPath = resolveAuthStorePath(agentDir);
   const mainAuthPath = resolveAuthStorePath();
   if (!agentDir || authPath === mainAuthPath) {
-    return overlayExternalAuthProfiles(store, { agentDir });
+    return store;
   }
 
   const mainStore = loadAuthProfileStoreForAgent(undefined, options);
+  return mergeAuthProfileStores(mainStore, store);
+}
+
+export async function ensureAuthProfileStoreAsync(
+  agentDir?: string,
+  options?: { allowKeychainPrompt?: boolean },
+): Promise<AuthProfileStore> {
+  const runtimeStore = resolveRuntimeAuthProfileStore(agentDir);
+  if (runtimeStore) {
+    return overlayExternalAuthProfilesAsync(runtimeStore, { agentDir });
+  }
+
+  const store = await loadAuthProfileStoreForAgentAsync(agentDir, options);
+  const authPath = resolveAuthStorePath(agentDir);
+  const mainAuthPath = resolveAuthStorePath();
+  if (!agentDir || authPath === mainAuthPath) {
+    return overlayExternalAuthProfilesAsync(store, { agentDir });
+  }
+
+  const mainStore = await loadAuthProfileStoreForAgentAsync(undefined, options);
   const merged = mergeAuthProfileStores(mainStore, store);
 
-  return overlayExternalAuthProfiles(merged, { agentDir });
+  return overlayExternalAuthProfilesAsync(merged, { agentDir });
 }
 
 export function findPersistedAuthProfileCredential(params: {
@@ -398,4 +538,45 @@ export function saveAuthProfileStore(
   if (hasRuntimeAuthProfileStoreSnapshot(agentDir)) {
     setRuntimeAuthProfileStoreSnapshot(runtimeStore, agentDir);
   }
+}
+
+export async function saveAuthProfileStoreAsync(
+  store: AuthProfileStore,
+  agentDir?: string,
+  options?: SaveAuthProfileStoreOptions,
+): Promise<void> {
+  const authPath = resolveAuthStorePath(agentDir);
+  const statePath = resolveAuthStatePath(agentDir);
+  const payload = buildPersistedAuthProfileSecretsStore(store, ({ profileId, credential }) => {
+    if (credential.type !== "oauth") {
+      return true;
+    }
+    if (options?.filterExternalAuthProfiles === false) {
+      return true;
+    }
+    return shouldPersistExternalAuthProfile({
+      store,
+      profileId,
+      credential,
+      agentDir,
+    });
+  });
+  await saveJsonFileAsync(authPath, payload);
+  await savePersistedAuthProfileStateAsync(store, agentDir);
+  const runtimeStore = cloneAuthProfileStore(store);
+  writeCachedAuthProfileStore({
+    authPath,
+    authMtimeMs: await readAuthStoreMtimeMsAsync(authPath),
+    stateMtimeMs: await readAuthStoreMtimeMsAsync(statePath),
+    store: runtimeStore,
+  });
+  if (hasRuntimeAuthProfileStoreSnapshot(agentDir)) {
+    setRuntimeAuthProfileStoreSnapshot(runtimeStore, agentDir);
+  }
+}
+
+// Stage 4 compat stub: upstream-only owner-agent resolver. Returns undefined
+// so callers fall through to the configured agent dir; tests mock this.
+export function resolvePersistedAuthProfileOwnerAgentDir(_params?: unknown): undefined {
+  return undefined;
 }

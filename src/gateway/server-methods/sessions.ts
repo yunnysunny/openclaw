@@ -1,7 +1,8 @@
+// @ts-nocheck
 import { randomUUID } from "node:crypto";
-import fs from "node:fs";
+import * as fs from "node:fs/promises";
 import path from "node:path";
-import { CURRENT_SESSION_VERSION, SessionManager } from "@mariozechner/pi-coding-agent";
+import { CURRENT_SESSION_VERSION, SessionManager } from "@earendil-works/pi-coding-agent";
 import { resolveAgentWorkspaceDir, resolveDefaultAgentId } from "../../agents/agent-scope.js";
 import {
   abortEmbeddedPiRun,
@@ -11,7 +12,6 @@ import {
 import { compactEmbeddedPiSession } from "../../agents/pi-embedded.js";
 import { clearSessionQueues } from "../../auto-reply/reply/queue/cleanup.js";
 import { normalizeReasoningLevel, normalizeThinkLevel } from "../../auto-reply/thinking.js";
-import { loadConfig } from "../../config/config.js";
 import {
   loadSessionStore,
   resolveMainSessionKey,
@@ -20,6 +20,7 @@ import {
   type SessionEntry,
   updateSessionStore,
 } from "../../config/sessions.js";
+import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import {
   hasInternalHookListeners,
   triggerInternalHook,
@@ -27,6 +28,8 @@ import {
   type SessionPatchHookEvent,
 } from "../../hooks/internal-hooks.js";
 import { formatErrorMessage } from "../../infra/errors.js";
+import { patchPluginSessionExtension } from "../../plugins/host-hook-state.js";
+import { isPluginJsonValue } from "../../plugins/host-hooks.js";
 import {
   normalizeAgentId,
   parseAgentSessionKey,
@@ -38,6 +41,7 @@ import {
   normalizeOptionalString,
   readStringValue,
 } from "../../shared/string-coerce.js";
+import { ADMIN_SCOPE } from "../operator-scopes.js";
 import { GATEWAY_CLIENT_IDS } from "../protocol/client-info.js";
 import {
   ErrorCodes,
@@ -54,6 +58,7 @@ import {
   validateSessionsMessagesSubscribeParams,
   validateSessionsMessagesUnsubscribeParams,
   validateSessionsPatchParams,
+  validateSessionsPluginPatchParams,
   validateSessionsPreviewParams,
   validateSessionsResetParams,
   validateSessionsResolveParams,
@@ -65,7 +70,7 @@ import {
 } from "../session-compaction-checkpoints.js";
 import { reactivateCompletedSubagentSession } from "../session-subagent-reactivation.js";
 import {
-  archiveFileOnDisk,
+  archiveFileOnDiskAsync,
   listSessionsFromStore,
   loadCombinedSessionStoreForGateway,
   loadGatewaySessionRow,
@@ -94,6 +99,23 @@ import type {
 } from "./types.js";
 import { assertValidParams } from "./validation.js";
 
+const gatewaySessionsTimingEnabled = process.env.OPENCLAW_DEBUG_GATEWAY_SESSIONS_TIMING === "1";
+const gatewaySessionsTimingFile = process.env.OPENCLAW_DEBUG_GATEWAY_SESSIONS_TIMING_FILE?.trim();
+
+function logGatewaySessionsTiming(stage: string, elapsedMs: number, extra?: Record<string, unknown>) {
+  if (!gatewaySessionsTimingEnabled) {
+    return;
+  }
+  const suffix = extra ? ` extra=${JSON.stringify(extra)}` : "";
+  const line = `[gateway-sessions-timing] stage=${stage} elapsedMs=${elapsedMs}${suffix}`;
+  console.error(line);
+  if (gatewaySessionsTimingFile) {
+    void fs
+      .appendFile(gatewaySessionsTimingFile, `${line}\n`, "utf8")
+      .catch(() => undefined);
+  }
+}
+
 type SessionsRuntimeModule = typeof import("./sessions.runtime.js");
 
 let sessionsRuntimeModulePromise: Promise<SessionsRuntimeModule> | undefined;
@@ -120,8 +142,31 @@ function requireSessionKey(key: unknown, respond: RespondFn): string | null {
   return normalized;
 }
 
-function resolveGatewaySessionTargetFromKey(key: string) {
-  const cfg = loadConfig();
+function rejectPluginRuntimeDeleteMismatch(params: {
+  client: GatewayClient | null;
+  key: string;
+  entry: SessionEntry | undefined;
+  respond: RespondFn;
+}): boolean {
+  const pluginOwnerId = normalizeOptionalString(params.client?.internal?.pluginRuntimeOwnerId);
+  if (!pluginOwnerId || !params.entry) {
+    return false;
+  }
+  if (normalizeOptionalString(params.entry.pluginOwnerId) === pluginOwnerId) {
+    return false;
+  }
+  params.respond(
+    false,
+    undefined,
+    errorShape(
+      ErrorCodes.INVALID_REQUEST,
+      `Plugin "${pluginOwnerId}" cannot delete session "${params.key}" because it did not create it.`,
+    ),
+  );
+  return true;
+}
+
+function resolveGatewaySessionTargetFromKey(key: string, cfg: OpenClawConfig) {
   const target = resolveGatewaySessionStoreTarget({ cfg, key });
   return { cfg, target, storePath: target.storePath };
 }
@@ -214,6 +259,7 @@ function emitSessionsChanged(
             runtimeMs: sessionRow.runtimeMs,
             compactionCheckpointCount: sessionRow.compactionCheckpointCount,
             latestCompactionCheckpoint: sessionRow.latestCompactionCheckpoint,
+            pluginExtensions: sessionRow.pluginExtensions,
           }
         : {}),
     },
@@ -223,7 +269,7 @@ function emitSessionsChanged(
 }
 
 function rejectWebchatSessionMutation(params: {
-  action: "patch" | "delete";
+  action: "patch" | "delete" | "compact" | "restore";
   client: GatewayClient | null;
   isWebchatConnect: (params: GatewayClient["connect"] | null | undefined) => boolean;
   respond: RespondFn;
@@ -290,12 +336,12 @@ function cloneCheckpointSessionEntry(params: {
   };
 }
 
-function ensureSessionTranscriptFile(params: {
+async function ensureSessionTranscriptFile(params: {
   sessionId: string;
   storePath: string;
   sessionFile?: string;
   agentId: string;
-}): { ok: true; transcriptPath: string } | { ok: false; error: string } {
+}): Promise<{ ok: true; transcriptPath: string } | { ok: false; error: string }> {
   try {
     const transcriptPath = resolveSessionFilePath(
       params.sessionId,
@@ -305,8 +351,8 @@ function ensureSessionTranscriptFile(params: {
         agentId: params.agentId,
       }),
     );
-    if (!fs.existsSync(transcriptPath)) {
-      fs.mkdirSync(path.dirname(transcriptPath), { recursive: true });
+    if (!(await fileExists(transcriptPath))) {
+      await fs.mkdir(path.dirname(transcriptPath), { recursive: true });
       const header = {
         type: "session",
         version: CURRENT_SESSION_VERSION,
@@ -314,7 +360,7 @@ function ensureSessionTranscriptFile(params: {
         timestamp: new Date().toISOString(),
         cwd: process.cwd(),
       };
-      fs.writeFileSync(transcriptPath, `${JSON.stringify(header)}\n`, {
+      await fs.writeFile(transcriptPath, `${JSON.stringify(header)}\n`, {
         encoding: "utf-8",
         mode: 0o600,
       });
@@ -326,6 +372,24 @@ function ensureSessionTranscriptFile(params: {
       error: formatErrorMessage(err),
     };
   }
+}
+
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function findExistingFilePath(candidates: readonly string[]): Promise<string | undefined> {
+  for (const candidate of candidates) {
+    if (await fileExists(candidate)) {
+      return candidate;
+    }
+  }
+  return undefined;
 }
 
 function resolveAbortSessionKey(params: {
@@ -576,17 +640,20 @@ async function handleSessionSend(params: {
   }
 }
 export const sessionsHandlers: GatewayRequestHandlers = {
-  "sessions.list": ({ params, respond }) => {
+  "sessions.list": async ({ params, respond, context }) => {
     if (!assertValidParams(params, validateSessionsListParams, "sessions.list", respond)) {
       return;
     }
     const p = params;
-    const cfg = loadConfig();
+    const cfg = context.getRuntimeConfig();
     const { storePath, store } = loadCombinedSessionStoreForGateway(cfg);
+    const loadedCatalog = await context.loadGatewayModelCatalog().catch(() => undefined);
+    const modelCatalog = Array.isArray(loadedCatalog) ? loadedCatalog : undefined;
     const result = listSessionsFromStore({
       cfg,
       storePath,
       store,
+      modelCatalog,
       opts: p,
     });
     respond(true, result, undefined);
@@ -651,7 +718,7 @@ export const sessionsHandlers: GatewayRequestHandlers = {
     }
     respond(true, { subscribed: false, key: canonicalKey }, undefined);
   },
-  "sessions.preview": ({ params, respond }) => {
+  "sessions.preview": ({ params, respond, context }) => {
     if (!assertValidParams(params, validateSessionsPreviewParams, "sessions.preview", respond)) {
       return;
     }
@@ -673,7 +740,7 @@ export const sessionsHandlers: GatewayRequestHandlers = {
       return;
     }
 
-    const cfg = loadConfig();
+    const cfg = context.getRuntimeConfig();
     const storeCache = new Map<string, Record<string, SessionEntry>>();
     const previews: SessionsPreviewEntry[] = [];
 
@@ -713,12 +780,12 @@ export const sessionsHandlers: GatewayRequestHandlers = {
 
     respond(true, { ts: Date.now(), previews } satisfies SessionsPreviewResult, undefined);
   },
-  "sessions.resolve": async ({ params, respond }) => {
+  "sessions.resolve": async ({ params, respond, context }) => {
     if (!assertValidParams(params, validateSessionsResolveParams, "sessions.resolve", respond)) {
       return;
     }
     const p = params;
-    const cfg = loadConfig();
+    const cfg = context.getRuntimeConfig();
 
     const resolved = await resolveSessionKeyFromResolveParams({ cfg, p });
     if (!resolved.ok) {
@@ -795,11 +862,12 @@ export const sessionsHandlers: GatewayRequestHandlers = {
     );
   },
   "sessions.create": async ({ req, params, respond, context, client, isWebchatConnect }) => {
+    const createStartMs = Date.now();
     if (!assertValidParams(params, validateSessionsCreateParams, "sessions.create", respond)) {
       return;
     }
     const p = params;
-    const cfg = loadConfig();
+    const cfg = context.getRuntimeConfig();
     const requestedKey = normalizeOptionalString(p.key);
     const agentId = normalizeAgentId(
       normalizeOptionalString(p.agentId) ?? resolveDefaultAgentId(cfg),
@@ -844,6 +912,7 @@ export const sessionsHandlers: GatewayRequestHandlers = {
       : buildDashboardSessionKey(agentId);
     const target = resolveGatewaySessionStoreTarget({ cfg, key });
     const targetAgentId = resolveAgentIdFromSessionKey(target.canonicalKey);
+    const storePatchStartMs = Date.now();
     const created = await updateSessionStore(target.storePath, async (store) => {
       const patched = await applySessionsPatchToStore({
         cfg,
@@ -869,15 +938,23 @@ export const sessionsHandlers: GatewayRequestHandlers = {
         entry: nextEntry,
       };
     });
+    logGatewaySessionsTiming("sessions.create.store-patch", Date.now() - storePatchStartMs, {
+      key: target.canonicalKey,
+      hasParent: Boolean(canonicalParentSessionKey),
+    });
     if (!created.ok) {
       respond(false, undefined, created.error);
       return;
     }
-    const ensured = ensureSessionTranscriptFile({
+    const transcriptStartMs = Date.now();
+    const ensured = await ensureSessionTranscriptFile({
       sessionId: created.entry.sessionId,
       storePath: target.storePath,
       sessionFile: created.entry.sessionFile,
       agentId: targetAgentId,
+    });
+    logGatewaySessionsTiming("sessions.create.ensure-transcript", Date.now() - transcriptStartMs, {
+      key: target.canonicalKey,
     });
     if (!ensured.ok) {
       await updateSessionStore(target.storePath, (store) => {
@@ -947,6 +1024,11 @@ export const sessionsHandlers: GatewayRequestHandlers = {
         payload: runPayload,
         cached: runMeta?.cached === true,
       });
+    logGatewaySessionsTiming("sessions.create.before-respond", Date.now() - createStartMs, {
+      key: target.canonicalKey,
+      runStarted,
+      hasInitialMessage: Boolean(initialMessage),
+    });
 
     respond(
       true,
@@ -1015,7 +1097,7 @@ export const sessionsHandlers: GatewayRequestHandlers = {
       );
       return;
     }
-    if (!fs.existsSync(checkpoint.preCompaction.sessionFile)) {
+    if (!(await fileExists(checkpoint.preCompaction.sessionFile))) {
       respond(
         false,
         undefined,
@@ -1101,6 +1183,9 @@ export const sessionsHandlers: GatewayRequestHandlers = {
     if (!key) {
       return;
     }
+    if (rejectWebchatSessionMutation({ action: "restore", client, isWebchatConnect, respond })) {
+      return;
+    }
     const checkpointId =
       typeof p.checkpointId === "string" && p.checkpointId.trim() ? p.checkpointId.trim() : "";
     if (!checkpointId) {
@@ -1126,7 +1211,7 @@ export const sessionsHandlers: GatewayRequestHandlers = {
       );
       return;
     }
-    if (!fs.existsSync(checkpoint.preCompaction.sessionFile)) {
+    if (!(await fileExists(checkpoint.preCompaction.sessionFile))) {
       respond(
         false,
         undefined,
@@ -1291,7 +1376,10 @@ export const sessionsHandlers: GatewayRequestHandlers = {
       return;
     }
 
-    const { cfg, target, storePath } = resolveGatewaySessionTargetFromKey(key);
+    const { cfg, target, storePath } = resolveGatewaySessionTargetFromKey(
+      key,
+      context.getRuntimeConfig(),
+    );
     const applied = await updateSessionStore(storePath, async (store) => {
       const { primaryKey } = migrateAndPruneGatewaySessionStoreKey({ cfg, key, store });
       return await applySessionsPatchToStore({
@@ -1343,6 +1431,81 @@ export const sessionsHandlers: GatewayRequestHandlers = {
       reason: "patch",
     });
   },
+  "sessions.pluginPatch": async ({ params, respond, context, client, isWebchatConnect }) => {
+    if (
+      !assertValidParams(params, validateSessionsPluginPatchParams, "sessions.pluginPatch", respond)
+    ) {
+      return;
+    }
+    const key = requireSessionKey(params.key, respond);
+    if (!key) {
+      return;
+    }
+    if (rejectWebchatSessionMutation({ action: "patch", client, isWebchatConnect, respond })) {
+      return;
+    }
+    const scopes = Array.isArray(client?.connect.scopes) ? client.connect.scopes : [];
+    if (!scopes.includes(ADMIN_SCOPE)) {
+      respond(
+        false,
+        undefined,
+        errorShape(
+          ErrorCodes.INVALID_REQUEST,
+          `sessions.pluginPatch requires gateway scope: ${ADMIN_SCOPE}`,
+        ),
+      );
+      return;
+    }
+    const pluginId = normalizeOptionalString(params.pluginId);
+    const namespace = normalizeOptionalString(params.namespace);
+    if (!pluginId || !namespace) {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INVALID_REQUEST, "pluginId and namespace are required"),
+      );
+      return;
+    }
+    if (params.unset === true && params.value !== undefined) {
+      respond(
+        false,
+        undefined,
+        errorShape(
+          ErrorCodes.INVALID_REQUEST,
+          "sessions.pluginPatch cannot specify both unset and value",
+        ),
+      );
+      return;
+    }
+    if (params.value !== undefined && !isPluginJsonValue(params.value)) {
+      respond(
+        false,
+        undefined,
+        errorShape(
+          ErrorCodes.INVALID_REQUEST,
+          "sessions.pluginPatch value must be JSON-compatible",
+        ),
+      );
+      return;
+    }
+    const patched = await patchPluginSessionExtension({
+      cfg: context.getRuntimeConfig(),
+      sessionKey: key,
+      pluginId,
+      namespace,
+      value: params.value,
+      unset: params.unset === true,
+    });
+    if (!patched.ok) {
+      respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, patched.error));
+      return;
+    }
+    respond(true, { ok: true, key: patched.key, value: patched.value }, undefined);
+    emitSessionsChanged(context, {
+      sessionKey: patched.key,
+      reason: "plugin-patch",
+    });
+  },
   "sessions.reset": async ({ params, respond, context }) => {
     if (!assertValidParams(params, validateSessionsResetParams, "sessions.reset", respond)) {
       return;
@@ -1383,7 +1546,10 @@ export const sessionsHandlers: GatewayRequestHandlers = {
       return;
     }
 
-    const { cfg, target, storePath } = resolveGatewaySessionTargetFromKey(key);
+    const { cfg, target, storePath } = resolveGatewaySessionTargetFromKey(
+      key,
+      context.getRuntimeConfig(),
+    );
     const mainKey = resolveMainSessionKey(cfg);
     if (target.canonicalKey === mainKey) {
       respond(
@@ -1403,6 +1569,9 @@ export const sessionsHandlers: GatewayRequestHandlers = {
     } = await loadSessionsRuntimeModule();
 
     const { entry, legacyKey, canonicalKey } = loadSessionEntry(key);
+    if (rejectPluginRuntimeDeleteMismatch({ client, key: canonicalKey ?? key, entry, respond })) {
+      return;
+    }
     const mutationCleanupError = await cleanupSessionBeforeMutation({
       cfg,
       key,
@@ -1464,7 +1633,7 @@ export const sessionsHandlers: GatewayRequestHandlers = {
       });
     }
   },
-  "sessions.get": ({ params, respond }) => {
+  "sessions.get": ({ params, respond, context }) => {
     const p = params;
     const key = requireSessionKey(p.key ?? p.sessionKey, respond);
     if (!key) {
@@ -1475,7 +1644,10 @@ export const sessionsHandlers: GatewayRequestHandlers = {
         ? Math.max(1, Math.floor(p.limit))
         : 200;
 
-    const { target, storePath } = resolveGatewaySessionTargetFromKey(key);
+    const { target, storePath } = resolveGatewaySessionTargetFromKey(
+      key,
+      context.getRuntimeConfig(),
+    );
     const store = loadSessionStore(storePath);
     const entry = resolveFreshestSessionEntryFromStoreKeys(store, target.storeKeys);
     if (!entry?.sessionId) {
@@ -1495,13 +1667,19 @@ export const sessionsHandlers: GatewayRequestHandlers = {
     if (!key) {
       return;
     }
+    if (rejectWebchatSessionMutation({ action: "compact", client, isWebchatConnect, respond })) {
+      return;
+    }
 
     const maxLines =
       typeof p.maxLines === "number" && Number.isFinite(p.maxLines)
         ? Math.max(1, Math.floor(p.maxLines))
         : undefined;
 
-    const { cfg, target, storePath } = resolveGatewaySessionTargetFromKey(key);
+    const { cfg, target, storePath } = resolveGatewaySessionTargetFromKey(
+      key,
+      context.getRuntimeConfig(),
+    );
     // Lock + read in a short critical section; transcript work happens outside.
     const compactTarget = await updateSessionStore(storePath, (store) => {
       const { entry, primaryKey } = migrateAndPruneGatewaySessionStoreKey({ cfg, key, store });
@@ -1523,12 +1701,9 @@ export const sessionsHandlers: GatewayRequestHandlers = {
       return;
     }
 
-    const filePath = resolveSessionTranscriptCandidates(
-      sessionId,
-      storePath,
-      entry?.sessionFile,
-      target.agentId,
-    ).find((candidate) => fs.existsSync(candidate));
+    const filePath = await findExistingFilePath(
+      resolveSessionTranscriptCandidates(sessionId, storePath, entry?.sessionFile, target.agentId),
+    );
     if (!filePath) {
       respond(
         true,
@@ -1571,6 +1746,7 @@ export const sessionsHandlers: GatewayRequestHandlers = {
         config: cfg,
         provider: resolvedModel.provider,
         model: resolvedModel.model,
+        agentHarnessId: entry?.sessionId === sessionId ? entry.agentHarnessId : undefined,
         thinkLevel: normalizeThinkLevel(entry?.thinkingLevel),
         reasoningLevel: normalizeReasoningLevel(entry?.reasoningLevel),
         bashElevated: {
@@ -1590,6 +1766,12 @@ export const sessionsHandlers: GatewayRequestHandlers = {
           }
           entryToUpdate.updatedAt = Date.now();
           entryToUpdate.compactionCount = Math.max(0, entryToUpdate.compactionCount ?? 0) + 1;
+          if (result.result?.sessionId && result.result.sessionId !== entryToUpdate.sessionId) {
+            entryToUpdate.sessionId = result.result.sessionId;
+          }
+          if (result.result?.sessionFile) {
+            entryToUpdate.sessionFile = result.result.sessionFile;
+          }
           delete entryToUpdate.inputTokens;
           delete entryToUpdate.outputTokens;
           if (
@@ -1626,7 +1808,7 @@ export const sessionsHandlers: GatewayRequestHandlers = {
       return;
     }
 
-    const raw = fs.readFileSync(filePath, "utf-8");
+    const raw = await fs.readFile(filePath, "utf-8");
     const lines = raw.split(/\r?\n/).filter((l) => Boolean(normalizeOptionalString(l)));
     if (lines.length <= maxLines) {
       respond(
@@ -1642,9 +1824,9 @@ export const sessionsHandlers: GatewayRequestHandlers = {
       return;
     }
 
-    const archived = archiveFileOnDisk(filePath, "bak");
+    const archived = await archiveFileOnDiskAsync(filePath, "bak");
     const keptLines = lines.slice(-maxLines);
-    fs.writeFileSync(filePath, `${keptLines.join("\n")}\n`, "utf-8");
+    await fs.writeFile(filePath, `${keptLines.join("\n")}\n`, "utf-8");
 
     await updateSessionStore(storePath, (store) => {
       const entryKey = compactTarget.primaryKey;

@@ -8,6 +8,7 @@ import { resolveMainSessionKey } from "../config/sessions.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { logWarn } from "../logger.js";
 import { isTestDefaultMemorySlotDisabled } from "../plugins/config-state.js";
+import { defaultSlotIdForKey } from "../plugins/slots.js";
 import {
   normalizeOptionalLowercaseString,
   normalizeOptionalString,
@@ -27,7 +28,7 @@ import {
   resolveOpenAiCompatibleHttpOperatorScopes,
   resolveOpenAiCompatibleHttpSenderIsOwner,
 } from "./http-utils.js";
-import { resolveGatewayScopedTools } from "./tool-resolution.js";
+import { resolveGatewayScopedToolsAsync } from "./tool-resolution.js";
 
 const DEFAULT_BODY_BYTES = 2 * 1024 * 1024;
 const MEMORY_TOOL_NAMES = new Set(["memory_search", "memory_get"]);
@@ -193,7 +194,7 @@ export async function handleToolsInvokeHttpRequest(
           type: "invalid_request",
           message:
             `memory tools are disabled in tests${suffix}. ` +
-            'Enable by setting plugins.slots.memory="memory-core" (and ensure plugins.enabled is not false).',
+            `Enable by setting plugins.slots.memory="${defaultSlotIdForKey("memory")}" (and ensure plugins.enabled is not false).`,
         },
       });
       return true;
@@ -225,19 +226,25 @@ export async function handleToolsInvokeHttpRequest(
   // with the correct owner context and channel-action gates (e.g. Matrix set-profile)
   // work correctly for both owner and non-owner callers.
   const senderIsOwner = resolveOpenAiCompatibleHttpSenderIsOwner(req, requestAuth);
-  const { agentId, tools } = resolveGatewayScopedTools({
-    cfg,
-    sessionKey,
-    messageProvider: messageChannel ?? undefined,
-    accountId,
-    agentTo,
-    agentThreadId,
-    allowGatewaySubagentBinding: true,
-    allowMediaInvokeCommands: true,
-    surface: "http",
-    disablePluginTools: isKnownCoreToolId(toolName),
-    senderIsOwner,
-  });
+  const resolveTools = (disablePluginTools: boolean) =>
+    resolveGatewayScopedToolsAsync({
+      cfg,
+      sessionKey,
+      messageProvider: messageChannel ?? undefined,
+      accountId,
+      agentTo,
+      agentThreadId,
+      allowGatewaySubagentBinding: true,
+      allowMediaInvokeCommands: true,
+      surface: "http",
+      disablePluginTools,
+      senderIsOwner,
+    });
+  const knownCoreTool = isKnownCoreToolId(toolName);
+  let { agentId, tools } = await resolveTools(knownCoreTool);
+  if (knownCoreTool && !tools.some((candidate) => candidate.name === toolName)) {
+    ({ agentId, tools } = await resolveTools(false));
+  }
   const gatewayFiltered = applyOwnerOnlyToolPolicy(tools, senderIsOwner);
 
   const tool = gatewayFiltered.find((t) => t.name === toolName);

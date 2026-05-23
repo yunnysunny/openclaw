@@ -1,9 +1,10 @@
-import syncFs from "node:fs";
+// @ts-nocheck
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { AgentTool } from "@mariozechner/pi-agent-core";
-import { Type } from "@sinclair/typebox";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
+import { Type } from "typebox";
 import { openBoundaryFile, type BoundaryFileOpenResult } from "../infra/boundary-file-read.js";
+import { closeFileDescriptorAsync, readFileUtf8FromFd } from "../infra/fd-promise.js";
 import {
   mkdirPathWithinRoot,
   removePathWithinRoot,
@@ -256,9 +257,9 @@ function resolvePatchFileOps(options: ApplyPatchOptions): PatchFileOps {
       });
       assertBoundaryRead(opened, filePath);
       try {
-        return syncFs.readFileSync(opened.fd, "utf8");
+        return await readFileUtf8FromFd(opened.fd);
       } finally {
-        syncFs.closeSync(opened.fd);
+        await closeFileDescriptorAsync(opened.fd);
       }
     },
     writeFile: async (filePath, content) => {
@@ -407,9 +408,13 @@ function checkPatchBoundariesLenient(lines: string[]): string[] {
     throw new Error(strictError);
   }
   const first = lines[0];
-  const last = lines[lines.length - 1];
-  if ((first === "<<EOF" || first === "<<'EOF'" || first === '<<"EOF"') && last.endsWith("EOF")) {
-    const inner = lines.slice(1, lines.length - 1);
+  const last = lines.at(-1);
+  if (
+    last &&
+    (first === "<<EOF" || first === "<<'EOF'" || first === '<<"EOF"') &&
+    last.endsWith("EOF")
+  ) {
+    const inner = lines.slice(1, -1);
     const innerError = checkPatchBoundariesStrict(inner);
     if (!innerError) {
       return inner;

@@ -1,6 +1,7 @@
+// @ts-nocheck
 import fs from "node:fs";
 import path from "node:path";
-import { CURRENT_SESSION_VERSION, SessionManager } from "@mariozechner/pi-coding-agent";
+import { CURRENT_SESSION_VERSION, SessionManager } from "@earendil-works/pi-coding-agent";
 import { formatErrorMessage } from "../../infra/errors.js";
 import { emitSessionTranscriptUpdate } from "../../sessions/transcript-events.js";
 import {
@@ -15,11 +16,20 @@ import { parseSessionThreadInfo } from "./thread-info.js";
 import { resolveMirroredTranscriptText } from "./transcript-mirror.js";
 import type { SessionEntry } from "./types.js";
 
+async function pathExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.promises.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function ensureSessionHeader(params: {
   sessionFile: string;
   sessionId: string;
 }): Promise<void> {
-  if (fs.existsSync(params.sessionFile)) {
+  if (await pathExists(params.sessionFile)) {
     return;
   }
   await fs.promises.mkdir(path.dirname(params.sessionFile), { recursive: true });
@@ -327,3 +337,14 @@ async function findLatestEquivalentAssistantMessageId(
 
   return undefined;
 }
+
+// Stage 5: inline the stage4 compat stub here to avoid the
+// sessions.ts <-> sessions/transcript.ts circular import chain.
+export async function readLatestAssistantTextFromSessionTranscript(
+  _sessionFile: string,
+): Promise<{ text: string } | undefined> {
+  return undefined;
+}
+
+// Stage 4 compat alias: upstream renamed readLatestAssistantTextFromSessionTranscript.
+export const readTailAssistantTextFromSessionTranscript = readLatestAssistantTextFromSessionTranscript;

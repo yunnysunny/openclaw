@@ -1,12 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { afterAll, describe, expect, it, vi } from "vitest";
 import {
   bundledDistPluginFile,
   bundledPluginFile,
   bundledPluginRoot,
-} from "../../test/helpers/bundled-plugin-paths.js";
+} from "openclaw/plugin-sdk/test-fixtures";
+import { afterAll, describe, expect, it, vi } from "vitest";
 import { withEnv } from "../test-utils/env.js";
 import {
   buildPluginLoaderAliasMap,
@@ -21,6 +21,7 @@ import {
   resolveExtensionApiAlias,
   resolvePluginRuntimeModulePath,
   resolvePluginSdkAliasFile,
+  resolvePluginSdkAliasFileAsync,
   shouldPreferNativeJiti,
 } from "./sdk-alias.js";
 import {
@@ -54,6 +55,22 @@ function withCwd<T>(cwd: string, run: () => T): T {
     return run();
   } finally {
     cwdSpy.mockRestore();
+  }
+}
+
+function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
+  const originalPlatform = process.platform;
+  Object.defineProperty(process, "platform", {
+    configurable: true,
+    value: platform,
+  });
+  try {
+    return run();
+  } finally {
+    Object.defineProperty(process, "platform", {
+      configurable: true,
+      value: originalPlatform,
+    });
   }
 }
 
@@ -190,6 +207,28 @@ function writePluginEntry(root: string, relativePath: string) {
   return pluginEntry;
 }
 
+function writeInstalledPluginEntry(params: {
+  installRoot: string;
+  packageName: string;
+  entry?: string;
+}) {
+  const entry = params.entry ?? "dist/index.js";
+  const packageRoot = path.join(
+    params.installRoot,
+    "node_modules",
+    ...params.packageName.split("/"),
+  );
+  const pluginEntry = path.join(packageRoot, entry);
+  mkdirSafeDir(path.dirname(pluginEntry));
+  fs.writeFileSync(
+    path.join(packageRoot, "package.json"),
+    JSON.stringify({ name: params.packageName, type: "module" }, null, 2),
+    "utf-8",
+  );
+  fs.writeFileSync(pluginEntry, 'export const plugin = "installed";\n', "utf-8");
+  return { packageRoot, pluginEntry };
+}
+
 function createUserInstalledPluginSdkAliasFixture() {
   const { fixture, sourceRootAlias, sourceChannelRuntimePath } =
     createPluginSdkAliasTargetFixture();
@@ -221,6 +260,23 @@ function resolvePluginSdkAlias(params: {
       argv1: params.argv1,
     });
   return params.env ? withEnv(params.env, run) : run();
+}
+
+async function resolvePluginSdkAliasAsync(params: {
+  srcFile: string;
+  distFile: string;
+  modulePath: string;
+  argv1?: string;
+  env?: NodeJS.ProcessEnv;
+}) {
+  const run = () =>
+    resolvePluginSdkAliasFileAsync({
+      srcFile: params.srcFile,
+      distFile: params.distFile,
+      modulePath: params.modulePath,
+      argv1: params.argv1,
+    });
+  return params.env ? await withEnv(params.env, run) : await run();
 }
 
 function resolvePluginRuntimeModule(params: {
@@ -549,6 +605,105 @@ describe("plugin sdk alias helpers", () => {
     expect(subpaths).toEqual(["core", "qa-lab", "qa-runtime"]);
   });
 
+  it("adds the non-QA private Codex task runtime subpath only for trusted Codex plugins", () => {
+    const fixture = createPluginSdkAliasFixture({
+      packageExports: {
+        "./plugin-sdk/core": { default: "./dist/plugin-sdk/core.js" },
+      },
+    });
+    fs.rmSync(
+      path.join(fixture.root, "scripts", "lib", "plugin-sdk-private-local-only-subpaths.json"),
+      { force: true },
+    );
+    fs.writeFileSync(
+      path.join(fixture.root, "src", "plugin-sdk", "codex-native-task-runtime.ts"),
+      "export const codexNativeTaskRuntime = true;\n",
+      "utf-8",
+    );
+    fs.writeFileSync(
+      path.join(fixture.root, "src", "plugin-sdk", "codex-mcp-projection.ts"),
+      "export const codexMcpProjection = true;\n",
+      "utf-8",
+    );
+    fs.writeFileSync(
+      path.join(fixture.root, "src", "plugin-sdk", "qa-runtime.ts"),
+      "export const qaRuntime = true;\n",
+      "utf-8",
+    );
+    const sourceCodexEntry = writePluginEntry(
+      fixture.root,
+      bundledPluginFile("codex", "src/index.ts"),
+    );
+    const sourceOtherEntry = writePluginEntry(
+      fixture.root,
+      bundledPluginFile("demo", "src/index.ts"),
+    );
+    const { packageRoot: installedCodexRoot, pluginEntry: installedCodexEntry } =
+      writeInstalledPluginEntry({
+        installRoot: path.join(makeTempDir(), ".openclaw", "npm"),
+        packageName: "@openclaw/codex",
+      });
+    const { packageRoot: installedOtherRoot, pluginEntry: installedOtherEntry } =
+      writeInstalledPluginEntry({
+        installRoot: path.join(makeTempDir(), ".openclaw", "npm"),
+        packageName: "@openclaw/demo",
+      });
+    const shadowCodexRoot = path.join(makeTempDir(), ".openclaw", "extensions", "codex-shadow");
+    const shadowCodexEntry = path.join(shadowCodexRoot, "dist", "index.js");
+    mkdirSafeDir(path.dirname(shadowCodexEntry));
+    fs.writeFileSync(
+      path.join(shadowCodexRoot, "package.json"),
+      JSON.stringify({ name: "@openclaw/codex", type: "module" }, null, 2),
+      "utf-8",
+    );
+    fs.writeFileSync(shadowCodexEntry, 'export const plugin = "shadow";\n', "utf-8");
+
+    const codexSubpaths = withEnv({ OPENCLAW_ENABLE_PRIVATE_QA_CLI: undefined }, () =>
+      listPluginSdkExportedSubpaths({
+        modulePath: sourceCodexEntry,
+      }),
+    );
+    const otherSubpaths = withEnv({ OPENCLAW_ENABLE_PRIVATE_QA_CLI: undefined }, () =>
+      listPluginSdkExportedSubpaths({
+        modulePath: sourceOtherEntry,
+      }),
+    );
+    const installedCodexSubpaths = withCwd(installedCodexRoot, () =>
+      withEnv({ OPENCLAW_ENABLE_PRIVATE_QA_CLI: undefined }, () =>
+        listPluginSdkExportedSubpaths({
+          modulePath: installedCodexEntry,
+          argv1: path.join(fixture.root, "openclaw.mjs"),
+        }),
+      ),
+    );
+    const installedOtherSubpaths = withCwd(installedOtherRoot, () =>
+      withEnv({ OPENCLAW_ENABLE_PRIVATE_QA_CLI: undefined }, () =>
+        listPluginSdkExportedSubpaths({
+          modulePath: installedOtherEntry,
+          argv1: path.join(fixture.root, "openclaw.mjs"),
+        }),
+      ),
+    );
+    const shadowCodexSubpaths = withCwd(shadowCodexRoot, () =>
+      withEnv({ OPENCLAW_ENABLE_PRIVATE_QA_CLI: undefined }, () =>
+        listPluginSdkExportedSubpaths({
+          modulePath: shadowCodexEntry,
+          argv1: path.join(fixture.root, "openclaw.mjs"),
+        }),
+      ),
+    );
+
+    expect(codexSubpaths).toEqual(["codex-mcp-projection", "codex-native-task-runtime", "core"]);
+    expect(installedCodexSubpaths).toEqual([
+      "codex-mcp-projection",
+      "codex-native-task-runtime",
+      "core",
+    ]);
+    expect(otherSubpaths).toEqual(["core"]);
+    expect(installedOtherSubpaths).toEqual(["core"]);
+    expect(shadowCodexSubpaths).toEqual(["core"]);
+  });
+
   it("does not reuse a non-private cached subpath list after private qa gets enabled", () => {
     const fixture = createPluginSdkAliasFixture({
       packageExports: {
@@ -680,6 +835,157 @@ describe("plugin sdk alias helpers", () => {
     expect(fs.realpathSync(aliases["openclaw/plugin-sdk/qa-lab"] ?? "")).toBe(
       fs.realpathSync(distQaLabPath),
     );
+  });
+
+  it("aliases non-QA private plugin-sdk subpaths for trusted Codex runtime loading", () => {
+    const fixture = createPluginSdkAliasFixture({
+      packageExports: {
+        "./plugin-sdk/core": { default: "./dist/plugin-sdk/core.js" },
+      },
+    });
+    const sourceRootAlias = path.join(fixture.root, "src", "plugin-sdk", "root-alias.cjs");
+    const sourceCodexNativeTaskRuntimePath = path.join(
+      fixture.root,
+      "src",
+      "plugin-sdk",
+      "codex-native-task-runtime.ts",
+    );
+    const sourceCodexMcpProjectionPath = path.join(
+      fixture.root,
+      "src",
+      "plugin-sdk",
+      "codex-mcp-projection.ts",
+    );
+    const distRootAlias = path.join(fixture.root, "dist", "plugin-sdk", "root-alias.cjs");
+    const distCodexNativeTaskRuntimePath = path.join(
+      fixture.root,
+      "dist",
+      "plugin-sdk",
+      "codex-native-task-runtime.js",
+    );
+    const distCodexMcpProjectionPath = path.join(
+      fixture.root,
+      "dist",
+      "plugin-sdk",
+      "codex-mcp-projection.js",
+    );
+    const sourceQaRuntimePath = path.join(fixture.root, "src", "plugin-sdk", "qa-runtime.ts");
+    fs.writeFileSync(sourceRootAlias, "module.exports = {};\n", "utf-8");
+    fs.writeFileSync(distRootAlias, "module.exports = {};\n", "utf-8");
+    fs.rmSync(
+      path.join(fixture.root, "scripts", "lib", "plugin-sdk-private-local-only-subpaths.json"),
+      { force: true },
+    );
+    fs.writeFileSync(
+      sourceCodexNativeTaskRuntimePath,
+      "export const codexNativeTaskRuntime = true;\n",
+      "utf-8",
+    );
+    fs.writeFileSync(
+      sourceCodexMcpProjectionPath,
+      "export const codexMcpProjection = true;\n",
+      "utf-8",
+    );
+    fs.writeFileSync(
+      distCodexNativeTaskRuntimePath,
+      "export const codexNativeTaskRuntime = true;\n",
+      "utf-8",
+    );
+    fs.writeFileSync(
+      distCodexMcpProjectionPath,
+      "export const codexMcpProjection = true;\n",
+      "utf-8",
+    );
+    fs.writeFileSync(sourceQaRuntimePath, "export const qaRuntime = true;\n", "utf-8");
+    const sourcePluginEntry = writePluginEntry(
+      fixture.root,
+      bundledPluginFile("codex", "src/index.ts"),
+    );
+    const sourceOtherPluginEntry = writePluginEntry(
+      fixture.root,
+      bundledPluginFile("demo", "src/index.ts"),
+    );
+    const { packageRoot: installedCodexRoot, pluginEntry: installedCodexEntry } =
+      writeInstalledPluginEntry({
+        installRoot: path.join(makeTempDir(), ".openclaw", "npm"),
+        packageName: "@openclaw/codex",
+      });
+    const { packageRoot: installedOtherRoot, pluginEntry: installedOtherEntry } =
+      writeInstalledPluginEntry({
+        installRoot: path.join(makeTempDir(), ".openclaw", "npm"),
+        packageName: "@openclaw/demo",
+      });
+    const shadowCodexRoot = path.join(makeTempDir(), ".openclaw", "extensions", "codex-shadow");
+    const shadowCodexEntry = path.join(shadowCodexRoot, "dist", "index.js");
+    mkdirSafeDir(path.dirname(shadowCodexEntry));
+    fs.writeFileSync(
+      path.join(shadowCodexRoot, "package.json"),
+      JSON.stringify({ name: "@openclaw/codex", type: "module" }, null, 2),
+      "utf-8",
+    );
+    fs.writeFileSync(shadowCodexEntry, 'export const plugin = "shadow";\n', "utf-8");
+
+    const aliases = withEnv(
+      { OPENCLAW_ENABLE_PRIVATE_QA_CLI: undefined, NODE_ENV: undefined },
+      () => buildPluginLoaderAliasMap(sourcePluginEntry),
+    );
+    const otherAliases = withEnv(
+      { OPENCLAW_ENABLE_PRIVATE_QA_CLI: undefined, NODE_ENV: undefined },
+      () => buildPluginLoaderAliasMap(sourceOtherPluginEntry),
+    );
+    const installedAliases = withCwd(installedCodexRoot, () =>
+      withEnv({ OPENCLAW_ENABLE_PRIVATE_QA_CLI: undefined, NODE_ENV: undefined }, () =>
+        buildPluginLoaderAliasMap(
+          installedCodexEntry,
+          path.join(fixture.root, "openclaw.mjs"),
+          undefined,
+          "dist",
+        ),
+      ),
+    );
+    const shadowCodexAliases = withCwd(shadowCodexRoot, () =>
+      withEnv({ OPENCLAW_ENABLE_PRIVATE_QA_CLI: undefined, NODE_ENV: undefined }, () =>
+        buildPluginLoaderAliasMap(
+          shadowCodexEntry,
+          path.join(fixture.root, "openclaw.mjs"),
+          undefined,
+          "dist",
+        ),
+      ),
+    );
+    const installedOtherAliases = withCwd(installedOtherRoot, () =>
+      withEnv({ OPENCLAW_ENABLE_PRIVATE_QA_CLI: undefined, NODE_ENV: undefined }, () =>
+        buildPluginLoaderAliasMap(
+          installedOtherEntry,
+          path.join(fixture.root, "openclaw.mjs"),
+          undefined,
+          "dist",
+        ),
+      ),
+    );
+
+    expect(fs.realpathSync(aliases["openclaw/plugin-sdk"] ?? "")).toBe(
+      fs.realpathSync(sourceRootAlias),
+    );
+    expect(fs.realpathSync(aliases["openclaw/plugin-sdk/codex-native-task-runtime"] ?? "")).toBe(
+      fs.realpathSync(sourceCodexNativeTaskRuntimePath),
+    );
+    expect(fs.realpathSync(aliases["openclaw/plugin-sdk/codex-mcp-projection"] ?? "")).toBe(
+      fs.realpathSync(sourceCodexMcpProjectionPath),
+    );
+    expect(
+      fs.realpathSync(installedAliases["openclaw/plugin-sdk/codex-native-task-runtime"] ?? ""),
+    ).toBe(fs.realpathSync(distCodexNativeTaskRuntimePath));
+    expect(
+      fs.realpathSync(installedAliases["openclaw/plugin-sdk/codex-mcp-projection"] ?? ""),
+    ).toBe(fs.realpathSync(distCodexMcpProjectionPath));
+    expect(aliases["openclaw/plugin-sdk/qa-runtime"]).toBeUndefined();
+    expect(otherAliases["openclaw/plugin-sdk/codex-native-task-runtime"]).toBeUndefined();
+    expect(otherAliases["openclaw/plugin-sdk/codex-mcp-projection"]).toBeUndefined();
+    expect(installedOtherAliases["openclaw/plugin-sdk/codex-native-task-runtime"]).toBeUndefined();
+    expect(installedOtherAliases["openclaw/plugin-sdk/codex-mcp-projection"]).toBeUndefined();
+    expect(shadowCodexAliases["openclaw/plugin-sdk/codex-native-task-runtime"]).toBeUndefined();
+    expect(shadowCodexAliases["openclaw/plugin-sdk/codex-mcp-projection"]).toBeUndefined();
   });
 
   it("applies explicit dist resolution to plugin-sdk subpath aliases too", () => {
@@ -841,10 +1147,12 @@ describe("plugin sdk alias helpers", () => {
   });
 
   it("uses transpiled Jiti loads for source TypeScript plugin entries", () => {
-    expect(shouldPreferNativeJiti("/repo/dist/plugins/runtime/index.js")).toBe(true);
-    expect(
-      shouldPreferNativeJiti(`/repo/${bundledPluginFile("discord", "src/channel.runtime.ts")}`),
-    ).toBe(false);
+    withPlatform("linux", () => {
+      expect(shouldPreferNativeJiti("/repo/dist/plugins/runtime/index.js")).toBe(true);
+      expect(
+        shouldPreferNativeJiti(`/repo/${bundledPluginFile("discord", "src/channel.runtime.ts")}`),
+      ).toBe(false);
+    });
   });
 
   it("disables native Jiti loads under Bun even for built JavaScript entries", () => {
@@ -870,7 +1178,7 @@ describe("plugin sdk alias helpers", () => {
     }
   });
 
-  it("disables native Jiti loads on Windows even for built JavaScript entries", () => {
+  it("disables native Jiti loads on Windows for built JavaScript entries", () => {
     const originalPlatform = process.platform;
     Object.defineProperty(process, "platform", {
       configurable: true,
@@ -890,7 +1198,7 @@ describe("plugin sdk alias helpers", () => {
     }
   });
 
-  it("keeps plugin loader dist shortcuts off on Windows", () => {
+  it("keeps plugin loader dist shortcuts on transpiled Jiti on Windows", () => {
     const originalPlatform = process.platform;
     Object.defineProperty(process, "platform", {
       configurable: true,
@@ -916,12 +1224,16 @@ describe("plugin sdk alias helpers", () => {
     }
   });
 
-  it("keeps bundled plugin dist modules on the aliased Jiti path", () => {
+  it("prefers native jiti for bundled plugin dist .js modules, keeps .ts on aliased path", () => {
+    // Built .js/.mjs/.cjs files under dist/extensions/ should now delegate
+    // to shouldPreferNativeJiti() — which returns true on Node for
+    // compiled artifacts, avoiding the slow jiti transform path.
     expect(
       resolvePluginLoaderJitiTryNative(`/repo/${bundledDistPluginFile("browser", "index.js")}`, {
         preferBuiltDist: true,
       }),
-    ).toBe(false);
+    ).toBe(true);
+    // TypeScript source files still need jiti's transform pipeline.
     expect(
       resolvePluginLoaderJitiTryNative(`/repo/${bundledDistPluginFile("browser", "helper.ts")}`, {
         preferBuiltDist: true,
@@ -1010,22 +1322,23 @@ describe("plugin sdk alias helpers", () => {
   });
 
   it("detects bundled plugin extension paths across source and dist roots", () => {
+    const repoRoot = path.join(path.parse(process.cwd()).root, "repo");
     expect(
       isBundledPluginExtensionPath({
-        modulePath: "/repo/extensions/demo/api.js",
-        openClawPackageRoot: "/repo",
+        modulePath: path.join(repoRoot, "extensions", "demo", "api.js"),
+        openClawPackageRoot: repoRoot,
       }),
     ).toBe(true);
     expect(
       isBundledPluginExtensionPath({
-        modulePath: "/repo/dist/extensions/demo/api.js",
-        openClawPackageRoot: "/repo",
+        modulePath: path.join(repoRoot, "dist", "extensions", "demo", "api.js"),
+        openClawPackageRoot: repoRoot,
       }),
     ).toBe(true);
     expect(
       isBundledPluginExtensionPath({
-        modulePath: "/repo/vendor/demo/api.js",
-        openClawPackageRoot: "/repo",
+        modulePath: path.join(repoRoot, "vendor", "demo", "api.js"),
+        openClawPackageRoot: repoRoot,
       }),
     ).toBe(false);
   });
@@ -1059,7 +1372,7 @@ describe("plugin sdk alias helpers", () => {
     fs.writeFileSync(jitiBaseFile, "export {};\n", "utf-8");
     fs.writeFileSync(
       path.join(copiedSourceDir, "channel.runtime.ts"),
-      `import { resolveOutboundSendDep } from "@openclaw/plugin-sdk/infra-runtime";
+      `import { resolveOutboundSendDep } from "@openclaw/plugin-sdk/outbound-send-deps";
 
 export const syntheticRuntimeMarker = {
   resolveOutboundSendDep,
@@ -1067,7 +1380,7 @@ export const syntheticRuntimeMarker = {
 `,
       "utf-8",
     );
-    const copiedChannelRuntimeShim = path.join(copiedPluginSdkDir, "infra-runtime.ts");
+    const copiedChannelRuntimeShim = path.join(copiedPluginSdkDir, "outbound-send-deps.ts");
     fs.writeFileSync(
       copiedChannelRuntimeShim,
       `export function resolveOutboundSendDep() {
@@ -1084,20 +1397,26 @@ export const syntheticRuntimeMarker = {
       ...buildPluginLoaderJitiOptions({}),
       tryNative: false,
     });
-    expect(() => withoutAlias(copiedChannelRuntime)).toThrow();
+    let loadError: unknown;
+    try {
+      withoutAlias(copiedChannelRuntime);
+    } catch (error) {
+      loadError = error;
+    }
+    expect(loadError).toBeInstanceOf(Error);
+    expect((loadError as Error).message).toContain("outbound-send-deps");
 
     const withAlias = createJiti(jitiBaseUrl, {
       ...buildPluginLoaderJitiOptions({
-        "openclaw/plugin-sdk/infra-runtime": copiedChannelRuntimeShim,
-        "@openclaw/plugin-sdk/infra-runtime": copiedChannelRuntimeShim,
+        "openclaw/plugin-sdk/outbound-send-deps": copiedChannelRuntimeShim,
+        "@openclaw/plugin-sdk/outbound-send-deps": copiedChannelRuntimeShim,
       }),
       tryNative: false,
     });
-    expect(withAlias(copiedChannelRuntime)).toMatchObject({
-      syntheticRuntimeMarker: {
-        resolveOutboundSendDep: expect.any(Function),
-      },
-    });
+    const loadedRuntime = withAlias(copiedChannelRuntime) as {
+      syntheticRuntimeMarker?: { resolveOutboundSendDep?: unknown };
+    };
+    expect(typeof loadedRuntime.syntheticRuntimeMarker?.resolveOutboundSendDep).toBe("function");
   }, 240_000);
 
   it.each([
@@ -1261,5 +1580,60 @@ describe("buildPluginLoaderAliasMap memoization", () => {
     expect(second).toEqual(first);
     // Same key set
     expect(Object.keys(second).toSorted()).toEqual(Object.keys(first).toSorted());
+  });
+
+  it("resolvePluginSdkAliasFileAsync matches sync resolution", async () => {
+    const fixture = createPluginSdkAliasFixture();
+    const modulePath = path.join(fixture.root, "src", "plugins", "loader.ts");
+    const argv1 = path.join(fixture.root, "node_modules", ".bin", "openclaw");
+    const syncResolved = resolvePluginSdkAlias({
+      srcFile: "index.ts",
+      distFile: "index.js",
+      modulePath,
+      argv1,
+      env: { NODE_ENV: undefined },
+    });
+    const asyncResolved = await resolvePluginSdkAliasAsync({
+      srcFile: "index.ts",
+      distFile: "index.js",
+      modulePath,
+      argv1,
+      env: { NODE_ENV: undefined },
+    });
+    expect(asyncResolved).toBe(syncResolved);
+  });
+});
+
+describe("buildPluginLoaderJitiOptions", () => {
+  it("pre-normalizes and marks alias maps for Jiti", () => {
+    const marker = Symbol.for("pathe:normalizedAlias");
+    const aliasMap = {
+      "openclaw/plugin-sdk/core": "/repo/src/plugin-sdk/core.ts",
+      "openclaw/plugin-sdk": "/repo/src/plugin-sdk/root-alias.cjs",
+      "@openclaw/plugin-sdk": "/repo/src/plugin-sdk/root-alias.cjs",
+    };
+
+    const first = buildPluginLoaderJitiOptions(aliasMap).alias as Record<string, string>;
+    const second = buildPluginLoaderJitiOptions({ ...aliasMap }).alias as Record<string, string>;
+
+    expect(second).toBe(first);
+    expect((first as Record<symbol, unknown>)[marker]).toBe(true);
+    expect(Object.prototype.propertyIsEnumerable.call(first, marker)).toBe(false);
+  });
+
+  it("applies Jiti alias-target normalization before caching", () => {
+    const aliasMap = {
+      alpha: "/repo/alpha",
+      beta: "alpha/sub",
+    };
+
+    const alias = buildPluginLoaderJitiOptions(aliasMap).alias as Record<string, string>;
+
+    expect(alias).not.toBe(aliasMap);
+    expect(alias.beta).toBe("/repo/alpha/sub");
+  });
+
+  it("does not attach an empty alias map", () => {
+    expect(buildPluginLoaderJitiOptions({})).not.toHaveProperty("alias");
   });
 });

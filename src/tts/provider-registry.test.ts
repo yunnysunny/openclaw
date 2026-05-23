@@ -4,11 +4,12 @@ import { createEmptyPluginRegistry } from "../plugins/registry-empty.js";
 import type { SpeechProviderPlugin } from "../plugins/types.js";
 
 const resolveRuntimePluginRegistryMock = vi.fn();
-const loadPluginManifestRegistryMock = vi.fn(() => ({
+const loadPluginManifestRegistrySyncMock = vi.fn(() => ({
   plugins: [
     { id: "elevenlabs", origin: "bundled", contracts: { speechProviders: [{}] } },
     { id: "microsoft", origin: "bundled", contracts: { speechProviders: [{}] } },
     { id: "openai", origin: "bundled", contracts: { speechProviders: [{}] } },
+    { id: "tts-local-cli", origin: "bundled", contracts: { speechProviders: [{}] } },
   ],
 }));
 
@@ -18,8 +19,9 @@ vi.mock("../plugins/loader.js", () => ({
 }));
 
 vi.mock("../plugins/manifest-registry.js", () => ({
-  loadPluginManifestRegistry: (...args: Parameters<typeof loadPluginManifestRegistryMock>) =>
-    loadPluginManifestRegistryMock(...args),
+  loadPluginManifestRegistrySync: (
+    ...args: Parameters<typeof loadPluginManifestRegistrySyncMock>
+  ) => loadPluginManifestRegistrySyncMock(...args),
 }));
 
 let getSpeechProvider: typeof import("./provider-registry.js").getSpeechProvider;
@@ -55,7 +57,7 @@ describe("speech provider registry", () => {
   beforeEach(() => {
     resolveRuntimePluginRegistryMock.mockReset();
     resolveRuntimePluginRegistryMock.mockReturnValue(undefined);
-    loadPluginManifestRegistryMock.mockClear();
+    loadPluginManifestRegistrySyncMock.mockClear();
   });
   it("uses active plugin speech providers without reloading plugins", () => {
     resolveRuntimePluginRegistryMock.mockReturnValue({
@@ -120,9 +122,11 @@ describe("speech provider registry", () => {
             elevenlabs: { enabled: true },
             microsoft: { enabled: true },
             openai: { enabled: true },
+            "tts-local-cli": { enabled: true },
           },
         },
       },
+      activate: false,
     });
   });
 

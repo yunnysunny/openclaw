@@ -1,25 +1,48 @@
 import fs from "node:fs";
 import path from "node:path";
-import { matchBoundaryFileOpenFailure, openBoundaryFileSync } from "../infra/boundary-file-read.js";
+import {
+  matchBoundaryFileOpenFailure,
+  openBoundaryFile,
+  openBoundaryFileSync,
+} from "../infra/boundary-file-read.js";
+import { resolveBoundaryPathSync } from "../infra/boundary-path.js";
+import { closeFileDescriptorAsync, readFileUtf8FromFd } from "../infra/fd-promise.js";
 import {
   normalizeLowercaseStringOrEmpty,
   normalizeOptionalString,
 } from "../shared/string-coerce.js";
 import { resolveUserPath } from "../utils.js";
-import { detectBundleManifestFormat, loadBundleManifest } from "./bundle-manifest.js";
+import {
+  detectBundleManifestFormat,
+  detectBundleManifestFormatAsync,
+  loadBundleManifest,
+  loadBundleManifestAsync,
+} from "./bundle-manifest.js";
 import type { PluginBundleFormat, PluginDiagnostic, PluginFormat } from "./manifest-types.js";
 import {
   DEFAULT_PLUGIN_ENTRY_CANDIDATES,
   getPackageManifestMetadata,
   loadPluginManifest,
+  loadPluginManifestAsync,
   type PluginManifest,
   resolvePackageExtensionEntries,
   type OpenClawPackageManifest,
   type PackageManifest,
 } from "./manifest.js";
-import { formatPosixMode, isPathInside, safeRealpathSync, safeStatSync } from "./path-safety.js";
+import {
+  formatPosixMode,
+  isPathInside,
+  safeRealpath,
+  safeRealpathSync,
+  safeStatSync,
+} from "./path-safety.js";
 import type { PluginOrigin } from "./plugin-origin.types.js";
-import { resolvePluginCacheInputs, resolvePluginSourceRoots } from "./roots.js";
+import {
+  resolvePluginCacheInputs,
+  resolvePluginCacheInputsAsync,
+  resolvePluginSourceRoots,
+  resolvePluginSourceRootsAsync,
+} from "./roots.js";
 
 const EXTENSION_EXTS = new Set([".ts", ".js", ".mts", ".cts", ".mjs", ".cjs"]);
 const SCANNED_DIRECTORY_IGNORE_NAMES = new Set([
@@ -112,6 +135,34 @@ function buildSharedDiscoveryCacheKey(params: {
   env: NodeJS.ProcessEnv;
 }): string {
   const roots = resolvePluginSourceRoots({ env: params.env });
+  const configExtensionsRoot = roots.global ?? "";
+  const bundledRoot = roots.stock ?? "";
+  const ownershipUid = params.ownershipUid ?? currentUid();
+  return `shared::${ownershipUid ?? "none"}::${configExtensionsRoot}::${bundledRoot}`;
+}
+
+async function buildScopedDiscoveryCacheKeyAsync(params: {
+  workspaceDir?: string;
+  extraPaths?: string[];
+  ownershipUid?: number | null;
+  env: NodeJS.ProcessEnv;
+}): Promise<string> {
+  const { roots, loadPaths } = await resolvePluginCacheInputsAsync({
+    workspaceDir: params.workspaceDir,
+    loadPaths: params.extraPaths,
+    env: params.env,
+  });
+  const workspaceKey = roots.workspace ?? "";
+  const bundledRoot = roots.stock ?? "";
+  const ownershipUid = params.ownershipUid ?? currentUid();
+  return `scoped::${workspaceKey}::${bundledRoot}::${ownershipUid ?? "none"}::${JSON.stringify(loadPaths)}`;
+}
+
+async function buildSharedDiscoveryCacheKeyAsync(params: {
+  ownershipUid?: number | null;
+  env: NodeJS.ProcessEnv;
+}): Promise<string> {
+  const roots = await resolvePluginSourceRootsAsync({ env: params.env });
   const configExtensionsRoot = roots.global ?? "";
   const bundledRoot = roots.stock ?? "";
   const ownershipUid = params.ownershipUid ?? currentUid();
@@ -611,6 +662,212 @@ function resolvePackageEntrySource(params: {
   return openCandidate(source);
 }
 
+function isTypeScriptPackageEntry(entryPath: string): boolean {
+  return [".ts", ".mts", ".cts"].includes(normalizeLowercaseStringOrEmpty(path.extname(entryPath)));
+}
+
+function shouldInferBuiltRuntimeEntry(origin: PluginOrigin): boolean {
+  return origin === "config" || origin === "global";
+}
+
+function resolveSafePackageEntry(params: {
+  packageDir: string;
+  entryPath: string;
+  sourceLabel: string;
+  diagnostics: PluginDiagnostic[];
+  rejectHardlinks?: boolean;
+}): { relativePath: string; existingSource?: string } | null {
+  const absolutePath = path.resolve(params.packageDir, params.entryPath);
+  if (fs.existsSync(absolutePath)) {
+    const existingSource = resolvePackageEntrySource({
+      packageDir: params.packageDir,
+      entryPath: params.entryPath,
+      sourceLabel: params.sourceLabel,
+      diagnostics: params.diagnostics,
+      rejectHardlinks: params.rejectHardlinks,
+    });
+    if (!existingSource) {
+      return null;
+    }
+    return {
+      relativePath: path.relative(params.packageDir, absolutePath).replace(/\\/g, "/"),
+      existingSource,
+    };
+  }
+
+  try {
+    resolveBoundaryPathSync({
+      absolutePath,
+      rootPath: params.packageDir,
+      boundaryLabel: "plugin package directory",
+    });
+  } catch {
+    params.diagnostics.push({
+      level: "error",
+      message: `extension entry escapes package directory: ${params.entryPath}`,
+      source: params.sourceLabel,
+    });
+    return null;
+  }
+  return { relativePath: path.relative(params.packageDir, absolutePath).replace(/\\/g, "/") };
+}
+
+function listBuiltRuntimeEntryCandidates(entryPath: string): string[] {
+  if (!isTypeScriptPackageEntry(entryPath)) {
+    return [];
+  }
+  const normalized = entryPath.replace(/\\/g, "/");
+  const withoutExtension = normalized.replace(/\.[^.]+$/u, "");
+  const normalizedRelative = normalized.replace(/^\.\//u, "");
+  const distWithoutExtension = normalizedRelative.startsWith("src/")
+    ? `./dist/${normalizedRelative.slice("src/".length).replace(/\.[^.]+$/u, "")}`
+    : `./dist/${withoutExtension.replace(/^\.\//u, "")}`;
+  const withJavaScriptExtensions = (basePath: string) => [
+    `${basePath}.js`,
+    `${basePath}.mjs`,
+    `${basePath}.cjs`,
+  ];
+  const candidates = [
+    ...withJavaScriptExtensions(distWithoutExtension),
+    ...withJavaScriptExtensions(withoutExtension),
+  ];
+  return [...new Set(candidates)].filter((candidate) => candidate !== normalized);
+}
+
+function resolveExistingPackageEntrySource(params: {
+  packageDir: string;
+  entryPath: string;
+  sourceLabel: string;
+  diagnostics: PluginDiagnostic[];
+  rejectHardlinks?: boolean;
+}): string | null {
+  const source = path.resolve(params.packageDir, params.entryPath);
+  if (!fs.existsSync(source)) {
+    return null;
+  }
+  return resolvePackageEntrySource(params);
+}
+
+function normalizePackageManifestStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map((entry) => normalizeOptionalString(entry) ?? "").filter(Boolean);
+}
+
+function resolvePackageRuntimeEntrySource(params: {
+  packageDir: string;
+  entryPath: string;
+  runtimeEntryPath?: string;
+  origin: PluginOrigin;
+  sourceLabel: string;
+  diagnostics: PluginDiagnostic[];
+  rejectHardlinks?: boolean;
+}): string | null {
+  const safeEntry = resolveSafePackageEntry({
+    packageDir: params.packageDir,
+    entryPath: params.entryPath,
+    sourceLabel: params.sourceLabel,
+    diagnostics: params.diagnostics,
+    rejectHardlinks: params.rejectHardlinks,
+  });
+  if (!safeEntry) {
+    return null;
+  }
+
+  if (params.runtimeEntryPath) {
+    const runtimeSource = resolvePackageEntrySource({
+      packageDir: params.packageDir,
+      entryPath: params.runtimeEntryPath,
+      sourceLabel: params.sourceLabel,
+      diagnostics: params.diagnostics,
+      rejectHardlinks: params.rejectHardlinks,
+    });
+    if (runtimeSource) {
+      return runtimeSource;
+    }
+  }
+
+  if (shouldInferBuiltRuntimeEntry(params.origin)) {
+    for (const candidate of listBuiltRuntimeEntryCandidates(safeEntry.relativePath)) {
+      const runtimeSource = resolveExistingPackageEntrySource({
+        packageDir: params.packageDir,
+        entryPath: candidate,
+        sourceLabel: params.sourceLabel,
+        diagnostics: params.diagnostics,
+        rejectHardlinks: params.rejectHardlinks,
+      });
+      if (runtimeSource) {
+        return runtimeSource;
+      }
+    }
+  }
+
+  if (safeEntry.existingSource) {
+    return safeEntry.existingSource;
+  }
+
+  return resolvePackageEntrySource({
+    packageDir: params.packageDir,
+    entryPath: params.entryPath,
+    sourceLabel: params.sourceLabel,
+    diagnostics: params.diagnostics,
+    rejectHardlinks: params.rejectHardlinks,
+  });
+}
+
+function resolvePackageSetupSource(params: {
+  packageDir: string;
+  manifest: PackageManifest | null;
+  origin: PluginOrigin;
+  sourceLabel: string;
+  diagnostics: PluginDiagnostic[];
+  rejectHardlinks?: boolean;
+}): string | null {
+  const packageManifest = getPackageManifestMetadata(params.manifest ?? undefined);
+  const setupEntryPath = normalizeOptionalString(packageManifest?.setupEntry);
+  if (!setupEntryPath) {
+    return null;
+  }
+  return resolvePackageRuntimeEntrySource({
+    packageDir: params.packageDir,
+    entryPath: setupEntryPath,
+    runtimeEntryPath: normalizeOptionalString(packageManifest?.runtimeSetupEntry),
+    origin: params.origin,
+    sourceLabel: params.sourceLabel,
+    diagnostics: params.diagnostics,
+    rejectHardlinks: params.rejectHardlinks,
+  });
+}
+
+function resolvePackageRuntimeExtensionEntries(params: {
+  packageDir: string;
+  manifest: PackageManifest | null;
+  extensions: readonly string[];
+  origin: PluginOrigin;
+  sourceLabel: string;
+  diagnostics: PluginDiagnostic[];
+  rejectHardlinks?: boolean;
+}): string[] {
+  const packageManifest = getPackageManifestMetadata(params.manifest ?? undefined);
+  const runtimeExtensions = normalizePackageManifestStringList(packageManifest?.runtimeExtensions);
+  return params.extensions.flatMap((entryPath, index) => {
+    const source = resolvePackageRuntimeEntrySource({
+      packageDir: params.packageDir,
+      entryPath,
+      runtimeEntryPath:
+        runtimeExtensions.length === params.extensions.length
+          ? runtimeExtensions[index]
+          : undefined,
+      origin: params.origin,
+      sourceLabel: params.sourceLabel,
+      diagnostics: params.diagnostics,
+      rejectHardlinks: params.rejectHardlinks,
+    });
+    return source ? [source] : [];
+  });
+}
+
 function discoverInDirectory(params: {
   dir: string;
   origin: PluginOrigin;
@@ -678,30 +935,26 @@ function discoverInDirectory(params: {
     const extensionResolution = resolvePackageExtensionEntries(manifest ?? undefined);
     const extensions = extensionResolution.status === "ok" ? extensionResolution.entries : [];
     const manifestId = resolveIdHintManifestId(fullPath, rejectHardlinks);
-    const setupEntryPath = getPackageManifestMetadata(manifest ?? undefined)?.setupEntry;
-    const setupSource =
-      typeof setupEntryPath === "string" && setupEntryPath.trim().length > 0
-        ? resolvePackageEntrySource({
-            packageDir: fullPath,
-            entryPath: setupEntryPath,
-            sourceLabel: fullPath,
-            diagnostics: params.diagnostics,
-            rejectHardlinks,
-          })
-        : null;
+    const setupSource = resolvePackageSetupSource({
+      packageDir: fullPath,
+      manifest,
+      origin: params.origin,
+      sourceLabel: fullPath,
+      diagnostics: params.diagnostics,
+      rejectHardlinks,
+    });
 
     if (extensions.length > 0) {
-      for (const extPath of extensions) {
-        const resolved = resolvePackageEntrySource({
-          packageDir: fullPath,
-          entryPath: extPath,
-          sourceLabel: fullPath,
-          diagnostics: params.diagnostics,
-          rejectHardlinks,
-        });
-        if (!resolved) {
-          continue;
-        }
+      const resolvedRuntimeSources = resolvePackageRuntimeExtensionEntries({
+        packageDir: fullPath,
+        manifest,
+        extensions,
+        origin: params.origin,
+        sourceLabel: fullPath,
+        diagnostics: params.diagnostics,
+        rejectHardlinks,
+      });
+      for (const resolved of resolvedRuntimeSources) {
         addCandidate({
           candidates: params.candidates,
           diagnostics: params.diagnostics,
@@ -818,30 +1071,26 @@ function discoverFromPath(params: {
     const extensionResolution = resolvePackageExtensionEntries(manifest ?? undefined);
     const extensions = extensionResolution.status === "ok" ? extensionResolution.entries : [];
     const manifestId = resolveIdHintManifestId(resolved, rejectHardlinks);
-    const setupEntryPath = getPackageManifestMetadata(manifest ?? undefined)?.setupEntry;
-    const setupSource =
-      typeof setupEntryPath === "string" && setupEntryPath.trim().length > 0
-        ? resolvePackageEntrySource({
-            packageDir: resolved,
-            entryPath: setupEntryPath,
-            sourceLabel: resolved,
-            diagnostics: params.diagnostics,
-            rejectHardlinks,
-          })
-        : null;
+    const setupSource = resolvePackageSetupSource({
+      packageDir: resolved,
+      manifest,
+      origin: params.origin,
+      sourceLabel: resolved,
+      diagnostics: params.diagnostics,
+      rejectHardlinks,
+    });
 
     if (extensions.length > 0) {
-      for (const extPath of extensions) {
-        const source = resolvePackageEntrySource({
-          packageDir: resolved,
-          entryPath: extPath,
-          sourceLabel: resolved,
-          diagnostics: params.diagnostics,
-          rejectHardlinks,
-        });
-        if (!source) {
-          continue;
-        }
+      const resolvedRuntimeSources = resolvePackageRuntimeExtensionEntries({
+        packageDir: resolved,
+        manifest,
+        extensions,
+        origin: params.origin,
+        sourceLabel: resolved,
+        diagnostics: params.diagnostics,
+        rejectHardlinks,
+      });
+      for (const source of resolvedRuntimeSources) {
         addCandidate({
           candidates: params.candidates,
           diagnostics: params.diagnostics,
@@ -998,6 +1247,804 @@ export function discoverOpenClawPlugins(params: {
       // Keep auto-discovered global extensions behind bundled plugins.
       // Users can still intentionally override via plugins.load.paths (origin=config).
       discoverInDirectory({
+        dir: roots.global,
+        origin: "global",
+        ownershipUid: params.ownershipUid,
+        candidates: result.candidates,
+        diagnostics: result.diagnostics,
+        seen,
+      });
+      return result;
+    },
+  });
+  const result = createDiscoveryResult();
+  const seenSources = new Set<string>();
+  mergeDiscoveryResult(result, scopedResult, seenSources);
+  mergeDiscoveryResult(result, sharedResult, seenSources);
+  return result;
+}
+
+async function discoveryPathExists(targetPath: string): Promise<boolean> {
+  try {
+    await fs.promises.access(targetPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function readPackageManifestAsync(
+  dir: string,
+  rejectHardlinks = true,
+): Promise<PackageManifest | null> {
+  const manifestPath = path.join(dir, "package.json");
+  const opened = await openBoundaryFile({
+    absolutePath: manifestPath,
+    rootPath: dir,
+    boundaryLabel: "plugin package directory",
+    rejectHardlinks,
+  });
+  if (!opened.ok) {
+    return null;
+  }
+  try {
+    const text = await readFileUtf8FromFd(opened.fd);
+    return JSON.parse(text) as PackageManifest;
+  } catch {
+    return null;
+  } finally {
+    await closeFileDescriptorAsync(opened.fd);
+  }
+}
+
+async function resolveIdHintManifestIdAsync(
+  rootDir: string,
+  rejectHardlinks: boolean,
+): Promise<string | undefined> {
+  const manifest = await loadPluginManifestAsync(rootDir, rejectHardlinks);
+  return manifest.ok ? manifest.manifest.id : undefined;
+}
+
+async function checkSourceEscapesRootAsync(params: {
+  source: string;
+  rootDir: string;
+}): Promise<CandidateBlockIssue | null> {
+  const sourceRealPath = await safeRealpath(params.source);
+  const rootRealPath = await safeRealpath(params.rootDir);
+  if (!sourceRealPath || !rootRealPath) {
+    return null;
+  }
+  if (isPathInside(rootRealPath, sourceRealPath)) {
+    return null;
+  }
+  return {
+    reason: "source_escapes_root",
+    sourcePath: params.source,
+    rootPath: params.rootDir,
+    targetPath: params.source,
+    sourceRealPath,
+    rootRealPath,
+  };
+}
+
+async function checkPathStatAndPermissionsAsync(params: {
+  source: string;
+  rootDir: string;
+  origin: PluginOrigin;
+  uid: number | null;
+}): Promise<CandidateBlockIssue | null> {
+  if (process.platform === "win32") {
+    return null;
+  }
+  const pathsToCheck = [params.rootDir, params.source];
+  const seen = new Set<string>();
+  for (const targetPath of pathsToCheck) {
+    const normalized = path.resolve(targetPath);
+    if (seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    let stat: fs.Stats;
+    try {
+      stat = await fs.promises.stat(targetPath);
+    } catch {
+      return {
+        reason: "path_stat_failed",
+        sourcePath: params.source,
+        rootPath: params.rootDir,
+        targetPath,
+      };
+    }
+    let modeBits = stat.mode & 0o777;
+    if ((modeBits & 0o002) !== 0 && params.origin === "bundled") {
+      try {
+        await fs.promises.chmod(targetPath, modeBits & ~0o022);
+        let repairedStat: fs.Stats;
+        try {
+          repairedStat = await fs.promises.stat(targetPath);
+        } catch {
+          return {
+            reason: "path_stat_failed",
+            sourcePath: params.source,
+            rootPath: params.rootDir,
+            targetPath,
+          };
+        }
+        stat = repairedStat;
+        modeBits = repairedStat.mode & 0o777;
+      } catch {
+        // Fall through to the normal block path below when repair is not possible.
+      }
+    }
+    if ((modeBits & 0o002) !== 0) {
+      return {
+        reason: "path_world_writable",
+        sourcePath: params.source,
+        rootPath: params.rootDir,
+        targetPath,
+        modeBits,
+      };
+    }
+    if (
+      params.origin !== "bundled" &&
+      params.uid !== null &&
+      typeof stat.uid === "number" &&
+      stat.uid !== params.uid &&
+      stat.uid !== 0
+    ) {
+      return {
+        reason: "path_suspicious_ownership",
+        sourcePath: params.source,
+        rootPath: params.rootDir,
+        targetPath,
+        foundUid: stat.uid,
+        expectedUid: params.uid,
+      };
+    }
+  }
+  return null;
+}
+
+async function findCandidateBlockIssueAsync(params: {
+  source: string;
+  rootDir: string;
+  origin: PluginOrigin;
+  ownershipUid?: number | null;
+}): Promise<CandidateBlockIssue | null> {
+  const escaped = await checkSourceEscapesRootAsync({
+    source: params.source,
+    rootDir: params.rootDir,
+  });
+  if (escaped) {
+    return escaped;
+  }
+  return checkPathStatAndPermissionsAsync({
+    source: params.source,
+    rootDir: params.rootDir,
+    origin: params.origin,
+    uid: currentUid(params.ownershipUid),
+  });
+}
+
+async function isUnsafePluginCandidateAsync(params: {
+  source: string;
+  rootDir: string;
+  origin: PluginOrigin;
+  diagnostics: PluginDiagnostic[];
+  ownershipUid?: number | null;
+}): Promise<boolean> {
+  const issue = await findCandidateBlockIssueAsync({
+    source: params.source,
+    rootDir: params.rootDir,
+    origin: params.origin,
+    ownershipUid: params.ownershipUid,
+  });
+  if (!issue) {
+    return false;
+  }
+  params.diagnostics.push({
+    level: "warn",
+    source: issue.targetPath,
+    message: formatCandidateBlockMessage(issue),
+  });
+  return true;
+}
+
+async function addCandidateAsync(params: {
+  candidates: PluginCandidate[];
+  diagnostics: PluginDiagnostic[];
+  seen: Set<string>;
+  idHint: string;
+  source: string;
+  setupSource?: string;
+  rootDir: string;
+  origin: PluginOrigin;
+  format?: PluginFormat;
+  bundleFormat?: PluginBundleFormat;
+  ownershipUid?: number | null;
+  workspaceDir?: string;
+  manifest?: PackageManifest | null;
+  packageDir?: string;
+  bundledManifest?: PluginManifest;
+  bundledManifestPath?: string;
+}): Promise<void> {
+  const resolved = path.resolve(params.source);
+  if (params.seen.has(resolved)) {
+    return;
+  }
+  const resolvedRoot = (await safeRealpath(params.rootDir)) ?? path.resolve(params.rootDir);
+  if (
+    await isUnsafePluginCandidateAsync({
+      source: resolved,
+      rootDir: resolvedRoot,
+      origin: params.origin,
+      diagnostics: params.diagnostics,
+      ownershipUid: params.ownershipUid,
+    })
+  ) {
+    return;
+  }
+  params.seen.add(resolved);
+  const manifest = params.manifest ?? null;
+  params.candidates.push({
+    idHint: params.idHint,
+    source: resolved,
+    setupSource: params.setupSource,
+    rootDir: resolvedRoot,
+    origin: params.origin,
+    format: params.format ?? "openclaw",
+    bundleFormat: params.bundleFormat,
+    workspaceDir: params.workspaceDir,
+    packageName: normalizeOptionalString(manifest?.name),
+    packageVersion: normalizeOptionalString(manifest?.version),
+    packageDescription: normalizeOptionalString(manifest?.description),
+    packageDir: params.packageDir,
+    packageManifest: getPackageManifestMetadata(manifest ?? undefined),
+    bundledManifest: params.bundledManifest,
+    bundledManifestPath: params.bundledManifestPath,
+  });
+}
+
+async function resolvesToSameDirectoryAsync(left?: string, right?: string): Promise<boolean> {
+  if (!left || !right) {
+    return false;
+  }
+  const leftRealPath = await safeRealpath(left);
+  const rightRealPath = await safeRealpath(right);
+  if (leftRealPath && rightRealPath) {
+    return leftRealPath === rightRealPath;
+  }
+  return path.resolve(left) === path.resolve(right);
+}
+
+async function resolvePackageEntrySourceAsync(params: {
+  packageDir: string;
+  entryPath: string;
+  sourceLabel: string;
+  diagnostics: PluginDiagnostic[];
+  rejectHardlinks?: boolean;
+}): Promise<string | null> {
+  const source = path.resolve(params.packageDir, params.entryPath);
+  const rejectHardlinks = params.rejectHardlinks ?? true;
+  const candidates = [source];
+  const openCandidate = async (absolutePath: string): Promise<string | null> => {
+    const opened = await openBoundaryFile({
+      absolutePath,
+      rootPath: params.packageDir,
+      boundaryLabel: "plugin package directory",
+      rejectHardlinks,
+    });
+    if (!opened.ok) {
+      return matchBoundaryFileOpenFailure(opened, {
+        path: () => null,
+        io: () => {
+          params.diagnostics.push({
+            level: "warn",
+            message: `extension entry unreadable (I/O error): ${params.entryPath}`,
+            source: params.sourceLabel,
+          });
+          return null;
+        },
+        fallback: () => {
+          params.diagnostics.push({
+            level: "error",
+            message: `extension entry escapes package directory: ${params.entryPath}`,
+            source: params.sourceLabel,
+          });
+          return null;
+        },
+      });
+    }
+    const safeSource = opened.path;
+    await closeFileDescriptorAsync(opened.fd);
+    return safeSource;
+  };
+  if (!rejectHardlinks) {
+    const builtCandidate = source.replace(/\.[^.]+$/u, ".js");
+    if (builtCandidate !== source) {
+      candidates.push(builtCandidate);
+    }
+  }
+
+  for (const candidate of new Set(candidates)) {
+    if (!(await discoveryPathExists(candidate))) {
+      continue;
+    }
+    return openCandidate(candidate);
+  }
+
+  return openCandidate(source);
+}
+
+async function discoverBundleInRootAsync(params: {
+  rootDir: string;
+  origin: PluginOrigin;
+  ownershipUid?: number | null;
+  workspaceDir?: string;
+  candidates: PluginCandidate[];
+  diagnostics: PluginDiagnostic[];
+  seen: Set<string>;
+}): Promise<"added" | "invalid" | "none"> {
+  const bundleFormat = await detectBundleManifestFormatAsync(params.rootDir);
+  if (!bundleFormat) {
+    return "none";
+  }
+  const bundleManifest = await loadBundleManifestAsync({
+    rootDir: params.rootDir,
+    bundleFormat,
+    rejectHardlinks: params.origin !== "bundled",
+  });
+  if (!bundleManifest.ok) {
+    params.diagnostics.push({
+      level: "error",
+      message: bundleManifest.error,
+      source: bundleManifest.manifestPath,
+    });
+    return "invalid";
+  }
+  await addCandidateAsync({
+    candidates: params.candidates,
+    diagnostics: params.diagnostics,
+    seen: params.seen,
+    idHint: bundleManifest.manifest.id,
+    source: params.rootDir,
+    rootDir: params.rootDir,
+    origin: params.origin,
+    format: "bundle",
+    bundleFormat,
+    ownershipUid: params.ownershipUid,
+    workspaceDir: params.workspaceDir,
+  });
+  return "added";
+}
+
+async function discoverInDirectoryAsync(params: {
+  dir: string;
+  origin: PluginOrigin;
+  ownershipUid?: number | null;
+  workspaceDir?: string;
+  candidates: PluginCandidate[];
+  diagnostics: PluginDiagnostic[];
+  seen: Set<string>;
+  recurseDirectories?: boolean;
+  skipDirectories?: Set<string>;
+  visitedDirectories?: Set<string>;
+}): Promise<void> {
+  if (!(await discoveryPathExists(params.dir))) {
+    return;
+  }
+  const resolvedDir = (await safeRealpath(params.dir)) ?? path.resolve(params.dir);
+  if (params.recurseDirectories) {
+    if (params.visitedDirectories?.has(resolvedDir)) {
+      return;
+    }
+    params.visitedDirectories?.add(resolvedDir);
+  }
+  let entries: fs.Dirent[];
+  try {
+    entries = await fs.promises.readdir(params.dir, { withFileTypes: true });
+  } catch (err) {
+    params.diagnostics.push({
+      level: "warn",
+      message: `failed to read extensions dir: ${params.dir} (${String(err)})`,
+      source: params.dir,
+    });
+    return;
+  }
+
+  for (const entry of entries) {
+    const fullPath = path.join(params.dir, entry.name);
+    if (entry.isFile()) {
+      if (!isExtensionFile(fullPath)) {
+        continue;
+      }
+      await addCandidateAsync({
+        candidates: params.candidates,
+        diagnostics: params.diagnostics,
+        seen: params.seen,
+        idHint: path.basename(entry.name, path.extname(entry.name)),
+        source: fullPath,
+        rootDir: path.dirname(fullPath),
+        origin: params.origin,
+        ownershipUid: params.ownershipUid,
+        workspaceDir: params.workspaceDir,
+      });
+    }
+    if (!entry.isDirectory()) {
+      continue;
+    }
+    if (params.skipDirectories?.has(entry.name)) {
+      continue;
+    }
+    if (shouldIgnoreScannedDirectory(entry.name)) {
+      continue;
+    }
+
+    const rejectHardlinks = params.origin !== "bundled";
+    const manifest = await readPackageManifestAsync(fullPath, rejectHardlinks);
+    const extensionResolution = resolvePackageExtensionEntries(manifest ?? undefined);
+    const extensions = extensionResolution.status === "ok" ? extensionResolution.entries : [];
+    const manifestId = await resolveIdHintManifestIdAsync(fullPath, rejectHardlinks);
+    const setupEntryPath = getPackageManifestMetadata(manifest ?? undefined)?.setupEntry;
+    const setupSource =
+      typeof setupEntryPath === "string" && setupEntryPath.trim().length > 0
+        ? await resolvePackageEntrySourceAsync({
+            packageDir: fullPath,
+            entryPath: setupEntryPath,
+            sourceLabel: fullPath,
+            diagnostics: params.diagnostics,
+            rejectHardlinks,
+          })
+        : null;
+
+    if (extensions.length > 0) {
+      for (const extPath of extensions) {
+        const resolved = await resolvePackageEntrySourceAsync({
+          packageDir: fullPath,
+          entryPath: extPath,
+          sourceLabel: fullPath,
+          diagnostics: params.diagnostics,
+          rejectHardlinks,
+        });
+        if (!resolved) {
+          continue;
+        }
+        await addCandidateAsync({
+          candidates: params.candidates,
+          diagnostics: params.diagnostics,
+          seen: params.seen,
+          idHint: deriveIdHint({
+            filePath: resolved,
+            manifestId,
+            packageName: manifest?.name,
+            hasMultipleExtensions: extensions.length > 1,
+          }),
+          source: resolved,
+          ...(setupSource ? { setupSource } : {}),
+          rootDir: fullPath,
+          origin: params.origin,
+          ownershipUid: params.ownershipUid,
+          workspaceDir: params.workspaceDir,
+          manifest,
+          packageDir: fullPath,
+        });
+      }
+      continue;
+    }
+
+    const bundleDiscovery = await discoverBundleInRootAsync({
+      rootDir: fullPath,
+      origin: params.origin,
+      ownershipUid: params.ownershipUid,
+      workspaceDir: params.workspaceDir,
+      candidates: params.candidates,
+      diagnostics: params.diagnostics,
+      seen: params.seen,
+    });
+    if (bundleDiscovery === "added") {
+      continue;
+    }
+
+    let indexFile: string | undefined;
+    for (const candidate of DEFAULT_PLUGIN_ENTRY_CANDIDATES) {
+      const candidatePath = path.join(fullPath, candidate);
+      if (await discoveryPathExists(candidatePath)) {
+        indexFile = candidatePath;
+        break;
+      }
+    }
+    if (indexFile && isExtensionFile(indexFile)) {
+      await addCandidateAsync({
+        candidates: params.candidates,
+        diagnostics: params.diagnostics,
+        seen: params.seen,
+        idHint: entry.name,
+        source: indexFile,
+        ...(setupSource ? { setupSource } : {}),
+        rootDir: fullPath,
+        origin: params.origin,
+        ownershipUid: params.ownershipUid,
+        workspaceDir: params.workspaceDir,
+        manifest,
+        packageDir: fullPath,
+      });
+      continue;
+    }
+
+    if (params.recurseDirectories) {
+      await discoverInDirectoryAsync({
+        ...params,
+        dir: fullPath,
+      });
+    }
+  }
+}
+
+async function discoverFromPathAsync(params: {
+  rawPath: string;
+  origin: PluginOrigin;
+  ownershipUid?: number | null;
+  workspaceDir?: string;
+  env: NodeJS.ProcessEnv;
+  candidates: PluginCandidate[];
+  diagnostics: PluginDiagnostic[];
+  seen: Set<string>;
+}): Promise<void> {
+  const resolved = resolveUserPath(params.rawPath, params.env);
+  if (!(await discoveryPathExists(resolved))) {
+    params.diagnostics.push({
+      level: "error",
+      message: `plugin path not found: ${resolved}`,
+      source: resolved,
+    });
+    return;
+  }
+
+  let stat: fs.Stats;
+  try {
+    stat = await fs.promises.stat(resolved);
+  } catch {
+    params.diagnostics.push({
+      level: "error",
+      message: `plugin path not found: ${resolved}`,
+      source: resolved,
+    });
+    return;
+  }
+
+  if (stat.isFile()) {
+    if (!isExtensionFile(resolved)) {
+      params.diagnostics.push({
+        level: "error",
+        message: `plugin path is not a supported file: ${resolved}`,
+        source: resolved,
+      });
+      return;
+    }
+    await addCandidateAsync({
+      candidates: params.candidates,
+      diagnostics: params.diagnostics,
+      seen: params.seen,
+      idHint: path.basename(resolved, path.extname(resolved)),
+      source: resolved,
+      rootDir: path.dirname(resolved),
+      origin: params.origin,
+      ownershipUid: params.ownershipUid,
+      workspaceDir: params.workspaceDir,
+    });
+    return;
+  }
+
+  if (stat.isDirectory()) {
+    const rejectHardlinks = params.origin !== "bundled";
+    const manifest = await readPackageManifestAsync(resolved, rejectHardlinks);
+    const extensionResolution = resolvePackageExtensionEntries(manifest ?? undefined);
+    const extensions = extensionResolution.status === "ok" ? extensionResolution.entries : [];
+    const manifestId = await resolveIdHintManifestIdAsync(resolved, rejectHardlinks);
+    const setupEntryPath = getPackageManifestMetadata(manifest ?? undefined)?.setupEntry;
+    const setupSource =
+      typeof setupEntryPath === "string" && setupEntryPath.trim().length > 0
+        ? await resolvePackageEntrySourceAsync({
+            packageDir: resolved,
+            entryPath: setupEntryPath,
+            sourceLabel: resolved,
+            diagnostics: params.diagnostics,
+            rejectHardlinks,
+          })
+        : null;
+
+    if (extensions.length > 0) {
+      for (const extPath of extensions) {
+        const source = await resolvePackageEntrySourceAsync({
+          packageDir: resolved,
+          entryPath: extPath,
+          sourceLabel: resolved,
+          diagnostics: params.diagnostics,
+          rejectHardlinks,
+        });
+        if (!source) {
+          continue;
+        }
+        await addCandidateAsync({
+          candidates: params.candidates,
+          diagnostics: params.diagnostics,
+          seen: params.seen,
+          idHint: deriveIdHint({
+            filePath: source,
+            manifestId,
+            packageName: manifest?.name,
+            hasMultipleExtensions: extensions.length > 1,
+          }),
+          source,
+          ...(setupSource ? { setupSource } : {}),
+          rootDir: resolved,
+          origin: params.origin,
+          ownershipUid: params.ownershipUid,
+          workspaceDir: params.workspaceDir,
+          manifest,
+          packageDir: resolved,
+        });
+      }
+      return;
+    }
+
+    const bundleDiscovery = await discoverBundleInRootAsync({
+      rootDir: resolved,
+      origin: params.origin,
+      ownershipUid: params.ownershipUid,
+      workspaceDir: params.workspaceDir,
+      candidates: params.candidates,
+      diagnostics: params.diagnostics,
+      seen: params.seen,
+    });
+    if (bundleDiscovery === "added") {
+      return;
+    }
+
+    let indexFile: string | undefined;
+    for (const candidate of DEFAULT_PLUGIN_ENTRY_CANDIDATES) {
+      const candidatePath = path.join(resolved, candidate);
+      if (await discoveryPathExists(candidatePath)) {
+        indexFile = candidatePath;
+        break;
+      }
+    }
+
+    if (indexFile && isExtensionFile(indexFile)) {
+      await addCandidateAsync({
+        candidates: params.candidates,
+        diagnostics: params.diagnostics,
+        seen: params.seen,
+        idHint: path.basename(resolved),
+        source: indexFile,
+        ...(setupSource ? { setupSource } : {}),
+        rootDir: resolved,
+        origin: params.origin,
+        ownershipUid: params.ownershipUid,
+        workspaceDir: params.workspaceDir,
+        manifest,
+        packageDir: resolved,
+      });
+      return;
+    }
+
+    await discoverInDirectoryAsync({
+      dir: resolved,
+      origin: params.origin,
+      ownershipUid: params.ownershipUid,
+      workspaceDir: params.workspaceDir,
+      candidates: params.candidates,
+      diagnostics: params.diagnostics,
+      seen: params.seen,
+    });
+  }
+}
+
+async function getCachedDiscoveryResultAsync(params: {
+  cacheEnabled: boolean;
+  cacheKey: string;
+  env: NodeJS.ProcessEnv;
+  load: () => Promise<PluginDiscoveryResult>;
+}): Promise<PluginDiscoveryResult> {
+  const ttl = resolveDiscoveryCacheMs(params.env);
+  if (params.cacheEnabled) {
+    const cached = discoveryCache.get(params.cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.result;
+    }
+  }
+  const result = await params.load();
+  if (params.cacheEnabled && ttl > 0) {
+    discoveryCache.set(params.cacheKey, { expiresAt: Date.now() + ttl, result });
+  }
+  return result;
+}
+
+export async function discoverOpenClawPluginsAsync(params: {
+  workspaceDir?: string;
+  extraPaths?: string[];
+  ownershipUid?: number | null;
+  cache?: boolean;
+  env?: NodeJS.ProcessEnv;
+}): Promise<PluginDiscoveryResult> {
+  const env = params.env ?? process.env;
+  const cacheEnabled = params.cache !== false && shouldUseDiscoveryCache(env);
+  const workspaceDir = normalizeOptionalString(params.workspaceDir);
+  const workspaceRoot = workspaceDir ? resolveUserPath(workspaceDir, env) : undefined;
+  const roots = await resolvePluginSourceRootsAsync({ workspaceDir: workspaceRoot, env });
+  const scopedCacheKey = await buildScopedDiscoveryCacheKeyAsync({
+    workspaceDir: params.workspaceDir,
+    extraPaths: params.extraPaths,
+    ownershipUid: params.ownershipUid,
+    env,
+  });
+  const sharedCacheKey = await buildSharedDiscoveryCacheKeyAsync({
+    ownershipUid: params.ownershipUid,
+    env,
+  });
+  const scopedResult = await getCachedDiscoveryResultAsync({
+    cacheEnabled,
+    cacheKey: scopedCacheKey,
+    env,
+    load: async () => {
+      const result = createDiscoveryResult();
+      const seen = new Set<string>();
+      const extra = params.extraPaths ?? [];
+      for (const extraPath of extra) {
+        if (typeof extraPath !== "string") {
+          continue;
+        }
+        const trimmed = extraPath.trim();
+        if (!trimmed) {
+          continue;
+        }
+        await discoverFromPathAsync({
+          rawPath: trimmed,
+          origin: "config",
+          ownershipUid: params.ownershipUid,
+          workspaceDir,
+          env,
+          candidates: result.candidates,
+          diagnostics: result.diagnostics,
+          seen,
+        });
+      }
+      const workspaceMatchesBundledRoot = await resolvesToSameDirectoryAsync(
+        workspaceRoot,
+        roots.stock,
+      );
+      if (roots.workspace && workspaceRoot && !workspaceMatchesBundledRoot) {
+        await discoverInDirectoryAsync({
+          dir: roots.workspace,
+          origin: "workspace",
+          ownershipUid: params.ownershipUid,
+          workspaceDir: workspaceRoot,
+          candidates: result.candidates,
+          diagnostics: result.diagnostics,
+          seen,
+        });
+      }
+      return result;
+    },
+  });
+  const sharedResult = await getCachedDiscoveryResultAsync({
+    cacheEnabled,
+    cacheKey: sharedCacheKey,
+    env,
+    load: async () => {
+      const result = createDiscoveryResult();
+      const seen = new Set<string>();
+      if (roots.stock) {
+        await discoverInDirectoryAsync({
+          dir: roots.stock,
+          origin: "bundled",
+          ownershipUid: params.ownershipUid,
+          candidates: result.candidates,
+          diagnostics: result.diagnostics,
+          seen,
+        });
+      }
+      await discoverInDirectoryAsync({
         dir: roots.global,
         origin: "global",
         ownershipUid: params.ownershipUid,

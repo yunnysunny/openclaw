@@ -1,11 +1,12 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  loadPluginManifestRegistry: vi.fn(),
+  loadPluginManifestRegistrySync: vi.fn(),
 }));
 
 vi.mock("./manifest-registry.js", () => ({
-  loadPluginManifestRegistry: (...args: unknown[]) => mocks.loadPluginManifestRegistry(...args),
+  loadPluginManifestRegistrySync: (...args: unknown[]) =>
+    mocks.loadPluginManifestRegistrySync(...args),
   resolveManifestContractPluginIds: vi.fn(),
 }));
 
@@ -18,8 +19,8 @@ describe("resolveManifestDeclaredWebProviderCandidatePluginIds", () => {
   });
 
   beforeEach(() => {
-    mocks.loadPluginManifestRegistry.mockReset();
-    mocks.loadPluginManifestRegistry.mockReturnValue({
+    mocks.loadPluginManifestRegistrySync.mockReset();
+    mocks.loadPluginManifestRegistrySync.mockReturnValue({
       plugins: [
         {
           id: "alpha",
@@ -69,6 +70,6 @@ describe("resolveManifestDeclaredWebProviderCandidatePluginIds", () => {
         configKey: "webSearch",
       }),
     ).toEqual(["alpha", "beta"]);
-    expect(mocks.loadPluginManifestRegistry).toHaveBeenCalledTimes(1);
+    expect(mocks.loadPluginManifestRegistrySync).toHaveBeenCalledTimes(1);
   });
 });

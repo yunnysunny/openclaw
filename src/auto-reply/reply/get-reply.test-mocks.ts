@@ -30,6 +30,14 @@ vi.mock("../../agents/timeout.js", () => ({
 
 vi.mock("../../agents/workspace.js", () => ({
   DEFAULT_AGENT_WORKSPACE_DIR: "/tmp/workspace",
+  DEFAULT_AGENTS_FILENAME: "AGENTS.md",
+  DEFAULT_SOUL_FILENAME: "SOUL.md",
+  DEFAULT_TOOLS_FILENAME: "TOOLS.md",
+  DEFAULT_IDENTITY_FILENAME: "IDENTITY.md",
+  DEFAULT_USER_FILENAME: "USER.md",
+  DEFAULT_HEARTBEAT_FILENAME: "HEARTBEAT.md",
+  DEFAULT_BOOTSTRAP_FILENAME: "BOOTSTRAP.md",
+  DEFAULT_MEMORY_FILENAME: "MEMORY.md",
   ensureAgentWorkspace: vi.fn(async () => ({ dir: "/tmp/workspace" })),
 }));
 
@@ -38,7 +46,7 @@ vi.mock("../../channels/model-overrides.js", () => ({
 }));
 
 vi.mock("../../config/config.js", () => ({
-  loadConfig: vi.fn(() => ({})),
+  getRuntimeConfig: vi.fn(() => ({})),
 }));
 
 vi.mock("../../runtime.js", () => ({

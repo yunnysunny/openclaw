@@ -7,7 +7,7 @@ import {
   resolveEffectivePluginActivationState,
   resolveMemorySlotDecision,
 } from "../plugins/config-state.js";
-import { loadPluginManifestRegistry } from "../plugins/manifest-registry.js";
+import { loadPluginManifestRegistrySync } from "../plugins/manifest-registry.js";
 import { hasKind } from "../plugins/slots.js";
 import { isPathInsideWithRealpath } from "../security/scan-paths.js";
 
@@ -26,7 +26,7 @@ export function resolvePluginHookDirs(params: {
   if (!workspaceDir) {
     return [];
   }
-  const registry = loadPluginManifestRegistry({
+  const registry = loadPluginManifestRegistrySync({
     workspaceDir,
     config: params.config,
     // Hook discovery should reflect freshly written bundle manifests immediately.

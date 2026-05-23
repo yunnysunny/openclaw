@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { PluginAutoEnableResult } from "../../config/plugin-auto-enable.js";
 
-const loadPluginManifestRegistry = vi.hoisted(() => vi.fn());
+const loadPluginManifestRegistrySync = vi.hoisted(() => vi.fn());
 const listChannelPluginCatalogEntries = vi.hoisted(() => vi.fn((): unknown[] => []));
 const listChatChannels = vi.hoisted(() => vi.fn((): Array<Record<string, string>> => []));
 const applyPluginAutoEnable = vi.hoisted(() =>
@@ -15,7 +15,7 @@ const applyPluginAutoEnable = vi.hoisted(() =>
 );
 
 vi.mock("../../plugins/manifest-registry.js", () => ({
-  loadPluginManifestRegistry: (...args: unknown[]) => loadPluginManifestRegistry(...args),
+  loadPluginManifestRegistrySync: (...args: unknown[]) => loadPluginManifestRegistrySync(...args),
 }));
 
 vi.mock("../../config/plugin-auto-enable.js", () => ({
@@ -35,7 +35,7 @@ import { listManifestInstalledChannelIds, resolveChannelSetupEntries } from "./d
 
 describe("listManifestInstalledChannelIds", () => {
   beforeEach(() => {
-    loadPluginManifestRegistry.mockReset().mockReturnValue({
+    loadPluginManifestRegistrySync.mockReset().mockReturnValue({
       plugins: [],
       diagnostics: [],
     });
@@ -61,7 +61,7 @@ describe("listManifestInstalledChannelIds", () => {
         slack: ["slack configured"],
       },
     });
-    loadPluginManifestRegistry.mockReturnValue({
+    loadPluginManifestRegistrySync.mockReturnValue({
       plugins: [{ id: "slack", channels: ["slack"] }],
       diagnostics: [],
     });
@@ -76,7 +76,7 @@ describe("listManifestInstalledChannelIds", () => {
       config: {},
       env: { OPENCLAW_HOME: "/tmp/home" },
     });
-    expect(loadPluginManifestRegistry).toHaveBeenCalledWith({
+    expect(loadPluginManifestRegistrySync).toHaveBeenCalledWith({
       config: autoEnabledConfig,
       workspaceDir: "/tmp/workspace",
       env: { OPENCLAW_HOME: "/tmp/home" },
@@ -142,16 +142,23 @@ describe("listManifestInstalledChannelIds", () => {
       env: { OPENCLAW_HOME: "/tmp/home" } as NodeJS.ProcessEnv,
     });
 
-    expect(resolved.entries).toEqual([
-      expect.objectContaining({
-        id: "telegram",
-        meta: expect.objectContaining({
-          label: "Telegram",
-          selectionLabel: "Telegram",
-          blurb: "bot token",
-          docsPath: "/channels/telegram",
-        }),
-      }),
-    ]);
+    expect(resolved).toStrictEqual({
+      entries: [
+        {
+          id: "telegram",
+          meta: {
+            id: "telegram",
+            label: "Telegram",
+            selectionLabel: "Telegram",
+            blurb: "bot token",
+            docsPath: "/channels/telegram",
+          },
+        },
+      ],
+      installedCatalogEntries: [],
+      installableCatalogEntries: [],
+      installedCatalogById: new Map(),
+      installableCatalogById: new Map(),
+    });
   });
 });

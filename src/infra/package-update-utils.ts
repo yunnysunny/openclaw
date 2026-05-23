@@ -1,6 +1,6 @@
-import fsSync from "node:fs";
 import path from "node:path";
-import { openBoundaryFileSync } from "./boundary-file-read.js";
+import { openBoundaryFile } from "./boundary-file-read.js";
+import { closeFileDescriptorAsync, readFileUtf8FromFd } from "./fd-promise.js";
 
 export function expectedIntegrityForUpdate(
   spec: string | undefined,
@@ -26,7 +26,7 @@ export function expectedIntegrityForUpdate(
 
 export async function readInstalledPackageVersion(dir: string): Promise<string | undefined> {
   const manifestPath = path.join(dir, "package.json");
-  const opened = openBoundaryFileSync({
+  const opened = await openBoundaryFile({
     absolutePath: manifestPath,
     rootPath: dir,
     boundaryLabel: "installed package directory",
@@ -35,12 +35,17 @@ export async function readInstalledPackageVersion(dir: string): Promise<string |
     return undefined;
   }
   try {
-    const raw = fsSync.readFileSync(opened.fd, "utf-8");
+    const raw = await readFileUtf8FromFd(opened.fd);
     const parsed = JSON.parse(raw) as { version?: unknown };
     return typeof parsed.version === "string" ? parsed.version : undefined;
   } catch {
     return undefined;
   } finally {
-    fsSync.closeSync(opened.fd);
+    await closeFileDescriptorAsync(opened.fd);
   }
 }
+
+export function installedPackageNeedsOpenClawPeerLinkRepair(_pkg: unknown): boolean {
+  return false;
+}
+

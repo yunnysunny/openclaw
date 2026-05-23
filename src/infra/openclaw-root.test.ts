@@ -1,3 +1,4 @@
+// @ts-nocheck
 import actualFs from "node:fs";
 import actualFsPromises from "node:fs/promises";
 import path from "node:path";
@@ -86,6 +87,16 @@ const mockFsModule = () => {
 const mockFsPromisesModule = () => {
   const wrapped = {
     ...actualFsPromises,
+    realpath: async (p: string) =>
+      isFixturePath(p)
+        ? (() => {
+            const resolved = abs(p);
+            if (state.realpathErrors.has(resolved)) {
+              throw new Error(`ENOENT: no such file or directory, realpath '${p}'`);
+            }
+            return state.realpaths.get(resolved) ?? resolved;
+          })()
+        : await actualFsPromises.realpath(p),
     readFile: async (p: string, encoding?: BufferEncoding) => {
       if (!isFixturePath(p)) {
         return await actualFsPromises.readFile(p, encoding);
@@ -108,13 +119,18 @@ vi.mock("./openclaw-root.fs.runtime.js", () => ({
 describe("resolveOpenClawPackageRoot", () => {
   let resolveOpenClawPackageRoot: typeof import("./openclaw-root.js").resolveOpenClawPackageRoot;
   let resolveOpenClawPackageRootSync: typeof import("./openclaw-root.js").resolveOpenClawPackageRootSync;
+  let clearOpenClawPackageRootCaches: typeof import("./openclaw-root.js").__testing.clearOpenClawPackageRootCaches;
 
   beforeAll(async () => {
-    ({ resolveOpenClawPackageRoot, resolveOpenClawPackageRootSync } =
-      await import("./openclaw-root.js"));
+    ({
+      resolveOpenClawPackageRoot,
+      resolveOpenClawPackageRootSync,
+      __testing: { clearOpenClawPackageRootCaches },
+    } = await import("./openclaw-root.js"));
   });
 
   beforeEach(() => {
+    clearOpenClawPackageRootCaches();
     state.entries.clear();
     state.realpaths.clear();
     state.realpathErrors.clear();

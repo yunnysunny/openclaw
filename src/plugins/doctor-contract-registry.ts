@@ -6,7 +6,8 @@ import type { OpenClawConfig } from "../config/types.js";
 import { asNullableRecord } from "../shared/record-coerce.js";
 import { discoverOpenClawPlugins } from "./discovery.js";
 import { getCachedPluginJitiLoader, type PluginJitiLoaderCache } from "./jiti-loader-cache.js";
-import { loadPluginManifestRegistry } from "./manifest-registry.js";
+import { loadPluginManifestRegistrySync } from "./manifest-registry.js";
+import { tryNativeRequireJavaScriptModule } from "./native-module-require.js";
 import { resolvePluginCacheInputs, type PluginSourceRoots } from "./roots.js";
 
 const CONTRACT_API_EXTENSIONS = [".js", ".mjs", ".cjs", ".ts", ".mts", ".cts"] as const;
@@ -36,7 +37,7 @@ type PluginDoctorContractEntry = {
 };
 
 type PluginManifestRegistryRecord = ReturnType<
-  typeof loadPluginManifestRegistry
+  typeof loadPluginManifestRegistrySync
 >["plugins"][number];
 
 const jitiLoaders: PluginJitiLoaderCache = new Map();
@@ -49,6 +50,14 @@ function getJiti(modulePath: string) {
     modulePath,
     importerUrl: import.meta.url,
   });
+}
+
+function loadPluginDoctorContractModule(modulePath: string): PluginDoctorContractModule {
+  const nativeModule = tryNativeRequireJavaScriptModule(modulePath);
+  if (nativeModule.ok) {
+    return nativeModule.moduleExport as PluginDoctorContractModule;
+  }
+  return getJiti(modulePath)(modulePath) as PluginDoctorContractModule;
 }
 
 function buildDoctorContractCacheKey(params: {
@@ -225,7 +234,7 @@ function loadPluginDoctorContractEntry(
   }
   let mod: PluginDoctorContractModule;
   try {
-    mod = getJiti(contractSource)(contractSource) as PluginDoctorContractModule;
+    mod = loadPluginDoctorContractModule(contractSource);
   } catch {
     cache.set(record.id, null);
     return null;
@@ -281,7 +290,7 @@ function resolvePluginDoctorContracts(params?: {
     env,
     cache: true,
   });
-  const manifestRegistry = loadPluginManifestRegistry({
+  const manifestRegistry = loadPluginManifestRegistrySync({
     workspaceDir: params?.workspaceDir,
     env,
     cache: true,
@@ -346,4 +355,14 @@ export function applyPluginDoctorCompatibilityMigrations(
     changes.push(...mutation.changes);
   }
   return { config: nextCfg, changes };
+}
+
+// Stage 4 compat stub: upstream-only listing of plugin-supplied doctor route
+// owners. Locally route ownership comes from the static gateway map; return
+// an empty list so doctor-session-state-providers reports no plugin owners.
+export function listPluginDoctorSessionRouteStateOwners(_params: {
+  config?: unknown;
+  env?: NodeJS.ProcessEnv;
+}): unknown[] {
+  return [];
 }

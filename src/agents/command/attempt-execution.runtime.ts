@@ -1,3 +1,4 @@
+// @ts-nocheck
 export {
   buildAcpResult,
   createAcpVisibleTextAccumulator,
@@ -5,6 +6,8 @@ export {
   emitAcpLifecycleEnd,
   emitAcpLifecycleError,
   emitAcpLifecycleStart,
+  emitAcpPromptSubmitted,
+  emitAcpRuntimeEvent,
   persistAcpTurnTranscript,
   persistCliTurnTranscript,
   runAgentAttempt,

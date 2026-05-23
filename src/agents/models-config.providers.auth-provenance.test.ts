@@ -1,8 +1,16 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { captureEnv } from "../test-utils/env.js";
 
+const resolveProviderSyntheticAuthWithPluginHoisted = vi.hoisted(() => vi.fn());
 vi.mock("../plugins/provider-runtime.js", () => ({
-  resolveProviderSyntheticAuthWithPlugin: vi.fn(),
+  resolveProviderSyntheticAuthWithPlugin: resolveProviderSyntheticAuthWithPluginHoisted,
+  resolveProviderSyntheticAuthWithPluginAsync: (...args: unknown[]) =>
+    Promise.resolve(resolveProviderSyntheticAuthWithPluginHoisted(...args)),
+}));
+
+vi.mock("./provider-auth-aliases.js", () => ({
+  resolveProviderAuthAliasMap: () => ({}),
+  resolveProviderIdForAuth: (provider: string) => provider.trim().toLowerCase(),
 }));
 
 type ProviderRuntimeModule = typeof import("../plugins/provider-runtime.js");
@@ -12,21 +20,14 @@ let MINIMAX_OAUTH_MARKER: typeof import("./model-auth-markers.js").MINIMAX_OAUTH
 let CUSTOM_LOCAL_AUTH_MARKER: typeof import("./model-auth-markers.js").CUSTOM_LOCAL_AUTH_MARKER;
 let resolveApiKeyFromCredential: typeof import("./models-config.providers.secrets.js").resolveApiKeyFromCredential;
 let createProviderAuthResolver: typeof import("./models-config.providers.secrets.js").createProviderAuthResolver;
-let mockedResolveProviderSyntheticAuthWithPlugin: ReturnType<
-  typeof vi.mocked<ProviderRuntimeModule["resolveProviderSyntheticAuthWithPlugin"]>
->;
-
 async function loadProviderAuthModules() {
   vi.doUnmock("../plugins/manifest-registry.js");
   vi.doUnmock("../secrets/provider-env-vars.js");
-  const [providerRuntimeModule, markersModule, secretsModule] = await Promise.all([
+  const [, markersModule, secretsModule] = await Promise.all([
     import("../plugins/provider-runtime.js"),
     import("./model-auth-markers.js"),
     import("./models-config.providers.secrets.js"),
   ]);
-  mockedResolveProviderSyntheticAuthWithPlugin = vi.mocked(
-    providerRuntimeModule.resolveProviderSyntheticAuthWithPlugin,
-  );
   CUSTOM_LOCAL_AUTH_MARKER = markersModule.CUSTOM_LOCAL_AUTH_MARKER;
   NON_ENV_SECRETREF_MARKER = markersModule.NON_ENV_SECRETREF_MARKER;
   MINIMAX_OAUTH_MARKER = markersModule.MINIMAX_OAUTH_MARKER;
@@ -37,7 +38,7 @@ async function loadProviderAuthModules() {
 beforeEach(() => {
   vi.doUnmock("../plugins/manifest-registry.js");
   vi.doUnmock("../secrets/provider-env-vars.js");
-  mockedResolveProviderSyntheticAuthWithPlugin.mockReset().mockReturnValue(undefined);
+  resolveProviderSyntheticAuthWithPluginHoisted.mockReset().mockReturnValue(undefined);
 });
 
 beforeAll(loadProviderAuthModules);
@@ -104,7 +105,7 @@ describe("models-config provider auth provenance", () => {
     expect(providers["minimax-portal"]?.apiKey).toBe(MINIMAX_OAUTH_MARKER);
   });
 
-  it("prefers profile auth over env auth in provider summaries to match runtime resolution", () => {
+  it("prefers profile auth over env auth in provider summaries to match runtime resolution", async () => {
     const auth = createProviderAuthResolver(
       {
         OPENAI_API_KEY: "env-openai-key",
@@ -121,7 +122,7 @@ describe("models-config provider auth provenance", () => {
       },
     );
 
-    expect(auth("openai")).toEqual({
+    await expect(auth("openai")).resolves.toEqual({
       apiKey: "OPENAI_PROFILE_KEY",
       discoveryApiKey: undefined,
       mode: "api_key",
@@ -130,8 +131,8 @@ describe("models-config provider auth provenance", () => {
     });
   });
 
-  it("resolves plugin-owned synthetic auth through the provider hook", () => {
-    mockedResolveProviderSyntheticAuthWithPlugin.mockReturnValue({
+  it("resolves plugin-owned synthetic auth through the provider hook", async () => {
+    resolveProviderSyntheticAuthWithPluginHoisted.mockReturnValue({
       apiKey: "xai-plugin-key",
       mode: "api-key",
       source: "test plugin",
@@ -157,7 +158,7 @@ describe("models-config provider auth provenance", () => {
       },
     );
 
-    expect(auth("xai")).toEqual({
+    await expect(auth("xai")).resolves.toEqual({
       apiKey: NON_ENV_SECRETREF_MARKER,
       discoveryApiKey: "xai-plugin-key",
       mode: "api_key",
@@ -165,8 +166,8 @@ describe("models-config provider auth provenance", () => {
     });
   });
 
-  it("preserves shared non-secret synthetic auth markers from provider hooks", () => {
-    mockedResolveProviderSyntheticAuthWithPlugin.mockReturnValue({
+  it("preserves shared non-secret synthetic auth markers from provider hooks", async () => {
+    resolveProviderSyntheticAuthWithPluginHoisted.mockReturnValue({
       apiKey: CUSTOM_LOCAL_AUTH_MARKER,
       mode: "api-key",
       source: "test plugin",
@@ -190,7 +191,7 @@ describe("models-config provider auth provenance", () => {
       },
     );
 
-    expect(auth("lmstudio")).toEqual({
+    await expect(auth("lmstudio")).resolves.toEqual({
       apiKey: CUSTOM_LOCAL_AUTH_MARKER,
       discoveryApiKey: undefined,
       mode: "api_key",

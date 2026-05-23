@@ -4,7 +4,7 @@ import {
   type ProviderCatalogContext,
 } from "openclaw/plugin-sdk/plugin-entry";
 import { createProviderApiKeyAuthMethod } from "openclaw/plugin-sdk/provider-auth-api-key";
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
+import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/string-coerce-runtime";
 import {
   applyStepFunPlanConfig,
   applyStepFunPlanConfigCn,
@@ -87,12 +87,13 @@ function resolveDefaultBaseUrl(surface: StepFunSurface, region: StepFunRegion): 
   return region === "cn" ? STEPFUN_STANDARD_CN_BASE_URL : STEPFUN_STANDARD_INTL_BASE_URL;
 }
 
-function resolveStepFunCatalog(
+async function resolveStepFunCatalog(
   ctx: ProviderCatalogContext,
   params: { providerId: string; surface: StepFunSurface },
 ) {
-  const auth = ctx.resolveProviderAuth(params.providerId);
-  const apiKey = auth.apiKey ?? ctx.resolveProviderApiKey(params.providerId).apiKey;
+  const auth = await ctx.resolveProviderAuth(params.providerId);
+  const resolvedKey = await ctx.resolveProviderApiKey(params.providerId);
+  const apiKey = auth.apiKey ?? resolvedKey.apiKey;
   if (!apiKey) {
     return null;
   }

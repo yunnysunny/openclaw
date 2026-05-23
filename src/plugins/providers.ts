@@ -7,7 +7,9 @@ import {
   passesManifestOwnerBasePolicy,
 } from "./manifest-owner-policy.js";
 import {
-  loadPluginManifestRegistry,
+  loadPluginManifestRegistryAsync,
+  loadPluginManifestRegistrySync,
+  resolveManifestContractPluginIds,
   type PluginManifestRecord,
   type PluginManifestRegistry,
 } from "./manifest-registry.js";
@@ -21,7 +23,17 @@ type ProviderManifestLoadParams = {
 type NormalizedPluginsConfig = ReturnType<typeof normalizePluginsConfig>;
 
 function loadProviderManifestRegistry(params: ProviderManifestLoadParams): PluginManifestRegistry {
-  return loadPluginManifestRegistry({
+  return loadPluginManifestRegistrySync({
+    config: params.config,
+    workspaceDir: params.workspaceDir,
+    env: params.env,
+  });
+}
+
+async function loadProviderManifestRegistryAsync(
+  params: ProviderManifestLoadParams,
+): Promise<PluginManifestRegistry> {
+  return loadPluginManifestRegistryAsync({
     config: params.config,
     workspaceDir: params.workspaceDir,
     env: params.env,
@@ -36,6 +48,18 @@ function loadScopedProviderManifestRegistry(
 } {
   return {
     registry: loadProviderManifestRegistry(params),
+    onlyPluginIdSet: createPluginIdScopeSet(params.onlyPluginIds),
+  };
+}
+
+async function loadScopedProviderManifestRegistryAsync(
+  params: ProviderManifestLoadParams & { onlyPluginIds?: readonly string[] },
+): Promise<{
+  registry: PluginManifestRegistry;
+  onlyPluginIdSet: ReturnType<typeof createPluginIdScopeSet>;
+}> {
+  return {
+    registry: await loadProviderManifestRegistryAsync(params),
     onlyPluginIdSet: createPluginIdScopeSet(params.onlyPluginIds),
   };
 }
@@ -71,6 +95,27 @@ function resolveProviderOwnerPluginIds(
   );
 }
 
+async function resolveProviderOwnerPluginIdsAsync(
+  params: ProviderManifestLoadParams & {
+    pluginIds: readonly string[];
+    isEligible: (
+      plugin: PluginManifestRecord,
+      normalizedConfig: NormalizedPluginsConfig,
+    ) => boolean;
+  },
+): Promise<string[]> {
+  if (params.pluginIds.length === 0) {
+    return [];
+  }
+  const pluginIdSet = new Set(params.pluginIds);
+  const registry = await loadProviderManifestRegistryAsync(params);
+  const normalizedConfig = normalizePluginsConfig(params.config?.plugins);
+  return listManifestPluginIds(
+    registry,
+    (plugin) => pluginIdSet.has(plugin.id) && params.isEligible(plugin, normalizedConfig),
+  );
+}
+
 export function withBundledProviderVitestCompat(params: {
   config: PluginLoadOptions["config"];
   pluginIds: readonly string[];
@@ -95,6 +140,22 @@ export function resolveBundledProviderCompatPluginIds(params: {
   );
 }
 
+export async function resolveBundledProviderCompatPluginIdsAsync(params: {
+  config?: PluginLoadOptions["config"];
+  workspaceDir?: string;
+  env?: PluginLoadOptions["env"];
+  onlyPluginIds?: readonly string[];
+}): Promise<string[]> {
+  const { registry, onlyPluginIdSet } = await loadScopedProviderManifestRegistryAsync(params);
+  return listManifestPluginIds(
+    registry,
+    (plugin) =>
+      plugin.origin === "bundled" &&
+      plugin.providers.length > 0 &&
+      (!onlyPluginIdSet || onlyPluginIdSet.has(plugin.id)),
+  );
+}
+
 export function resolveEnabledProviderPluginIds(params: {
   config?: PluginLoadOptions["config"];
   workspaceDir?: string;
@@ -102,6 +163,33 @@ export function resolveEnabledProviderPluginIds(params: {
   onlyPluginIds?: readonly string[];
 }): string[] {
   const { registry, onlyPluginIdSet } = loadScopedProviderManifestRegistry(params);
+  const normalizedConfig = normalizePluginsConfig(params.config?.plugins);
+  return listManifestPluginIds(
+    registry,
+    (plugin) =>
+      plugin.providers.length > 0 &&
+      (!onlyPluginIdSet || onlyPluginIdSet.has(plugin.id)) &&
+      resolveEffectivePluginActivationState({
+        id: plugin.id,
+        origin: plugin.origin,
+        config: normalizedConfig,
+        rootConfig: params.config,
+        enabledByDefault: plugin.enabledByDefault,
+      }).activated,
+  );
+}
+
+/**
+ * Like {@link resolveEnabledProviderPluginIds}, but loads the manifest registry with
+ * {@link loadPluginManifestRegistryAsync} (awaitable I/O).
+ */
+export async function resolveEnabledProviderPluginIdsAsync(params: {
+  config?: PluginLoadOptions["config"];
+  workspaceDir?: string;
+  env?: PluginLoadOptions["env"];
+  onlyPluginIds?: readonly string[];
+}): Promise<string[]> {
+  const { registry, onlyPluginIdSet } = await loadScopedProviderManifestRegistryAsync(params);
   const normalizedConfig = normalizePluginsConfig(params.config?.plugins);
   return listManifestPluginIds(
     registry,
@@ -185,6 +273,49 @@ export function resolveDiscoverableProviderOwnerPluginIds(params: {
   });
 }
 
+export async function resolveDiscoveredProviderPluginIdsAsync(params: {
+  config?: PluginLoadOptions["config"];
+  workspaceDir?: string;
+  env?: PluginLoadOptions["env"];
+  onlyPluginIds?: readonly string[];
+  includeUntrustedWorkspacePlugins?: boolean;
+}): Promise<string[]> {
+  const { registry, onlyPluginIdSet } = await loadScopedProviderManifestRegistryAsync(params);
+  const shouldFilterUntrustedWorkspacePlugins = params.includeUntrustedWorkspacePlugins === false;
+  const normalizedConfig = normalizePluginsConfig(params.config?.plugins);
+  return listManifestPluginIds(registry, (plugin) => {
+    if (!(plugin.providers.length > 0 && (!onlyPluginIdSet || onlyPluginIdSet.has(plugin.id)))) {
+      return false;
+    }
+    return isProviderPluginEligibleForSetupDiscovery({
+      plugin,
+      shouldFilterUntrustedWorkspacePlugins,
+      normalizedConfig,
+      rootConfig: params.config,
+    });
+  });
+}
+
+export async function resolveDiscoverableProviderOwnerPluginIdsAsync(params: {
+  pluginIds: readonly string[];
+  config?: PluginLoadOptions["config"];
+  workspaceDir?: string;
+  env?: PluginLoadOptions["env"];
+  includeUntrustedWorkspacePlugins?: boolean;
+}): Promise<string[]> {
+  const shouldFilterUntrustedWorkspacePlugins = params.includeUntrustedWorkspacePlugins === false;
+  return resolveProviderOwnerPluginIdsAsync({
+    ...params,
+    isEligible: (plugin, normalizedConfig) =>
+      isProviderPluginEligibleForSetupDiscovery({
+        plugin,
+        shouldFilterUntrustedWorkspacePlugins,
+        normalizedConfig,
+        rootConfig: params.config,
+      }),
+  });
+}
+
 function isProviderPluginEligibleForRuntimeOwnerActivation(params: {
   plugin: PluginManifestRecord;
   normalizedConfig: NormalizedPluginsConfig;
@@ -226,12 +357,39 @@ export function resolveActivatableProviderOwnerPluginIds(params: {
   });
 }
 
+/**
+ * Like {@link resolveActivatableProviderOwnerPluginIds}, but resolves owner candidates with
+ * {@link resolveProviderOwnerPluginIdsAsync} (async manifest load).
+ */
+export async function resolveActivatableProviderOwnerPluginIdsAsync(params: {
+  pluginIds: readonly string[];
+  config?: PluginLoadOptions["config"];
+  workspaceDir?: string;
+  env?: PluginLoadOptions["env"];
+  includeUntrustedWorkspacePlugins?: boolean;
+}): Promise<string[]> {
+  return resolveProviderOwnerPluginIdsAsync({
+    ...params,
+    isEligible: (plugin, normalizedConfig) =>
+      isProviderPluginEligibleForRuntimeOwnerActivation({
+        plugin,
+        normalizedConfig,
+        rootConfig: params.config,
+      }),
+  });
+}
+
 export const __testing = {
   resolveActivatableProviderOwnerPluginIds,
+  resolveActivatableProviderOwnerPluginIdsAsync,
   resolveEnabledProviderPluginIds,
+  resolveEnabledProviderPluginIdsAsync,
   resolveDiscoveredProviderPluginIds,
+  resolveDiscoveredProviderPluginIdsAsync,
   resolveDiscoverableProviderOwnerPluginIds,
+  resolveDiscoverableProviderOwnerPluginIdsAsync,
   resolveBundledProviderCompatPluginIds,
+  resolveBundledProviderCompatPluginIdsAsync,
   withBundledProviderVitestCompat,
 } as const;
 
@@ -451,5 +609,74 @@ export function resolveCatalogHookProviderPluginIds(params: {
   const bundledCompatPluginIds = resolveBundledProviderCompatPluginIds(params);
   return [...new Set([...enabledProviderPluginIds, ...bundledCompatPluginIds])].toSorted(
     (left, right) => left.localeCompare(right),
+  );
+}
+
+/**
+ * Like {@link resolveCatalogHookProviderPluginIds}, but uses
+ * {@link loadProviderManifestRegistryAsync} and
+ * {@link resolveBundledProviderCompatPluginIdsAsync} for awaitable I/O.
+ */
+export async function resolveCatalogHookProviderPluginIdsAsync(params: {
+  config?: PluginLoadOptions["config"];
+  workspaceDir?: string;
+  env?: PluginLoadOptions["env"];
+}): Promise<string[]> {
+  const registry = await loadProviderManifestRegistryAsync(params);
+  const normalizedConfig = normalizePluginsConfig(params.config?.plugins);
+  const enabledProviderPluginIds = listManifestPluginIds(
+    registry,
+    (plugin) =>
+      plugin.providers.length > 0 &&
+      resolveEffectivePluginActivationState({
+        id: plugin.id,
+        origin: plugin.origin,
+        config: normalizedConfig,
+        rootConfig: params.config,
+        enabledByDefault: plugin.enabledByDefault,
+      }).activated,
+  );
+  const bundledCompatPluginIds = await resolveBundledProviderCompatPluginIdsAsync(params);
+  return [...new Set([...enabledProviderPluginIds, ...bundledCompatPluginIds])].toSorted(
+    (left, right) => left.localeCompare(right),
+  );
+}
+
+export function resolveExternalAuthProfileProviderPluginIds(params: {
+  config?: PluginLoadOptions["config"];
+  workspaceDir?: string;
+  env?: PluginLoadOptions["env"];
+}): string[] {
+  return resolveManifestContractPluginIds({
+    contract: "externalAuthProviders",
+    config: params.config,
+    workspaceDir: params.workspaceDir,
+    env: params.env,
+  });
+}
+
+export function resolveExternalAuthProfileCompatFallbackPluginIds(params: {
+  config?: PluginLoadOptions["config"];
+  workspaceDir?: string;
+  env?: PluginLoadOptions["env"];
+  declaredPluginIds?: ReadonlySet<string>;
+}): string[] {
+  // Deprecated compatibility fallback for provider plugins that still implement
+  // resolveExternalOAuthProfiles or omit contracts.externalAuthProviders.
+  const declaredPluginIds =
+    params.declaredPluginIds ?? new Set(resolveExternalAuthProfileProviderPluginIds(params));
+  const registry = loadPluginManifestRegistrySync(params);
+  const normalizedConfig = normalizePluginsConfig(params.config?.plugins);
+  return listManifestPluginIds(
+    registry,
+    (plugin) =>
+      plugin.origin !== "bundled" &&
+      plugin.providers.length > 0 &&
+      !declaredPluginIds.has(plugin.id) &&
+      isProviderPluginEligibleForRuntimeOwnerActivation({
+        plugin,
+        normalizedConfig,
+        rootConfig: params.config,
+      }),
   );
 }

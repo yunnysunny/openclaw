@@ -2,9 +2,12 @@ import { randomUUID } from "node:crypto";
 import { normalizeModelRef, parseModelRef } from "../agents/model-selection.js";
 import { applyPluginAutoEnable } from "../config/plugin-auto-enable.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
-import { resolveGatewayStartupPluginIds } from "../plugins/channel-plugin-ids.js";
+import {
+  resolveGatewayStartupPluginIds,
+  resolveGatewayStartupPluginIdsAsync,
+} from "../plugins/channel-plugin-ids.js";
 import { normalizePluginsConfig } from "../plugins/config-state.js";
-import { loadOpenClawPlugins } from "../plugins/loader.js";
+import { loadOpenClawPlugins, loadOpenClawPluginsAsync } from "../plugins/loader.js";
 import { createEmptyPluginRegistry } from "../plugins/registry-empty.js";
 import { setActivePluginRegistry } from "../plugins/runtime.js";
 import { getPluginRuntimeGatewayRequestScope } from "../plugins/runtime/gateway-request-scope.js";
@@ -44,17 +47,40 @@ const getFallbackGatewayContextState = () =>
     resolveContext: undefined,
   }));
 
-export function setFallbackGatewayContext(ctx: GatewayRequestContext): void {
+export function setFallbackGatewayContext(ctx: GatewayRequestContext): () => void {
   const fallbackGatewayContextState = getFallbackGatewayContextState();
   fallbackGatewayContextState.context = ctx;
   fallbackGatewayContextState.resolveContext = undefined;
+  return () => {
+    const currentFallbackGatewayContextState = getFallbackGatewayContextState();
+    if (
+      currentFallbackGatewayContextState.context === ctx &&
+      currentFallbackGatewayContextState.resolveContext === undefined
+    ) {
+      currentFallbackGatewayContextState.context = undefined;
+    }
+  };
 }
 
 export function setFallbackGatewayContextResolver(
   resolveContext: () => GatewayRequestContext | undefined,
-): void {
+): () => void {
   const fallbackGatewayContextState = getFallbackGatewayContextState();
+  fallbackGatewayContextState.context = undefined;
   fallbackGatewayContextState.resolveContext = resolveContext;
+  return () => {
+    const currentFallbackGatewayContextState = getFallbackGatewayContextState();
+    if (currentFallbackGatewayContextState.resolveContext === resolveContext) {
+      currentFallbackGatewayContextState.context = undefined;
+      currentFallbackGatewayContextState.resolveContext = undefined;
+    }
+  };
+}
+
+export function clearFallbackGatewayContext(): void {
+  const fallbackGatewayContextState = getFallbackGatewayContextState();
+  fallbackGatewayContextState.context = undefined;
+  fallbackGatewayContextState.resolveContext = undefined;
 }
 
 function getFallbackGatewayContext(): GatewayRequestContext | undefined {
@@ -338,6 +364,7 @@ export function createGatewaySubagentRuntime(): PluginRuntime["subagent"] {
           ...(allowOverride && params.model && { model: params.model }),
           ...(params.extraSystemPrompt && { extraSystemPrompt: params.extraSystemPrompt }),
           ...(params.lane && { lane: params.lane }),
+          ...(params.lightContext === true && { bootstrapContextMode: "lightweight" }),
           // The gateway `agent` schema requires `idempotencyKey: NonEmptyString`,
           // so fall back to a generated UUID when the caller omits it. Without
           // this, plugin subagent runs (for example memory-core dreaming
@@ -380,6 +407,37 @@ export function createGatewaySubagentRuntime(): PluginRuntime["subagent"] {
         key: params.sessionKey,
         deleteTranscript: params.deleteTranscript ?? true,
       });
+    },
+  };
+}
+
+export function createGatewayNodesRuntime(): PluginRuntime["nodes"] {
+  return {
+    async list(params) {
+      const payload = await dispatchGatewayMethod<{ nodes?: unknown[] }>("node.list", {});
+      const nodes = Array.isArray(payload?.nodes) ? payload.nodes : [];
+      const filteredNodes =
+        params?.connected === true
+          ? nodes.filter(
+              (node) =>
+                node !== null &&
+                typeof node === "object" &&
+                (node as { connected?: unknown }).connected === true,
+            )
+          : nodes;
+      return {
+        nodes: filteredNodes as Awaited<ReturnType<PluginRuntime["nodes"]["list"]>>["nodes"],
+      };
+    },
+    async invoke(params) {
+      const payload = await dispatchGatewayMethod<unknown>("node.invoke", {
+        nodeId: params.nodeId,
+        command: params.command,
+        ...(params.params !== undefined && { params: params.params }),
+        timeoutMs: params.timeoutMs,
+        idempotencyKey: params.idempotencyKey || randomUUID(),
+      });
+      return payload;
     },
   };
 }
@@ -477,3 +535,90 @@ export function loadGatewayPlugins(params: {
   const gatewayMethods = Array.from(new Set([...params.baseMethods, ...pluginMethods]));
   return { pluginRegistry, gatewayMethods };
 }
+
+export async function loadGatewayPluginsAsync(params: {
+  cfg: OpenClawConfig;
+  activationSourceConfig?: OpenClawConfig;
+  autoEnabledReasons?: Readonly<Record<string, string[]>>;
+  workspaceDir: string;
+  log: {
+    info: (msg: string) => void;
+    warn: (msg: string) => void;
+    error: (msg: string) => void;
+    debug: (msg: string) => void;
+  };
+  coreGatewayHandlers: Record<string, GatewayRequestHandler>;
+  baseMethods: string[];
+  pluginIds?: string[];
+  preferSetupRuntimeForChannelPlugins?: boolean;
+  suppressPluginInfoLogs?: boolean;
+}): Promise<ReturnType<typeof loadGatewayPlugins>> {
+  const activationAutoEnabled =
+    params.activationSourceConfig !== undefined
+      ? applyPluginAutoEnable({
+          config: params.activationSourceConfig,
+          env: process.env,
+        })
+      : undefined;
+  const autoEnabled =
+    params.activationSourceConfig !== undefined
+      ? {
+          config: params.cfg,
+          changes: activationAutoEnabled?.changes ?? [],
+          autoEnabledReasons:
+            params.autoEnabledReasons ?? activationAutoEnabled?.autoEnabledReasons ?? {},
+        }
+      : params.autoEnabledReasons !== undefined
+        ? {
+            config: params.cfg,
+            changes: [],
+            autoEnabledReasons: params.autoEnabledReasons,
+          }
+        : applyPluginAutoEnable({
+            config: params.cfg,
+            env: process.env,
+          });
+  const resolvedConfig = autoEnabled.config;
+  const pluginIds =
+    params.pluginIds ??
+    (await resolveGatewayStartupPluginIdsAsync({
+      config: resolvedConfig,
+      activationSourceConfig: params.activationSourceConfig,
+      workspaceDir: params.workspaceDir,
+      env: process.env,
+    }));
+  if (pluginIds.length === 0) {
+    const pluginRegistry = createEmptyPluginRegistry();
+    setActivePluginRegistry(pluginRegistry, undefined, "gateway-bindable", params.workspaceDir);
+    return {
+      pluginRegistry,
+      gatewayMethods: [...params.baseMethods],
+    };
+  }
+  const pluginRegistry = await loadOpenClawPluginsAsync({
+    config: resolvedConfig,
+    activationSourceConfig: params.activationSourceConfig ?? params.cfg,
+    autoEnabledReasons: autoEnabled.autoEnabledReasons,
+    workspaceDir: params.workspaceDir,
+    onlyPluginIds: pluginIds,
+    logger: createGatewayPluginRegistrationLogger({
+      suppressInfoLogs: params.suppressPluginInfoLogs,
+    }),
+    coreGatewayHandlers: params.coreGatewayHandlers,
+    runtimeOptions: {
+      allowGatewaySubagentBinding: true,
+    },
+    preferSetupRuntimeForChannelPlugins: params.preferSetupRuntimeForChannelPlugins,
+  });
+  const pluginMethods = Object.keys(pluginRegistry.gatewayHandlers);
+  const gatewayMethods = Array.from(new Set([...params.baseMethods, ...pluginMethods]));
+  return { pluginRegistry, gatewayMethods };
+}
+
+export const dispatchGatewayMethodInProcessRaw: ((...args: unknown[]) => Promise<unknown>) = async () => undefined;
+
+
+// Stage 4 compat alias: subagent-announce.runtime.ts re-exports under the
+// non-Raw name; both call sites accept the same loose signature.
+export const dispatchGatewayMethodInProcess: typeof dispatchGatewayMethodInProcessRaw =
+  dispatchGatewayMethodInProcessRaw;

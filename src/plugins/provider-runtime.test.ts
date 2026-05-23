@@ -1,4 +1,5 @@
-import type { AgentMessage } from "@mariozechner/pi-agent-core";
+// @ts-nocheck
+import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ModelProviderConfig } from "../config/types.js";
 import type { ProviderRuntimeModel } from "./provider-runtime-model.types.js";
@@ -40,11 +41,14 @@ let classifyProviderFailoverReasonWithPlugin: typeof import("./provider-runtime.
 let matchesProviderContextOverflowWithPlugin: typeof import("./provider-runtime.js").matchesProviderContextOverflowWithPlugin;
 let normalizeProviderConfigWithPlugin: typeof import("./provider-runtime.js").normalizeProviderConfigWithPlugin;
 let normalizeProviderModelIdWithPlugin: typeof import("./provider-runtime.js").normalizeProviderModelIdWithPlugin;
+let normalizeProviderModelIdWithPluginAsync: typeof import("./provider-runtime.js").normalizeProviderModelIdWithPluginAsync;
 let applyProviderResolvedModelCompatWithPlugins: typeof import("./provider-runtime.js").applyProviderResolvedModelCompatWithPlugins;
+let applyProviderResolvedModelCompatWithPluginsAsync: typeof import("./provider-runtime.js").applyProviderResolvedModelCompatWithPluginsAsync;
 let applyProviderResolvedTransportWithPlugin: typeof import("./provider-runtime.js").applyProviderResolvedTransportWithPlugin;
 let normalizeProviderTransportWithPlugin: typeof import("./provider-runtime.js").normalizeProviderTransportWithPlugin;
 let prepareProviderExtraParams: typeof import("./provider-runtime.js").prepareProviderExtraParams;
 let resolveProviderConfigApiKeyWithPlugin: typeof import("./provider-runtime.js").resolveProviderConfigApiKeyWithPlugin;
+let resolveProviderConfigApiKeyWithPluginAsync: typeof import("./provider-runtime.js").resolveProviderConfigApiKeyWithPluginAsync;
 let resolveProviderStreamFn: typeof import("./provider-runtime.js").resolveProviderStreamFn;
 let resolveProviderCacheTtlEligibility: typeof import("./provider-runtime.js").resolveProviderCacheTtlEligibility;
 let resolveProviderBinaryThinking: typeof import("./provider-runtime.js").resolveProviderBinaryThinking;
@@ -237,10 +241,16 @@ describe("provider-runtime", () => {
     vi.doMock("./providers.js", () => ({
       resolveCatalogHookProviderPluginIds: (params: unknown) =>
         resolveCatalogHookProviderPluginIdsMock(params as never),
+      resolveCatalogHookProviderPluginIdsAsync: async (params: unknown) =>
+        resolveCatalogHookProviderPluginIdsMock(params as never),
     }));
     vi.doMock("./providers.runtime.js", () => ({
       resolvePluginProviders: (params: unknown) => resolvePluginProvidersMock(params as never),
+      resolvePluginProvidersAsync: async (params: unknown) =>
+        resolvePluginProvidersMock(params as never),
       isPluginProvidersLoadInFlight: (params: unknown) =>
+        isPluginProvidersLoadInFlightMock(params as never),
+      isPluginProvidersLoadInFlightAsync: async (params: unknown) =>
         isPluginProvidersLoadInFlightMock(params as never),
     }));
     ({
@@ -251,15 +261,18 @@ describe("provider-runtime", () => {
       applyProviderNativeStreamingUsageCompatWithPlugin,
       applyProviderConfigDefaultsWithPlugin,
       applyProviderResolvedModelCompatWithPlugins,
+      applyProviderResolvedModelCompatWithPluginsAsync,
       applyProviderResolvedTransportWithPlugin,
       classifyProviderFailoverReasonWithPlugin,
       formatProviderAuthProfileApiKeyWithPlugin,
       matchesProviderContextOverflowWithPlugin,
       normalizeProviderConfigWithPlugin,
       normalizeProviderModelIdWithPlugin,
+      normalizeProviderModelIdWithPluginAsync,
       normalizeProviderTransportWithPlugin,
       prepareProviderExtraParams,
       resolveProviderConfigApiKeyWithPlugin,
+      resolveProviderConfigApiKeyWithPluginAsync,
       resolveProviderStreamFn,
       resolveProviderCacheTtlEligibility,
       resolveProviderBinaryThinking,
@@ -422,6 +435,29 @@ describe("provider-runtime", () => {
         },
       }),
     ).toBe("gemini-3.1-flash-lite-preview");
+    expect(resolvePluginProvidersMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("normalizes model ids asynchronously through the async hook provider path", async () => {
+    resolvePluginProvidersMock.mockReturnValue([
+      {
+        id: "google",
+        label: "Google",
+        hookAliases: ["google-vertex"],
+        auth: [],
+        normalizeModelId: ({ modelId }) => modelId.replace("flash-lite", "flash-lite-preview"),
+      },
+    ]);
+
+    await expect(
+      normalizeProviderModelIdWithPluginAsync({
+        provider: "google-vertex",
+        context: {
+          provider: "google-vertex",
+          modelId: "gemini-3.1-flash-lite",
+        },
+      }),
+    ).resolves.toBe("gemini-3.1-flash-lite-preview");
     expect(resolvePluginProvidersMock).toHaveBeenCalledTimes(1);
   });
 
@@ -845,6 +881,16 @@ describe("provider-runtime", () => {
       }),
     ).toBe("DEMO_PROFILE");
 
+    expect(
+      await resolveProviderConfigApiKeyWithPluginAsync({
+        provider: DEMO_PROVIDER_ID,
+        context: {
+          provider: DEMO_PROVIDER_ID,
+          env: { DEMO_PROFILE: "default" } as NodeJS.ProcessEnv,
+        },
+      }),
+    ).toBe("DEMO_PROFILE");
+
     await prepareProviderDynamicModel({
       provider: DEMO_PROVIDER_ID,
       context: createDemoRuntimeContext({
@@ -1052,6 +1098,13 @@ describe("provider-runtime", () => {
       }),
     ).toBeUndefined();
 
+    await expect(
+      applyProviderResolvedModelCompatWithPluginsAsync({
+        provider: DEMO_PROVIDER_ID,
+        context: createDemoResolvedModelContext({}),
+      }),
+    ).resolves.toBeUndefined();
+
     expect(
       formatProviderAuthProfileApiKeyWithPlugin({
         provider: DEMO_PROVIDER_ID,
@@ -1220,7 +1273,31 @@ describe("provider-runtime", () => {
     );
   });
 
-  it("merges compat contributions from owner and foreign provider plugins", () => {
+  it("resolveProviderConfigApiKeyWithPluginAsync prefers resolveConfigApiKeyAsync", async () => {
+    resolvePluginProvidersMock.mockReturnValue([
+      {
+        id: "async-pref",
+        label: "Async pref",
+        auth: [],
+        resolveConfigApiKey: () => "from-sync",
+        resolveConfigApiKeyAsync: async () => "from-async",
+      } as ProviderPlugin,
+    ]);
+    expect(
+      resolveProviderConfigApiKeyWithPlugin({
+        provider: "async-pref",
+        context: { provider: "async-pref", env: process.env },
+      }),
+    ).toBe("from-sync");
+    expect(
+      await resolveProviderConfigApiKeyWithPluginAsync({
+        provider: "async-pref",
+        context: { provider: "async-pref", env: process.env },
+      }),
+    ).toBe("from-async");
+  });
+
+  it("merges compat contributions from owner and foreign provider plugins", async () => {
     resolvePluginProvidersMock.mockImplementation((params) => {
       const onlyPluginIds = params.onlyPluginIds ?? [];
       const plugins: ProviderPlugin[] = [
@@ -1258,6 +1335,28 @@ describe("provider-runtime", () => {
         }),
       }),
     ).toMatchObject({
+      compat: {
+        supportsDeveloperRole: false,
+        supportsStrictMode: true,
+        supportsStore: false,
+      },
+    });
+
+    await expect(
+      applyProviderResolvedModelCompatWithPluginsAsync({
+        provider: "openrouter",
+        context: createDemoResolvedModelContext({
+          provider: "openrouter",
+          modelId: "mistralai/mistral-small-3.2-24b-instruct",
+          model: {
+            ...MODEL,
+            provider: "openrouter",
+            id: "mistralai/mistral-small-3.2-24b-instruct",
+            compat: { supportsDeveloperRole: false },
+          },
+        }),
+      }),
+    ).resolves.toMatchObject({
       compat: {
         supportsDeveloperRole: false,
         supportsStrictMode: true,

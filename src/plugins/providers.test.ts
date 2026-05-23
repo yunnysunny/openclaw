@@ -6,17 +6,23 @@ import { createEmptyPluginRegistry } from "./registry-empty.js";
 import type { ProviderPlugin } from "./types.js";
 
 type ResolveRuntimePluginRegistry = typeof import("./loader.js").resolveRuntimePluginRegistry;
+type ResolveRuntimePluginRegistryAsync =
+  typeof import("./loader.js").resolveRuntimePluginRegistryAsync;
 type LoadOpenClawPlugins = typeof import("./loader.js").loadOpenClawPlugins;
+type LoadOpenClawPluginsAsync = typeof import("./loader.js").loadOpenClawPluginsAsync;
 type IsPluginRegistryLoadInFlight = typeof import("./loader.js").isPluginRegistryLoadInFlight;
 type LoadPluginManifestRegistry =
-  typeof import("./manifest-registry.js").loadPluginManifestRegistry;
+  typeof import("./manifest-registry.js").loadPluginManifestRegistrySync;
+type LoadPluginManifestRegistryAsync =
+  typeof import("./manifest-registry.js").loadPluginManifestRegistryAsync;
 type ApplyPluginAutoEnable = typeof import("../config/plugin-auto-enable.js").applyPluginAutoEnable;
 type SetActivePluginRegistry = typeof import("./runtime.js").setActivePluginRegistry;
 
 const resolveRuntimePluginRegistryMock = vi.fn<ResolveRuntimePluginRegistry>();
 const loadOpenClawPluginsMock = vi.fn<LoadOpenClawPlugins>();
 const isPluginRegistryLoadInFlightMock = vi.fn<IsPluginRegistryLoadInFlight>((_) => false);
-const loadPluginManifestRegistryMock = vi.fn<LoadPluginManifestRegistry>();
+const loadPluginManifestRegistrySyncMock = vi.fn<LoadPluginManifestRegistry>();
+const loadPluginManifestRegistryAsyncMock = vi.fn<LoadPluginManifestRegistryAsync>();
 const applyPluginAutoEnableMock = vi.fn<ApplyPluginAutoEnable>();
 
 let resolveOwningPluginIdsForProvider: typeof import("./providers.js").resolveOwningPluginIdsForProvider;
@@ -24,6 +30,7 @@ let resolveOwningPluginIdsForModelRef: typeof import("./providers.js").resolveOw
 let resolveActivatableProviderOwnerPluginIds: typeof import("./providers.js").resolveActivatableProviderOwnerPluginIds;
 let resolveEnabledProviderPluginIds: typeof import("./providers.js").resolveEnabledProviderPluginIds;
 let resolveDiscoveredProviderPluginIds: typeof import("./providers.js").resolveDiscoveredProviderPluginIds;
+let resolveDiscoveredProviderPluginIdsAsync: typeof import("./providers.js").resolveDiscoveredProviderPluginIdsAsync;
 let resolveDiscoverableProviderOwnerPluginIds: typeof import("./providers.js").resolveDiscoverableProviderOwnerPluginIds;
 let resolvePluginProviders: typeof import("./providers.runtime.js").resolvePluginProviders;
 let setActivePluginRegistry: SetActivePluginRegistry;
@@ -57,7 +64,7 @@ function createManifestProviderPlugin(params: {
 }
 
 function setManifestPlugins(plugins: PluginManifestRecord[]) {
-  loadPluginManifestRegistryMock.mockReturnValue({
+  loadPluginManifestRegistrySyncMock.mockReturnValue({
     plugins,
     diagnostics: [],
   });
@@ -266,25 +273,36 @@ function expectProviderRuntimeRegistryLoad(params?: { config?: unknown; env?: No
 describe("resolvePluginProviders", () => {
   beforeAll(async () => {
     vi.resetModules();
-    loadPluginManifestRegistryMock.mockReturnValue({
+    loadPluginManifestRegistrySyncMock.mockReturnValue({
       plugins: [],
       diagnostics: [],
     });
     vi.doMock("./loader.js", () => ({
       loadOpenClawPlugins: (...args: Parameters<LoadOpenClawPlugins>) =>
         loadOpenClawPluginsMock(...args),
+      loadOpenClawPluginsAsync: async (...args: Parameters<LoadOpenClawPluginsAsync>) =>
+        loadOpenClawPluginsMock(...args),
       isPluginRegistryLoadInFlight: (...args: Parameters<IsPluginRegistryLoadInFlight>) =>
         isPluginRegistryLoadInFlightMock(...args),
       resolveRuntimePluginRegistry: (...args: Parameters<ResolveRuntimePluginRegistry>) =>
         resolveRuntimePluginRegistryMock(...args),
+      resolveRuntimePluginRegistryAsync: async (
+        ...args: Parameters<ResolveRuntimePluginRegistryAsync>
+      ) => resolveRuntimePluginRegistryMock(...args),
     }));
     vi.doMock("../config/plugin-auto-enable.js", () => ({
       applyPluginAutoEnable: (...args: Parameters<ApplyPluginAutoEnable>) =>
         applyPluginAutoEnableMock(...args),
     }));
+    loadPluginManifestRegistryAsyncMock.mockImplementation(
+      async (...args: Parameters<LoadPluginManifestRegistryAsync>) =>
+        loadPluginManifestRegistrySyncMock(...args),
+    );
     vi.doMock("./manifest-registry.js", () => ({
-      loadPluginManifestRegistry: (...args: Parameters<LoadPluginManifestRegistry>) =>
-        loadPluginManifestRegistryMock(...args),
+      loadPluginManifestRegistrySync: (...args: Parameters<LoadPluginManifestRegistry>) =>
+        loadPluginManifestRegistrySyncMock(...args),
+      loadPluginManifestRegistryAsync: (...args: Parameters<LoadPluginManifestRegistryAsync>) =>
+        loadPluginManifestRegistryAsyncMock(...args),
     }));
     ({
       resolveActivatableProviderOwnerPluginIds,
@@ -292,6 +310,7 @@ describe("resolvePluginProviders", () => {
       resolveOwningPluginIdsForModelRef,
       resolveEnabledProviderPluginIds,
       resolveDiscoveredProviderPluginIds,
+      resolveDiscoveredProviderPluginIdsAsync,
       resolveDiscoverableProviderOwnerPluginIds,
     } = await import("./providers.js"));
     ({ resolvePluginProviders } = await import("./providers.runtime.js"));
@@ -320,7 +339,12 @@ describe("resolvePluginProviders", () => {
     registry.providers.push({ pluginId: "google", provider, source: "bundled" });
     resolveRuntimePluginRegistryMock.mockReturnValue(registry);
     loadOpenClawPluginsMock.mockReturnValue(registry);
-    loadPluginManifestRegistryMock.mockReset();
+    loadPluginManifestRegistrySyncMock.mockReset();
+    loadPluginManifestRegistryAsyncMock.mockReset();
+    loadPluginManifestRegistryAsyncMock.mockImplementation(
+      async (...args: Parameters<LoadPluginManifestRegistryAsync>) =>
+        loadPluginManifestRegistrySyncMock(...args),
+    );
     applyPluginAutoEnableMock.mockReset();
     applyPluginAutoEnableMock.mockImplementation(
       (params): PluginAutoEnableResult => ({
@@ -402,6 +426,17 @@ describe("resolvePluginProviders", () => {
         onlyPluginIds: [],
       }),
     ).toEqual([]);
+  });
+
+  it("matches resolveDiscoveredProviderPluginIdsAsync to resolveDiscoveredProviderPluginIds for the same manifest mock", async () => {
+    const opts = {
+      config: {},
+      env: {} as NodeJS.ProcessEnv,
+      onlyPluginIds: [] as string[] | undefined,
+    };
+    expect(await resolveDiscoveredProviderPluginIdsAsync(opts)).toEqual(
+      resolveDiscoveredProviderPluginIds(opts),
+    );
   });
 
   it.each([

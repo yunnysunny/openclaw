@@ -25,7 +25,7 @@ function manifest(id: string): PluginManifestRecord {
 
 describe("doctor stale plugin config helpers", () => {
   beforeEach(() => {
-    vi.spyOn(manifestRegistry, "loadPluginManifestRegistry").mockReturnValue({
+    vi.spyOn(manifestRegistry, "loadPluginManifestRegistrySync").mockReturnValue({
       plugins: [manifest("discord"), manifest("voice-call"), manifest("openai")],
       diagnostics: [],
     });
@@ -100,7 +100,7 @@ describe("doctor stale plugin config helpers", () => {
   });
 
   it("does not auto-repair stale refs while plugin discovery has errors", () => {
-    vi.spyOn(manifestRegistry, "loadPluginManifestRegistry").mockReturnValue({
+    vi.spyOn(manifestRegistry, "loadPluginManifestRegistrySync").mockReturnValue({
       plugins: [],
       diagnostics: [
         { level: "error", message: "plugin path not found: /missing", source: "/missing" },
@@ -155,19 +155,9 @@ describe("doctor stale plugin config helpers", () => {
 
     expect(scanStalePluginConfig(cfg)).toEqual([
       {
-        pluginId: "openai-codex",
-        pathLabel: "plugins.allow",
-        surface: "allow",
-      },
-      {
         pluginId: "acpx",
         pathLabel: "plugins.allow",
         surface: "allow",
-      },
-      {
-        pluginId: "openai-codex",
-        pathLabel: "plugins.entries.openai-codex",
-        surface: "entries",
       },
       {
         pluginId: "acpx",
@@ -177,7 +167,9 @@ describe("doctor stale plugin config helpers", () => {
     ]);
 
     const result = maybeRepairStalePluginConfig(cfg);
-    expect(result.config.plugins?.allow).toEqual([]);
-    expect(result.config.plugins?.entries).toEqual({});
+    expect(result.config.plugins?.allow).toEqual(["openai-codex"]);
+    expect(result.config.plugins?.entries).toEqual({
+      "openai-codex": { enabled: true },
+    });
   });
 });

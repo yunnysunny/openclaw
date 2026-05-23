@@ -84,12 +84,37 @@ function candidateDirsFromArgv1(argv1: string): string[] {
   return candidates;
 }
 
+async function candidateDirsFromArgv1Async(argv1: string): Promise<string[]> {
+  const normalized = path.resolve(argv1);
+  const candidates = [path.dirname(normalized)];
+
+  // Resolve symlinks for version managers (nvm, fnm, n, Homebrew/Linuxbrew)
+  // that create symlinks in bin/ pointing to the real package location.
+  try {
+    const resolved = await openClawRootFs.realpath(normalized);
+    if (resolved !== normalized) {
+      candidates.push(path.dirname(resolved));
+    }
+  } catch {
+    // realpath throws if path doesn't exist; keep original candidates
+  }
+
+  const parts = normalized.split(path.sep);
+  const binIndex = parts.lastIndexOf(".bin");
+  if (binIndex > 0 && parts[binIndex - 1] === "node_modules") {
+    const binName = path.basename(normalized);
+    const nodeModulesDir = parts.slice(0, binIndex).join(path.sep);
+    candidates.push(path.join(nodeModulesDir, binName));
+  }
+  return candidates;
+}
+
 export async function resolveOpenClawPackageRoot(opts: {
   cwd?: string;
   argv1?: string;
   moduleUrl?: string;
 }): Promise<string | null> {
-  for (const candidate of buildCandidates(opts)) {
+  for (const candidate of await buildCandidatesAsync(opts)) {
     const found = await findPackageRoot(candidate);
     if (found) {
       return found;
@@ -126,6 +151,30 @@ function buildCandidates(opts: { cwd?: string; argv1?: string; moduleUrl?: strin
   }
   if (opts.argv1) {
     candidates.push(...candidateDirsFromArgv1(opts.argv1));
+  }
+  if (opts.cwd) {
+    candidates.push(opts.cwd);
+  }
+
+  return candidates;
+}
+
+async function buildCandidatesAsync(opts: {
+  cwd?: string;
+  argv1?: string;
+  moduleUrl?: string;
+}): Promise<string[]> {
+  const candidates: string[] = [];
+
+  if (opts.moduleUrl) {
+    try {
+      candidates.push(path.dirname(fileURLToPath(opts.moduleUrl)));
+    } catch {
+      // Ignore invalid file:// URLs and keep other package-root hints.
+    }
+  }
+  if (opts.argv1) {
+    candidates.push(...(await candidateDirsFromArgv1Async(opts.argv1)));
   }
   if (opts.cwd) {
     candidates.push(opts.cwd);

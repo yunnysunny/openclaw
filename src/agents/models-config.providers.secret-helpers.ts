@@ -3,7 +3,7 @@ import { coerceSecretRef, resolveSecretInputRef } from "../config/types.secrets.
 import { normalizeOptionalString } from "../shared/string-coerce.js";
 import { normalizeOptionalSecretInput } from "../utils/normalize-secret-input.js";
 import type { AuthProfileStore } from "./auth-profiles/types.js";
-import { resolveEnvApiKey } from "./model-auth-env.js";
+import { resolveEnvApiKey, resolveEnvApiKeyAsync } from "./model-auth-env.js";
 import {
   isNonSecretApiKeyMarker,
   resolveEnvSecretRefHeaderValueMarker,
@@ -11,7 +11,11 @@ import {
   resolveNonEnvSecretRefHeaderValueMarker,
 } from "./model-auth-markers.js";
 import { resolveAwsSdkEnvVarName } from "./model-auth-runtime-shared.js";
-import { resolveProviderIdForAuth } from "./provider-auth-aliases.js";
+import {
+  type ProviderAuthAliasLookupParams,
+  resolveProviderIdForAuth,
+  resolveProviderIdForAuthAsync,
+} from "./provider-auth-aliases.js";
 
 type ModelsConfig = NonNullable<OpenClawConfig["models"]>;
 export type ProviderConfig = NonNullable<ModelsConfig["providers"]>[string];
@@ -28,21 +32,21 @@ export type ProfileApiKeyResolution = {
   discoveryApiKey?: string;
 };
 
-export type ProviderApiKeyResolver = (provider: string) => {
+export type ProviderApiKeyResolver = (provider: string) => Promise<{
   apiKey: string | undefined;
   discoveryApiKey?: string;
-};
+}>;
 
 export type ProviderAuthResolver = (
   provider: string,
   options?: { oauthMarker?: string },
-) => {
+) => Promise<{
   apiKey: string | undefined;
   discoveryApiKey?: string;
-  mode: "api_key" | "oauth" | "token" | "none";
+  mode: "api_key" | "aws-sdk" | "oauth" | "token" | "none";
   source: "env" | "profile" | "none";
   profileId?: string;
-};
+}>;
 
 const ENV_VAR_NAME_RE = /^[A-Z_][A-Z0-9_]*$/;
 
@@ -65,6 +69,18 @@ export function resolveEnvApiKeyVarName(
   env: NodeJS.ProcessEnv = process.env,
 ): string | undefined {
   const resolved = resolveEnvApiKey(provider, env);
+  if (!resolved) {
+    return undefined;
+  }
+  const match = /^(?:env: |shell env: )([A-Z0-9_]+)$/.exec(resolved.source);
+  return match ? match[1] : undefined;
+}
+
+export async function resolveEnvApiKeyVarNameAsync(
+  provider: string,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<string | undefined> {
+  const resolved = await resolveEnvApiKeyAsync(provider, env);
   if (!resolved) {
     return undefined;
   }
@@ -168,11 +184,37 @@ export function resolveApiKeyFromCredential(
   return undefined;
 }
 
+export async function resolveApiKeyFromCredentialAsync(
+  cred: AuthProfileStore["profiles"][string] | undefined,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<ProfileApiKeyResolution | undefined> {
+  return resolveApiKeyFromCredential(cred, env);
+}
+
 export function listAuthProfilesForProvider(store: AuthProfileStore, provider: string): string[] {
   const providerKey = resolveProviderIdForAuth(provider);
   return Object.entries(store.profiles)
     .filter(([, cred]) => resolveProviderIdForAuth(cred.provider) === providerKey)
     .map(([id]) => id);
+}
+
+/**
+ * Async counterpart to {@link listAuthProfilesForProvider}: same matching rules with
+ * {@link resolveProviderIdForAuthAsync} (async manifest-backed alias resolution).
+ */
+export async function listAuthProfilesForProviderAsync(
+  store: AuthProfileStore,
+  provider: string,
+  params?: ProviderAuthAliasLookupParams,
+): Promise<string[]> {
+  const providerKey = await resolveProviderIdForAuthAsync(provider, params);
+  const ids: string[] = [];
+  for (const [id, cred] of Object.entries(store.profiles)) {
+    if ((await resolveProviderIdForAuthAsync(cred.provider, params)) === providerKey) {
+      ids.push(id);
+    }
+  }
+  return ids;
 }
 
 export function resolveApiKeyFromProfiles(params: {
@@ -183,6 +225,21 @@ export function resolveApiKeyFromProfiles(params: {
   const ids = listAuthProfilesForProvider(params.store, params.provider);
   for (const id of ids) {
     const resolved = resolveApiKeyFromCredential(params.store.profiles[id], params.env);
+    if (resolved) {
+      return resolved;
+    }
+  }
+  return undefined;
+}
+
+export async function resolveApiKeyFromProfilesAsync(params: {
+  provider: string;
+  store: AuthProfileStore;
+  env?: NodeJS.ProcessEnv;
+}): Promise<ProfileApiKeyResolution | undefined> {
+  const ids = await listAuthProfilesForProviderAsync(params.store, params.provider);
+  for (const id of ids) {
+    const resolved = await resolveApiKeyFromCredentialAsync(params.store.profiles[id], params.env);
     if (resolved) {
       return resolved;
     }
@@ -268,6 +325,32 @@ export function normalizeResolvedEnvApiKey(params: {
   };
 }
 
+export async function normalizeResolvedEnvApiKeyAsync(params: {
+  providerKey: string;
+  provider: ProviderConfig;
+  env: NodeJS.ProcessEnv;
+  secretRefManagedProviders?: Set<string>;
+}): Promise<ProviderConfig> {
+  const currentApiKey = params.provider.apiKey;
+  if (
+    typeof currentApiKey !== "string" ||
+    !currentApiKey.trim() ||
+    ENV_VAR_NAME_RE.test(currentApiKey.trim())
+  ) {
+    return params.provider;
+  }
+
+  const envVarName = await resolveEnvApiKeyVarNameAsync(params.providerKey, params.env);
+  if (!envVarName || params.env[envVarName] !== currentApiKey) {
+    return params.provider;
+  }
+  params.secretRefManagedProviders?.add(params.providerKey);
+  return {
+    ...params.provider,
+    apiKey: envVarName,
+  };
+}
+
 export function resolveMissingProviderApiKey(params: {
   providerKey: string;
   provider: ProviderConfig;
@@ -306,6 +389,59 @@ export function resolveMissingProviderApiKey(params: {
   }
 
   const fromEnv = resolveEnvApiKeyVarName(params.providerKey, params.env);
+  const apiKey = fromEnv ?? params.profileApiKey?.apiKey;
+  if (!apiKey?.trim()) {
+    return params.provider;
+  }
+  if (params.profileApiKey && params.profileApiKey.source !== "plaintext") {
+    params.secretRefManagedProviders?.add(params.providerKey);
+  }
+  return {
+    ...params.provider,
+    apiKey,
+  };
+}
+
+export async function resolveMissingProviderApiKeyAsync(params: {
+  providerKey: string;
+  provider: ProviderConfig;
+  env: NodeJS.ProcessEnv;
+  profileApiKey: ProfileApiKeyResolution | undefined;
+  secretRefManagedProviders?: Set<string>;
+  providerApiKeyResolver?: (
+    env: NodeJS.ProcessEnv,
+  ) => string | undefined | Promise<string | undefined>;
+}): Promise<ProviderConfig> {
+  const hasModels = Array.isArray(params.provider.models) && params.provider.models.length > 0;
+  const normalizedApiKey = normalizeOptionalSecretInput(params.provider.apiKey);
+  const hasConfiguredApiKey = Boolean(normalizedApiKey || params.provider.apiKey);
+  if (!hasModels || hasConfiguredApiKey) {
+    return params.provider;
+  }
+
+  const authMode = params.provider.auth;
+  if (params.providerApiKeyResolver && (!authMode || authMode === "aws-sdk")) {
+    const resolvedApiKey = await Promise.resolve(params.providerApiKeyResolver(params.env));
+    if (!resolvedApiKey) {
+      return params.provider;
+    }
+    return {
+      ...params.provider,
+      apiKey: resolvedApiKey,
+    };
+  }
+  if (authMode === "aws-sdk") {
+    const awsEnvVar = resolveAwsSdkApiKeyVarName(params.env);
+    if (!awsEnvVar) {
+      return params.provider;
+    }
+    return {
+      ...params.provider,
+      apiKey: awsEnvVar,
+    };
+  }
+
+  const fromEnv = await resolveEnvApiKeyVarNameAsync(params.providerKey, params.env);
   const apiKey = fromEnv ?? params.profileApiKey?.apiKey;
   if (!apiKey?.trim()) {
     return params.provider;

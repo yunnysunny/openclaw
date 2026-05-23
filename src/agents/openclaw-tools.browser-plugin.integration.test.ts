@@ -1,18 +1,26 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
-import { resolveOpenClawPluginToolsForOptions } from "./openclaw-plugin-tools.js";
+import { activateSecretsRuntimeSnapshot, clearSecretsRuntimeSnapshot } from "../secrets/runtime.js";
+import {
+  resolveOpenClawPluginToolsForOptions,
+  resolveOpenClawPluginToolsForOptionsAsync,
+} from "./openclaw-plugin-tools.js";
 
 const hoisted = vi.hoisted(() => ({
   resolvePluginTools: vi.fn(),
+  resolvePluginToolsAsync: vi.fn(),
 }));
 
 vi.mock("../plugins/tools.js", () => ({
   resolvePluginTools: (...args: unknown[]) => hoisted.resolvePluginTools(...args),
+  resolvePluginToolsAsync: (...args: unknown[]) => hoisted.resolvePluginToolsAsync(...args),
 }));
 
 describe("createOpenClawTools browser plugin integration", () => {
   afterEach(() => {
     hoisted.resolvePluginTools.mockReset();
+    hoisted.resolvePluginToolsAsync.mockReset();
+    clearSecretsRuntimeSnapshot();
   });
 
   it("keeps the browser tool returned by plugin resolution", () => {
@@ -116,5 +124,89 @@ describe("createOpenClawTools browser plugin integration", () => {
     const result = await browserTool.execute("tool-call", {});
     const details = (result.details ?? {}) as { workspaceOnly?: boolean | null };
     expect(details.workspaceOnly).toBe(true);
+  });
+
+  it("keeps the browser tool returned by async plugin resolution", async () => {
+    hoisted.resolvePluginToolsAsync.mockResolvedValue([
+      {
+        name: "browser",
+        description: "browser fixture tool",
+        parameters: {
+          type: "object",
+          properties: {},
+        },
+        async execute() {
+          return {
+            content: [{ type: "text", text: "ok" }],
+          };
+        },
+      },
+    ]);
+
+    const config = {
+      plugins: {
+        allow: ["browser"],
+      },
+    } as OpenClawConfig;
+
+    const tools = await resolveOpenClawPluginToolsForOptionsAsync({
+      options: { config },
+      resolvedConfig: config,
+    });
+
+    expect(tools.map((tool) => tool.name)).toContain("browser");
+  });
+
+  it("does not pass a stale active snapshot as plugin runtime config for a resolved run config", () => {
+    const staleSourceConfig = {
+      plugins: {
+        allow: ["old-plugin"],
+      },
+    } as OpenClawConfig;
+    const staleRuntimeConfig = {
+      plugins: {
+        allow: ["old-plugin"],
+      },
+    } as OpenClawConfig;
+    const resolvedRunConfig = {
+      plugins: {
+        allow: ["browser"],
+      },
+      tools: {
+        experimental: {
+          planTool: true,
+        },
+      },
+    } as OpenClawConfig;
+    let capturedRuntimeConfig: OpenClawConfig | undefined;
+    hoisted.resolvePluginTools.mockImplementation((params: unknown) => {
+      capturedRuntimeConfig = (params as { context?: { runtimeConfig?: OpenClawConfig } }).context
+        ?.runtimeConfig;
+      return [];
+    });
+    activateSecretsRuntimeSnapshot({
+      sourceConfig: staleSourceConfig,
+      config: staleRuntimeConfig,
+      authStores: [],
+      warnings: [],
+      webTools: {
+        search: {
+          providerSource: "none",
+          diagnostics: [],
+        },
+        fetch: {
+          providerSource: "none",
+          diagnostics: [],
+        },
+        diagnostics: [],
+      },
+    });
+
+    resolveOpenClawPluginToolsForOptions({
+      options: { config: resolvedRunConfig },
+      resolvedConfig: resolvedRunConfig,
+    });
+
+    expect(capturedRuntimeConfig).toBe(resolvedRunConfig);
   });
 });

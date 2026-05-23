@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { loadPluginManifestRegistryMock } = vi.hoisted(() => ({
-  loadPluginManifestRegistryMock: vi.fn(() => {
+const { loadPluginManifestRegistrySyncMock } = vi.hoisted(() => ({
+  loadPluginManifestRegistrySyncMock: vi.fn(() => {
     throw new Error("manifest registry should stay off the explicit channel target fast path");
   }),
 }));
@@ -35,7 +35,7 @@ const { loadBundledPluginPublicArtifactModuleSyncMock } = vi.hoisted(() => ({
 }));
 
 vi.mock("../plugins/manifest-registry.js", () => ({
-  loadPluginManifestRegistry: loadPluginManifestRegistryMock,
+  loadPluginManifestRegistrySync: loadPluginManifestRegistrySyncMock,
 }));
 
 vi.mock("../plugins/public-surface-loader.js", () => ({
@@ -46,20 +46,22 @@ import { resolveConfigSecretTargetByPath } from "./target-registry.js";
 
 describe("secret target registry fast path", () => {
   beforeEach(() => {
-    loadPluginManifestRegistryMock.mockClear();
+    loadPluginManifestRegistrySyncMock.mockClear();
     loadBundledPluginPublicArtifactModuleSyncMock.mockClear();
   });
 
   it("resolves bundled channel targets by explicit channel id without manifest scans", () => {
     const target = resolveConfigSecretTargetByPath(["channels", "googlechat", "serviceAccount"]);
 
-    expect(target).not.toBeNull();
-    expect(target?.entry.id).toBe("channels.googlechat.serviceAccount");
-    expect(target?.refPathSegments).toEqual(["channels", "googlechat", "serviceAccountRef"]);
+    if (!target) {
+      throw new Error("expected googlechat service account target");
+    }
+    expect(target.entry.id).toBe("channels.googlechat.serviceAccount");
+    expect(target.refPathSegments).toEqual(["channels", "googlechat", "serviceAccountRef"]);
     expect(loadBundledPluginPublicArtifactModuleSyncMock).toHaveBeenCalledWith({
       dirName: "googlechat",
       artifactBasename: "secret-contract-api.js",
     });
-    expect(loadPluginManifestRegistryMock).not.toHaveBeenCalled();
+    expect(loadPluginManifestRegistrySyncMock).not.toHaveBeenCalled();
   });
 });

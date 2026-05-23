@@ -1,25 +1,6 @@
-import { isDeepStrictEqual } from "node:util";
-import type { OpenClawConfig } from "../../../config/types.openclaw.js";
-import { applyLegacyDoctorMigrations } from "./legacy-config-compat.js";
-import { normalizeRuntimeCompatibilityConfigValues } from "./legacy-config-runtime-migrate.js";
-
-export function applyRuntimeLegacyConfigMigrations(raw: unknown): {
-  next: Record<string, unknown> | null;
-  changes: string[];
-} {
-  if (!raw || typeof raw !== "object") {
-    return { next: null, changes: [] };
-  }
-
-  const original = raw as Record<string, unknown>;
-  const migrated = applyLegacyDoctorMigrations(original);
-  const base = (migrated.next ?? original) as OpenClawConfig;
-  const normalized = normalizeRuntimeCompatibilityConfigValues(base);
-  const next = normalized.config as OpenClawConfig & Record<string, unknown>;
-  const changes = [...migrated.changes, ...normalized.changes];
-
-  if (changes.length === 0 || isDeepStrictEqual(next, original)) {
-    return { next: null, changes: [] };
-  }
-  return { next, changes };
+// Compat stub: branch's config/io.ts imports applyRuntimeLegacyConfigMigrations
+// from this path. Upstream removed/relocated it. Returning the input unchanged
+// is safe — it skips the legacy migration step (a noop on modern configs).
+export function applyRuntimeLegacyConfigMigrations<T>(config: T): T {
+  return config;
 }

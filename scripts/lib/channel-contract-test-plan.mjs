@@ -1,7 +1,20 @@
+import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
 
 function listContractTestFiles(rootDir = "src/channels/plugins/contracts") {
+  const result = spawnSync("git", ["ls-files", "--", rootDir], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  });
+  if (result.status === 0) {
+    return result.stdout
+      .split("\n")
+      .map((line) => line.trim().replaceAll("\\", "/"))
+      .filter((line) => line.endsWith(".test.ts"))
+      .toSorted((a, b) => a.localeCompare(b));
+  }
+
   if (!existsSync(rootDir)) {
     return [];
   }
@@ -23,32 +36,27 @@ const CONTRACT_FILE_WEIGHTS = new Map([
 function resolveContractFileWeight(file) {
   const name = file.replaceAll("\\", "/").split("/").pop();
   if (name.startsWith("plugin.registry-backed-shard-")) {
-    return 5;
+    return 40;
   }
   if (name.startsWith("surfaces-only.registry-backed-shard-")) {
-    return 5;
+    return 40;
   }
   if (name.startsWith("directory.registry-backed-shard-")) {
-    return 4;
+    return 24;
   }
   if (name.startsWith("threading.registry-backed-shard-")) {
-    return 4;
+    return 18;
   }
   return CONTRACT_FILE_WEIGHTS.get(name) ?? 8;
 }
 
 export function createChannelContractTestShards() {
   const rootDir = "src/channels/plugins/contracts";
-  const suffixes = ["a", "b", "c", "d", "e", "f", "g", "h"];
+  const suffixes = ["a", "b", "c"];
   const groups = Object.fromEntries(
-    ["registry", "core"].flatMap((family) =>
-      suffixes.map((suffix) => [`checks-fast-contracts-channels-${family}-${suffix}`, []]),
-    ),
+    suffixes.map((suffix) => [`checks-fast-contracts-channels-${suffix}`, []]),
   );
-  const groupKeys = {
-    core: suffixes.map((suffix) => `checks-fast-contracts-channels-core-${suffix}`),
-    registry: suffixes.map((suffix) => `checks-fast-contracts-channels-registry-${suffix}`),
-  };
+  const groupKeys = suffixes.map((suffix) => `checks-fast-contracts-channels-${suffix}`);
   const weights = Object.fromEntries(Object.keys(groups).map((key) => [key, 0]));
   const pushBalanced = (keys, file) => {
     const target = keys.toSorted((a, b) => weights[a] - weights[b] || a.localeCompare(b))[0];
@@ -71,10 +79,10 @@ export function createChannelContractTestShards() {
     return delta === 0 ? left.localeCompare(right) : delta;
   };
   for (const file of registryFiles.toSorted(byDescendingWeight)) {
-    pushBalanced(groupKeys.registry, file);
+    pushBalanced(groupKeys, file);
   }
   for (const file of coreFiles.toSorted(byDescendingWeight)) {
-    pushBalanced(groupKeys.core, file);
+    pushBalanced(groupKeys, file);
   }
 
   return Object.entries(groups).map(([checkName, includePatterns]) => ({

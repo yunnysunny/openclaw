@@ -1,27 +1,33 @@
+// Compat stub: branch's safe-open-async.ts and boundary-file-read.ts import these
+// from this path. Upstream removed the file in the 2026-05 fs-safe migration.
+// Provide minimal runtime-correct implementations.
 import fs from "node:fs";
-import { sameFileIdentity as hasSameFileIdentity } from "./file-identity.js";
 
-export type SafeOpenSyncFailureReason = "path" | "validation" | "io";
+export type SafeOpenSyncAllowedType = "file" | "directory";
+
+export type SafeOpenSyncFailureReason = "path" | "io" | "validation";
 
 export type SafeOpenSyncResult =
   | { ok: true; path: string; fd: number; stat: fs.Stats }
   | { ok: false; reason: SafeOpenSyncFailureReason; error?: unknown };
 
-export type SafeOpenSyncAllowedType = "file" | "directory";
-
-type SafeOpenSyncFs = Pick<
-  typeof fs,
-  "constants" | "lstatSync" | "realpathSync" | "openSync" | "fstatSync" | "closeSync"
->;
+export function sameFileIdentity(a: fs.Stats, b: fs.Stats): boolean {
+  return a.dev === b.dev && a.ino === b.ino;
+}
 
 function isExpectedPathError(error: unknown): boolean {
   const code =
-    typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+    typeof error === "object" && error !== null && "code" in error
+      ? String((error as { code: unknown }).code)
+      : "";
   return code === "ENOENT" || code === "ENOTDIR" || code === "ELOOP";
 }
 
-export function sameFileIdentity(left: fs.Stats, right: fs.Stats): boolean {
-  return hasSameFileIdentity(left, right);
+function isAllowedType(stat: fs.Stats, allowedType: SafeOpenSyncAllowedType): boolean {
+  if (allowedType === "directory") {
+    return stat.isDirectory();
+  }
+  return stat.isFile();
 }
 
 export function openVerifiedFileSync(params: {
@@ -31,24 +37,21 @@ export function openVerifiedFileSync(params: {
   rejectHardlinks?: boolean;
   maxBytes?: number;
   allowedType?: SafeOpenSyncAllowedType;
-  ioFs?: SafeOpenSyncFs;
 }): SafeOpenSyncResult {
-  const ioFs = params.ioFs ?? fs;
   const allowedType = params.allowedType ?? "file";
+  const constants = fs.constants;
   const openReadFlags =
-    ioFs.constants.O_RDONLY |
-    (typeof ioFs.constants.O_NOFOLLOW === "number" ? ioFs.constants.O_NOFOLLOW : 0);
+    constants.O_RDONLY | (typeof constants.O_NOFOLLOW === "number" ? constants.O_NOFOLLOW : 0);
   let fd: number | null = null;
   try {
     if (params.rejectPathSymlink) {
-      const candidateStat = ioFs.lstatSync(params.filePath);
+      const candidateStat = fs.lstatSync(params.filePath);
       if (candidateStat.isSymbolicLink()) {
         return { ok: false, reason: "validation" };
       }
     }
-
-    const realPath = params.resolvedPath ?? ioFs.realpathSync(params.filePath);
-    const preOpenStat = ioFs.lstatSync(realPath);
+    const realPath = params.resolvedPath ?? fs.realpathSync(params.filePath);
+    const preOpenStat = fs.lstatSync(realPath);
     if (!isAllowedType(preOpenStat, allowedType)) {
       return { ok: false, reason: "validation" };
     }
@@ -62,9 +65,8 @@ export function openVerifiedFileSync(params: {
     ) {
       return { ok: false, reason: "validation" };
     }
-
-    fd = ioFs.openSync(realPath, openReadFlags);
-    const openedStat = ioFs.fstatSync(fd);
+    fd = fs.openSync(realPath, openReadFlags);
+    const openedStat = fs.fstatSync(fd);
     if (!isAllowedType(openedStat, allowedType)) {
       return { ok: false, reason: "validation" };
     }
@@ -77,7 +79,6 @@ export function openVerifiedFileSync(params: {
     if (!sameFileIdentity(preOpenStat, openedStat)) {
       return { ok: false, reason: "validation" };
     }
-
     const opened = { ok: true as const, path: realPath, fd, stat: openedStat };
     fd = null;
     return opened;
@@ -88,14 +89,9 @@ export function openVerifiedFileSync(params: {
     return { ok: false, reason: "io", error };
   } finally {
     if (fd !== null) {
-      ioFs.closeSync(fd);
+      try {
+        fs.closeSync(fd);
+      } catch {}
     }
   }
-}
-
-function isAllowedType(stat: fs.Stats, allowedType: SafeOpenSyncAllowedType): boolean {
-  if (allowedType === "directory") {
-    return stat.isDirectory();
-  }
-  return stat.isFile();
 }

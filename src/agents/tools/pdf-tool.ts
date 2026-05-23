@@ -1,6 +1,10 @@
-import { type Context, complete } from "@mariozechner/pi-ai";
-import { Type } from "@sinclair/typebox";
+import { type Context, complete } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
+import {
+  classifyMediaReferenceSource,
+  normalizeMediaReferenceSource,
+} from "../../media/media-reference.js";
 import { extractPdfContent, type PdfExtractedContent } from "../../media/pdf-extract.js";
 import { loadWebMediaRaw } from "../../media/web-media.js";
 import {
@@ -16,6 +20,7 @@ import {
   resolveMediaToolLocalRoots,
   resolveModelRuntimeApiKey,
   resolvePromptAndModelOverride,
+  resolveRemoteMediaSsrfPolicy,
 } from "./media-tool-shared.js";
 import { anthropicAnalyzePdf, geminiAnalyzePdf } from "./pdf-native-providers.js";
 import {
@@ -29,7 +34,7 @@ import {
 import { resolvePdfModelConfigForTool } from "./pdf-tool.model-config.js";
 import {
   createSandboxBridgeReadFile,
-  discoverAuthStorage,
+  discoverAuthStorageAsync,
   discoverModels,
   ensureOpenClawModelsJson,
   resolveSandboxedBridgeMediaPath,
@@ -50,15 +55,15 @@ const PDF_MAX_PIXELS = 4_000_000;
 
 export const PdfToolSchema = Type.Object({
   prompt: Type.Optional(Type.String()),
-  pdf: Type.Optional(Type.String({ description: "Single PDF path or URL." })),
+  pdf: Type.Optional(Type.String({ description: "One PDF path/URL." })),
   pdfs: Type.Optional(
     Type.Array(Type.String(), {
-      description: "Multiple PDF paths or URLs (up to 10).",
+      description: "PDF paths/URLs; max 10.",
     }),
   ),
   pages: Type.Optional(
     Type.String({
-      description: 'Page range to process, e.g. "1-5", "1,3,5-7". Defaults to all pages.',
+      description: 'Pages, e.g. "1-5", "1,3,5-7"; default all.',
     }),
   ),
   model: Type.Optional(Type.String()),
@@ -128,7 +133,7 @@ async function runPdfPrompt(params: {
   const effectiveCfg = applyImageModelConfigDefaults(params.cfg, params.pdfModelConfig);
 
   await ensureOpenClawModelsJson(effectiveCfg, params.agentDir);
-  const authStorage = discoverAuthStorage(params.agentDir);
+  const authStorage = await discoverAuthStorageAsync(params.agentDir);
   const modelRegistry = discoverModels(authStorage, params.agentDir);
 
   let extractionCache: PdfExtractedContent[] | null = null;
@@ -272,7 +277,8 @@ export function createPdfTool(options?: {
       : DEFAULT_MAX_PAGES;
 
   const description =
-    "Analyze one or more PDF documents with a model. Supports native PDF analysis for Anthropic and Google models, with text/image extraction fallback for other providers. Use pdf for a single path/URL, or pdfs for multiple (up to 10). Provide a prompt describing what to analyze.";
+    "Analyze PDFs with model. Anthropic/Google native PDF when supported; else text/image extraction. Use pdf for one, pdfs for max 10; prompt says what to inspect.";
+  const remoteMediaSsrfPolicy = resolveRemoteMediaSsrfPolicy(options?.config);
 
   return {
     label: "PDF",
@@ -331,14 +337,11 @@ export function createPdfTool(options?: {
       }> = [];
 
       for (const pdfRaw of pdfInputs) {
-        const trimmed = pdfRaw.trim();
-        const isHttpUrl = /^https?:\/\//i.test(trimmed);
-        const isFileUrl = /^file:/i.test(trimmed);
-        const isDataUrl = /^data:/i.test(trimmed);
-        const looksLikeWindowsDrive = /^[a-zA-Z]:[\\/]/.test(trimmed);
-        const hasScheme = /^[a-z][a-z0-9+.-]*:/i.test(trimmed);
+        const trimmed = normalizeMediaReferenceSource(pdfRaw);
+        const refInfo = classifyMediaReferenceSource(trimmed);
+        const { isHttpUrl } = refInfo;
 
-        if (hasScheme && !looksLikeWindowsDrive && !isFileUrl && !isHttpUrl && !isDataUrl) {
+        if (refInfo.hasUnsupportedScheme) {
           return {
             content: [
               {
@@ -392,6 +395,7 @@ export function createPdfTool(options?: {
           : await loadWebMediaRaw(resolvedPathInfo.resolved, {
               maxBytes,
               localRoots,
+              ssrfPolicy: remoteMediaSsrfPolicy,
             });
 
         if (media.kind !== "document") {
@@ -431,6 +435,7 @@ export function createPdfTool(options?: {
             maxPixels: PDF_MAX_PIXELS,
             minTextChars: PDF_MIN_TEXT_CHARS,
             pageNumbers,
+            config: options?.config,
           });
           extractedAll.push(extracted);
         }

@@ -1,4 +1,5 @@
 import type { OpenClawConfig } from "../config/types.openclaw.js";
+import type { PluginMetadataSnapshot } from "../plugins/plugin-metadata-snapshot.js";
 import { isRecord } from "../utils.js";
 import {
   mergeProviders,
@@ -8,7 +9,7 @@ import {
 import {
   applyNativeStreamingUsageCompat,
   enforceSourceManagedProviderSecrets,
-  normalizeProviders,
+  normalizeProvidersAsync,
   resolveImplicitProviders,
   type ProviderConfig,
 } from "./models-config.providers.js";
@@ -18,7 +19,12 @@ export type ResolveImplicitProvidersForModelsJson = (params: {
   agentDir: string;
   config: OpenClawConfig;
   env: NodeJS.ProcessEnv;
+  workspaceDir?: string;
   explicitProviders: Record<string, ProviderConfig>;
+  pluginMetadataSnapshot?: Pick<PluginMetadataSnapshot, "index" | "manifestRegistry" | "owners">;
+  providerDiscoveryProviderIds?: readonly string[];
+  providerDiscoveryTimeoutMs?: number;
+  providerDiscoveryEntriesOnly?: boolean;
 }) => Promise<Record<string, ProviderConfig>>;
 
 export type ModelsJsonPlan =
@@ -38,6 +44,11 @@ export async function resolveProvidersForModelsJsonWithDeps(
     cfg: OpenClawConfig;
     agentDir: string;
     env: NodeJS.ProcessEnv;
+    workspaceDir?: string;
+    pluginMetadataSnapshot?: Pick<PluginMetadataSnapshot, "index" | "manifestRegistry" | "owners">;
+    providerDiscoveryProviderIds?: readonly string[];
+    providerDiscoveryTimeoutMs?: number;
+    providerDiscoveryEntriesOnly?: boolean;
   },
   deps?: {
     resolveImplicitProviders?: ResolveImplicitProvidersForModelsJson;
@@ -50,7 +61,18 @@ export async function resolveProvidersForModelsJsonWithDeps(
     agentDir,
     config: cfg,
     env,
+    ...(params.workspaceDir ? { workspaceDir: params.workspaceDir } : {}),
     explicitProviders,
+    ...(params.pluginMetadataSnapshot
+      ? { pluginMetadataSnapshot: params.pluginMetadataSnapshot }
+      : {}),
+    ...(params.providerDiscoveryProviderIds
+      ? { providerDiscoveryProviderIds: params.providerDiscoveryProviderIds }
+      : {}),
+    ...(params.providerDiscoveryTimeoutMs !== undefined
+      ? { providerDiscoveryTimeoutMs: params.providerDiscoveryTimeoutMs }
+      : {}),
+    ...(params.providerDiscoveryEntriesOnly === true ? { providerDiscoveryEntriesOnly: true } : {}),
   });
   return mergeProviders({
     implicit: implicitProviders,
@@ -88,15 +110,40 @@ export async function planOpenClawModelsJsonWithDeps(
     sourceConfigForSecrets?: OpenClawConfig;
     agentDir: string;
     env: NodeJS.ProcessEnv;
+    workspaceDir?: string;
     existingRaw: string;
     existingParsed: unknown;
+    pluginMetadataSnapshot?: Pick<PluginMetadataSnapshot, "index" | "manifestRegistry" | "owners">;
+    providerDiscoveryProviderIds?: readonly string[];
+    providerDiscoveryTimeoutMs?: number;
+    providerDiscoveryEntriesOnly?: boolean;
   },
   deps?: {
     resolveImplicitProviders?: ResolveImplicitProvidersForModelsJson;
   },
 ): Promise<ModelsJsonPlan> {
   const { cfg, agentDir, env } = params;
-  const providers = await resolveProvidersForModelsJsonWithDeps({ cfg, agentDir, env }, deps);
+  const providers = await resolveProvidersForModelsJsonWithDeps(
+    {
+      cfg,
+      agentDir,
+      env,
+      ...(params.workspaceDir ? { workspaceDir: params.workspaceDir } : {}),
+      ...(params.pluginMetadataSnapshot
+        ? { pluginMetadataSnapshot: params.pluginMetadataSnapshot }
+        : {}),
+      ...(params.providerDiscoveryProviderIds
+        ? { providerDiscoveryProviderIds: params.providerDiscoveryProviderIds }
+        : {}),
+      ...(params.providerDiscoveryTimeoutMs !== undefined
+        ? { providerDiscoveryTimeoutMs: params.providerDiscoveryTimeoutMs }
+        : {}),
+      ...(params.providerDiscoveryEntriesOnly === true
+        ? { providerDiscoveryEntriesOnly: true }
+        : {}),
+    },
+    deps,
+  );
 
   if (Object.keys(providers).length === 0) {
     return { action: "skip" };
@@ -105,7 +152,7 @@ export async function planOpenClawModelsJsonWithDeps(
   const mode = cfg.models?.mode ?? "merge";
   const secretRefManagedProviders = new Set<string>();
   const normalizedProviders =
-    normalizeProviders({
+    (await normalizeProvidersAsync({
       providers,
       agentDir,
       env,
@@ -113,7 +160,7 @@ export async function planOpenClawModelsJsonWithDeps(
       sourceProviders: params.sourceConfigForSecrets?.models?.providers,
       sourceSecretDefaults: params.sourceConfigForSecrets?.secrets?.defaults,
       secretRefManagedProviders,
-    }) ?? providers;
+    })) ?? providers;
   const mergedProviders = resolveProvidersForMode({
     mode,
     existingParsed: params.existingParsed,

@@ -2,13 +2,16 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolveOpenClawPackageRootSync } from "../infra/openclaw-root.js";
+import {
+  resolveOpenClawPackageRoot,
+  resolveOpenClawPackageRootSync,
+} from "../infra/openclaw-root.js";
 import { normalizeOptionalLowercaseString } from "../shared/string-coerce.js";
 import { resolveUserPath } from "../utils.js";
 
 const DISABLED_BUNDLED_PLUGINS_DIR = path.join(os.tmpdir(), "openclaw-empty-bundled-plugins");
 
-function bundledPluginsDisabled(env: NodeJS.ProcessEnv): boolean {
+export function areBundledPluginsDisabled(env: NodeJS.ProcessEnv = process.env): boolean {
   const raw = normalizeOptionalLowercaseString(env.OPENCLAW_DISABLE_BUNDLED_PLUGINS);
   return raw === "1" || raw === "true";
 }
@@ -18,12 +21,35 @@ function resolveDisabledBundledPluginsDir(): string {
   return DISABLED_BUNDLED_PLUGINS_DIR;
 }
 
+async function resolveDisabledBundledPluginsDirAsync(): Promise<string> {
+  await fs.promises.mkdir(DISABLED_BUNDLED_PLUGINS_DIR, { recursive: true });
+  return DISABLED_BUNDLED_PLUGINS_DIR;
+}
+
 function isSourceCheckoutRoot(packageRoot: string): boolean {
   return (
     fs.existsSync(path.join(packageRoot, ".git")) &&
     fs.existsSync(path.join(packageRoot, "src")) &&
     fs.existsSync(path.join(packageRoot, "extensions"))
   );
+}
+
+async function pathExists(targetPath: string): Promise<boolean> {
+  try {
+    await fs.promises.access(targetPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function isSourceCheckoutRootAsync(packageRoot: string): Promise<boolean> {
+  const [hasGit, hasSrc, hasExtensions] = await Promise.all([
+    pathExists(path.join(packageRoot, ".git")),
+    pathExists(path.join(packageRoot, "src")),
+    pathExists(path.join(packageRoot, "extensions")),
+  ]);
+  return hasGit && hasSrc && hasExtensions;
 }
 
 function hasUsableBundledPluginTree(pluginsDir: string): boolean {
@@ -44,6 +70,31 @@ function hasUsableBundledPluginTree(pluginsDir: string): boolean {
   } catch {
     return false;
   }
+}
+
+async function hasUsableBundledPluginTreeAsync(pluginsDir: string): Promise<boolean> {
+  if (!(await pathExists(pluginsDir))) {
+    return false;
+  }
+  let entries: fs.Dirent[];
+  try {
+    entries = await fs.promises.readdir(pluginsDir, { withFileTypes: true });
+  } catch {
+    return false;
+  }
+  for (const entry of entries) {
+    if (!entry.isDirectory()) {
+      continue;
+    }
+    const pluginDir = path.join(pluginsDir, entry.name);
+    if (
+      (await pathExists(path.join(pluginDir, "package.json"))) ||
+      (await pathExists(path.join(pluginDir, "openclaw.plugin.json")))
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function runningSourceTypeScriptProcess(): boolean {
@@ -108,8 +159,37 @@ function resolveBundledDirFromPackageRoot(
   return undefined;
 }
 
+async function resolveBundledDirFromPackageRootAsync(
+  packageRoot: string,
+  preferSourceCheckout: boolean,
+): Promise<string | undefined> {
+  const sourceExtensionsDir = path.join(packageRoot, "extensions");
+  const builtExtensionsDir = path.join(packageRoot, "dist", "extensions");
+  const sourceCheckout = await isSourceCheckoutRootAsync(packageRoot);
+  if (preferSourceCheckout && (await pathExists(sourceExtensionsDir))) {
+    return sourceExtensionsDir;
+  }
+  const runtimeExtensionsDir = path.join(packageRoot, "dist-runtime", "extensions");
+  const hasUsableRuntimeTree = sourceCheckout
+    ? await hasUsableBundledPluginTreeAsync(runtimeExtensionsDir)
+    : await pathExists(runtimeExtensionsDir);
+  const hasUsableBuiltTree = sourceCheckout
+    ? await hasUsableBundledPluginTreeAsync(builtExtensionsDir)
+    : await pathExists(builtExtensionsDir);
+  if (hasUsableRuntimeTree && hasUsableBuiltTree) {
+    return runtimeExtensionsDir;
+  }
+  if (hasUsableBuiltTree) {
+    return builtExtensionsDir;
+  }
+  if (sourceCheckout && (await pathExists(sourceExtensionsDir))) {
+    return sourceExtensionsDir;
+  }
+  return undefined;
+}
+
 export function resolveBundledPluginsDir(env: NodeJS.ProcessEnv = process.env): string | undefined {
-  if (bundledPluginsDisabled(env)) {
+  if (areBundledPluginsDisabled(env)) {
     return resolveDisabledBundledPluginsDir();
   }
 
@@ -139,11 +219,12 @@ export function resolveBundledPluginsDir(env: NodeJS.ProcessEnv = process.env): 
   const preferSourceCheckout = Boolean(env.VITEST) || runningSourceTypeScriptProcess();
 
   try {
-    const packageRoots = [
-      resolveOpenClawPackageRootSync({ argv1: process.argv[1] }),
-      resolveOpenClawPackageRootSync({ cwd: process.cwd() }),
-      resolveOpenClawPackageRootSync({ moduleUrl: import.meta.url }),
-    ].filter(
+    const argvRoot = resolveOpenClawPackageRootSync({ argv1: process.argv[1] });
+    const cwdRoot = resolveOpenClawPackageRootSync({ cwd: process.cwd() });
+    const moduleRoot = resolveOpenClawPackageRootSync({ moduleUrl: import.meta.url });
+    const packageRoots = (
+      preferSourceCheckout ? [cwdRoot, argvRoot, moduleRoot] : [argvRoot, cwdRoot, moduleRoot]
+    ).filter(
       (entry, index, all): entry is string => Boolean(entry) && all.indexOf(entry) === index,
     );
     for (const packageRoot of packageRoots) {
@@ -190,4 +271,102 @@ export function resolveBundledPluginsDir(env: NodeJS.ProcessEnv = process.env): 
   }
 
   return undefined;
+}
+
+export async function resolveBundledPluginsDirAsync(
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<string | undefined> {
+  if (areBundledPluginsDisabled(env)) {
+    return resolveDisabledBundledPluginsDirAsync();
+  }
+
+  const override = env.OPENCLAW_BUNDLED_PLUGINS_DIR?.trim();
+  if (override) {
+    const resolvedOverride = resolveUserPath(override, env);
+    if (await pathExists(resolvedOverride)) {
+      return resolvedOverride;
+    }
+    try {
+      const argvPackageRoot = await resolveOpenClawPackageRoot({ argv1: process.argv[1] });
+      if (argvPackageRoot && !(await isSourceCheckoutRootAsync(argvPackageRoot))) {
+        const argvFallback = await resolveBundledDirFromPackageRootAsync(argvPackageRoot, false);
+        if (argvFallback) {
+          return argvFallback;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return resolvedOverride;
+  }
+
+  const preferSourceCheckout = Boolean(env.VITEST) || runningSourceTypeScriptProcess();
+
+  try {
+    const packageRoots = [
+      await resolveOpenClawPackageRoot({ argv1: process.argv[1] }),
+      await resolveOpenClawPackageRoot({ cwd: process.cwd() }),
+      await resolveOpenClawPackageRoot({ moduleUrl: import.meta.url }),
+    ].filter(
+      (entry, index, all): entry is string => Boolean(entry) && all.indexOf(entry) === index,
+    );
+    for (const packageRoot of packageRoots) {
+      const bundledDir = await resolveBundledDirFromPackageRootAsync(
+        packageRoot,
+        preferSourceCheckout,
+      );
+      if (bundledDir) {
+        return bundledDir;
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  try {
+    const execDir = path.dirname(process.execPath);
+    const siblingBuilt = path.join(execDir, "dist", "extensions");
+    if (await pathExists(siblingBuilt)) {
+      return siblingBuilt;
+    }
+    const sibling = path.join(execDir, "extensions");
+    if (await pathExists(sibling)) {
+      return sibling;
+    }
+  } catch {
+    // ignore
+  }
+
+  try {
+    let cursor = path.dirname(fileURLToPath(import.meta.url));
+    for (let i = 0; i < 6; i += 1) {
+      const candidate = path.join(cursor, "extensions");
+      if (await pathExists(candidate)) {
+        return candidate;
+      }
+      const parent = path.dirname(cursor);
+      if (parent === cursor) {
+        break;
+      }
+      cursor = parent;
+    }
+  } catch {
+    // ignore
+  }
+
+  return undefined;
+}
+
+// Stage 4 compat stub: upstream test seam that swaps the resolved bundled
+// plugins directory in-process. Locally callers read from env directly, so
+// keep the name available and mirror the env var so test cleanup paths work.
+export function setBundledPluginsDirOverrideForTest(dir: string | undefined): void {
+  if (process.env.VITEST !== "true" && process.env.NODE_ENV !== "test") {
+    throw new Error("setBundledPluginsDirOverrideForTest is only available in tests");
+  }
+  if (dir === undefined) {
+    delete process.env.OPENCLAW_BUNDLED_PLUGINS_DIR;
+  } else {
+    process.env.OPENCLAW_BUNDLED_PLUGINS_DIR = dir;
+  }
 }

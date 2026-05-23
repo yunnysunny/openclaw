@@ -47,7 +47,7 @@ export default definePluginEntry({
       catalog: {
         order: "paired",
         run: async (ctx) => {
-          const apiKey = ctx.resolveProviderApiKey(PROVIDER_ID).apiKey;
+          const apiKey = (await ctx.resolveProviderApiKey(PROVIDER_ID)).apiKey;
           if (!apiKey) {
             return null;
           }

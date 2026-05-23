@@ -33,8 +33,10 @@ export const resolveMarketplaceInstallShortcut: Mock<ResolveMarketplaceInstallSh
 export const enablePluginInConfig: UnknownMock = vi.fn();
 export const recordPluginInstall: UnknownMock = vi.fn();
 export const clearPluginManifestRegistryCache: UnknownMock = vi.fn();
-export const loadPluginManifestRegistry: UnknownMock = vi.fn();
+export const loadPluginManifestRegistrySync: UnknownMock = vi.fn();
 export const buildPluginSnapshotReport: UnknownMock = vi.fn();
+export const buildPluginInspectReport: UnknownMock = vi.fn();
+export const buildAllPluginInspectReports: UnknownMock = vi.fn();
 export const buildPluginDiagnosticsReport: UnknownMock = vi.fn();
 export const buildPluginCompatibilityNotices: UnknownMock = vi.fn();
 export const applyExclusiveSlotSelection: UnknownMock = vi.fn();
@@ -87,6 +89,12 @@ vi.mock("../runtime.js", () => ({
 }));
 
 vi.mock("../config/config.js", () => ({
+  assertConfigWriteAllowedInCurrentMode: () => {
+    if (process.env.OPENCLAW_NIX_MODE === "1") {
+      throw new Error("OPENCLAW_NIX_MODE=1");
+    }
+  },
+  getRuntimeConfig: () => loadConfig(),
   loadConfig: () => loadConfig(),
   readConfigFileSnapshot: ((
     ...args: Parameters<(typeof import("../config/config.js"))["readConfigFileSnapshot"]>
@@ -113,6 +121,7 @@ vi.mock("../config/config.js", () => ({
 }));
 
 vi.mock("../config/paths.js", () => ({
+  resolveIsNixMode: () => false,
   resolveStateDir: () => resolveStateDir(),
 }));
 
@@ -149,13 +158,23 @@ vi.mock("../plugins/installs.js", () => ({
 
 vi.mock("../plugins/manifest-registry.js", () => ({
   clearPluginManifestRegistryCache: () => clearPluginManifestRegistryCache(),
-  loadPluginManifestRegistry: ((...args: unknown[]) =>
-    invokeMock<unknown[], unknown>(loadPluginManifestRegistry, ...args)) as (
+  loadPluginManifestRegistrySync: ((...args: unknown[]) =>
+    invokeMock<unknown[], unknown>(loadPluginManifestRegistrySync, ...args)) as (
     ...args: unknown[]
   ) => unknown,
 }));
 
 vi.mock("../plugins/status.js", () => ({
+  buildAllPluginInspectReports: ((
+    ...args: Parameters<(typeof import("../plugins/status.js"))["buildAllPluginInspectReports"]>
+  ) =>
+    invokeMock<
+      Parameters<(typeof import("../plugins/status.js"))["buildAllPluginInspectReports"]>,
+      ReturnType<(typeof import("../plugins/status.js"))["buildAllPluginInspectReports"]>
+    >(
+      buildAllPluginInspectReports,
+      ...args,
+    )) as (typeof import("../plugins/status.js"))["buildAllPluginInspectReports"],
   buildPluginSnapshotReport: ((
     ...args: Parameters<(typeof import("../plugins/status.js"))["buildPluginSnapshotReport"]>
   ) =>
@@ -166,6 +185,16 @@ vi.mock("../plugins/status.js", () => ({
       buildPluginSnapshotReport,
       ...args,
     )) as (typeof import("../plugins/status.js"))["buildPluginSnapshotReport"],
+  buildPluginInspectReport: ((
+    ...args: Parameters<(typeof import("../plugins/status.js"))["buildPluginInspectReport"]>
+  ) =>
+    invokeMock<
+      Parameters<(typeof import("../plugins/status.js"))["buildPluginInspectReport"]>,
+      ReturnType<(typeof import("../plugins/status.js"))["buildPluginInspectReport"]>
+    >(
+      buildPluginInspectReport,
+      ...args,
+    )) as (typeof import("../plugins/status.js"))["buildPluginInspectReport"],
   buildPluginDiagnosticsReport: ((
     ...args: Parameters<(typeof import("../plugins/status.js"))["buildPluginDiagnosticsReport"]>
   ) =>
@@ -186,20 +215,25 @@ vi.mock("../plugins/status.js", () => ({
       buildPluginCompatibilityNotices,
       ...args,
     )) as (typeof import("../plugins/status.js"))["buildPluginCompatibilityNotices"],
+  formatPluginCompatibilityNotice: (entry: { message: string }) => entry.message,
 }));
 
-vi.mock("../plugins/slots.js", () => ({
-  applyExclusiveSlotSelection: ((
-    params: Parameters<(typeof import("../plugins/slots.js"))["applyExclusiveSlotSelection"]>[0],
-  ) =>
-    invokeMock<
-      [Parameters<(typeof import("../plugins/slots.js"))["applyExclusiveSlotSelection"]>[0]],
-      ReturnType<(typeof import("../plugins/slots.js"))["applyExclusiveSlotSelection"]>
-    >(
-      applyExclusiveSlotSelection,
-      params,
-    )) as (typeof import("../plugins/slots.js"))["applyExclusiveSlotSelection"],
-}));
+vi.mock("../plugins/slots.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../plugins/slots.js")>();
+  return {
+    ...actual,
+    applyExclusiveSlotSelection: ((
+      params: Parameters<(typeof import("../plugins/slots.js"))["applyExclusiveSlotSelection"]>[0],
+    ) =>
+      invokeMock<
+        [Parameters<(typeof import("../plugins/slots.js"))["applyExclusiveSlotSelection"]>[0]],
+        ReturnType<(typeof import("../plugins/slots.js"))["applyExclusiveSlotSelection"]>
+      >(
+        applyExclusiveSlotSelection,
+        params,
+      )) as (typeof import("../plugins/slots.js"))["applyExclusiveSlotSelection"],
+  };
+});
 
 vi.mock("../plugins/uninstall.js", () => ({
   uninstallPlugin: ((
@@ -371,8 +405,9 @@ export function resetPluginsCliTestState() {
   enablePluginInConfig.mockReset();
   recordPluginInstall.mockReset();
   clearPluginManifestRegistryCache.mockReset();
-  loadPluginManifestRegistry.mockReset();
+  loadPluginManifestRegistrySync.mockReset();
   buildPluginSnapshotReport.mockReset();
+  buildPluginInspectReport.mockReset();
   buildPluginDiagnosticsReport.mockReset();
   buildPluginCompatibilityNotices.mockReset();
   applyExclusiveSlotSelection.mockReset();
@@ -424,7 +459,7 @@ export function resetPluginsCliTestState() {
   recordPluginInstall.mockImplementation(
     ((cfg: OpenClawConfig) => cfg) as (...args: unknown[]) => unknown,
   );
-  loadPluginManifestRegistry.mockReturnValue({
+  loadPluginManifestRegistrySync.mockReturnValue({
     plugins: [],
     diagnostics: [],
   });

@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { resolveProviderDiscoveryFilterForTest } from "./models-config.providers.implicit.js";
 
 describe("resolveProviderDiscoveryFilterForTest", () => {
-  it("maps live provider backend ids to owning plugin ids", () => {
+  it("maps live provider backend ids to owning plugin ids", async () => {
     expect(
-      resolveProviderDiscoveryFilterForTest({
+      await resolveProviderDiscoveryFilterForTest({
         env: {
           OPENCLAW_LIVE_TEST: "1",
           OPENCLAW_LIVE_PROVIDERS: "claude-cli",
@@ -14,9 +14,9 @@ describe("resolveProviderDiscoveryFilterForTest", () => {
     ).toEqual(["anthropic"]);
   });
 
-  it("honors gateway live provider filters too", () => {
+  it("honors gateway live provider filters too", async () => {
     expect(
-      resolveProviderDiscoveryFilterForTest({
+      await resolveProviderDiscoveryFilterForTest({
         env: {
           OPENCLAW_LIVE_TEST: "1",
           OPENCLAW_LIVE_GATEWAY_PROVIDERS: "claude-cli",
@@ -26,9 +26,9 @@ describe("resolveProviderDiscoveryFilterForTest", () => {
     ).toEqual(["anthropic"]);
   });
 
-  it("keeps explicit plugin-id filters when no owning provider plugin exists", () => {
+  it("keeps explicit plugin-id filters when no owning provider plugin exists", async () => {
     expect(
-      resolveProviderDiscoveryFilterForTest({
+      await resolveProviderDiscoveryFilterForTest({
         env: {
           OPENCLAW_LIVE_TEST: "1",
           OPENCLAW_LIVE_PROVIDERS: "openrouter",

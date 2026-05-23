@@ -12,6 +12,7 @@ import {
   projectOutboundPayloadPlanForJson,
   projectOutboundPayloadPlanForMirror,
   projectOutboundPayloadPlanForOutbound,
+  summarizeOutboundPayloadForTransport,
 } from "./payloads.js";
 
 function resolveMirrorProjection(payloads: readonly ReplyPayload[]) {
@@ -45,7 +46,7 @@ describe("normalizeReplyPayloadsForDelivery", () => {
         mediaUrls: ["https://x.test/a.png", "https://x.test/b.png"],
         replyToId: "123",
         replyToTag: true,
-        replyToCurrent: false,
+        replyToCurrent: undefined,
         audioAsVoice: true,
       },
     ]);
@@ -64,7 +65,7 @@ describe("normalizeReplyPayloadsForDelivery", () => {
         mediaUrls: undefined,
         mediaUrl: undefined,
         replyToId: undefined,
-        replyToCurrent: false,
+        replyToCurrent: undefined,
         replyToTag: false,
         audioAsVoice: false,
       },
@@ -84,7 +85,7 @@ describe("normalizeReplyPayloadsForDelivery", () => {
           text: "Updated [wiki/tools.md] with the rollback failure-mode nuance. No channel reply.",
         },
       ]),
-    ).toEqual([]);
+    ).toStrictEqual([]);
   });
 
   it("keeps normal payloads that mention wiki without matching relay placeholders", () => {
@@ -98,7 +99,7 @@ describe("normalizeReplyPayloadsForDelivery", () => {
         mediaUrls: undefined,
         mediaUrl: undefined,
         replyToId: undefined,
-        replyToCurrent: false,
+        replyToCurrent: undefined,
         replyToTag: false,
         audioAsVoice: false,
       },
@@ -111,7 +112,7 @@ describe("normalizeReplyPayloadsForDelivery", () => {
         { text: '{"action":"NO_REPLY"}' },
         { text: '{\n  "action": "NO_REPLY"\n}' },
       ]),
-    ).toEqual([]);
+    ).toStrictEqual([]);
   });
 
   it("keeps JSON NO_REPLY objects that include extra fields", () => {
@@ -123,7 +124,7 @@ describe("normalizeReplyPayloadsForDelivery", () => {
         mediaUrls: undefined,
         mediaUrl: undefined,
         replyToId: undefined,
-        replyToCurrent: false,
+        replyToCurrent: undefined,
         replyToTag: false,
         audioAsVoice: false,
       },
@@ -143,7 +144,7 @@ describe("normalizeReplyPayloadsForDelivery", () => {
         mediaUrls: undefined,
         mediaUrl: undefined,
         replyToId: undefined,
-        replyToCurrent: false,
+        replyToCurrent: undefined,
         replyToTag: false,
         audioAsVoice: false,
       },
@@ -152,7 +153,7 @@ describe("normalizeReplyPayloadsForDelivery", () => {
         mediaUrls: undefined,
         mediaUrl: undefined,
         replyToId: undefined,
-        replyToCurrent: false,
+        replyToCurrent: undefined,
         replyToTag: false,
         audioAsVoice: false,
       },
@@ -171,7 +172,7 @@ describe("normalizeReplyPayloadsForDelivery", () => {
         mediaUrls: ["https://x.test/one.png"],
         mediaUrl: "https://x.test/one.png",
         replyToId: undefined,
-        replyToCurrent: false,
+        replyToCurrent: undefined,
         replyToTag: false,
         audioAsVoice: false,
       },
@@ -180,11 +181,44 @@ describe("normalizeReplyPayloadsForDelivery", () => {
         mediaUrls: ["https://x.test/two.png"],
         mediaUrl: undefined,
         replyToId: undefined,
-        replyToCurrent: false,
+        replyToCurrent: undefined,
         replyToTag: false,
         audioAsVoice: false,
       },
     ]);
+  });
+
+  it("drops bare silent replies for direct conversations", () => {
+    expect(
+      projectOutboundPayloadPlanForDelivery(
+        createOutboundPayloadPlan([{ text: "NO_REPLY" }], {
+          sessionKey: "agent:main:telegram:direct:123",
+          surface: "telegram",
+        }),
+      ),
+    ).toStrictEqual([]);
+  });
+
+  it("drops bare silent replies for groups", () => {
+    expect(
+      projectOutboundPayloadPlanForDelivery(
+        createOutboundPayloadPlan([{ text: "NO_REPLY" }], {
+          sessionKey: "agent:main:telegram:group:123",
+          surface: "telegram",
+        }),
+      ),
+    ).toStrictEqual([]);
+  });
+
+  it("does not add silent-reply chatter when visible content is already being delivered", () => {
+    const delivery = projectOutboundPayloadPlanForDelivery(
+      createOutboundPayloadPlan([{ text: "NO_REPLY" }, { text: "visible reply" }], {
+        sessionKey: "agent:main:telegram:direct:123",
+        surface: "telegram",
+      }),
+    );
+    expect(delivery).toHaveLength(1);
+    expect(delivery[0]?.text).toBe("visible reply");
   });
 
   it("is idempotent for already-normalized delivery payloads", () => {
@@ -224,7 +258,7 @@ describe("normalizeReplyPayloadsForDelivery", () => {
           "audioAsVoice": false,
           "mediaUrl": undefined,
           "mediaUrls": undefined,
-          "replyToCurrent": false,
+          "replyToCurrent": undefined,
           "replyToId": undefined,
           "replyToTag": false,
           "text": "NO_REPLY with details",
@@ -233,7 +267,7 @@ describe("normalizeReplyPayloadsForDelivery", () => {
           "audioAsVoice": false,
           "mediaUrl": undefined,
           "mediaUrls": undefined,
-          "replyToCurrent": false,
+          "replyToCurrent": undefined,
           "replyToId": undefined,
           "replyToTag": false,
           "text": "{"action":"NO_REPLY","note":"keep"}",
@@ -244,7 +278,7 @@ describe("normalizeReplyPayloadsForDelivery", () => {
           "mediaUrls": [
             "https://x.test/m1.png",
           ],
-          "replyToCurrent": false,
+          "replyToCurrent": undefined,
           "replyToId": undefined,
           "replyToTag": false,
           "text": "",
@@ -255,7 +289,7 @@ describe("normalizeReplyPayloadsForDelivery", () => {
           "mediaUrls": [
             "https://x.test/m2.png",
           ],
-          "replyToCurrent": false,
+          "replyToCurrent": undefined,
           "replyToId": "444",
           "replyToTag": true,
           "text": "hi",
@@ -267,7 +301,7 @@ describe("normalizeReplyPayloadsForDelivery", () => {
           },
           "mediaUrl": undefined,
           "mediaUrls": undefined,
-          "replyToCurrent": false,
+          "replyToCurrent": undefined,
           "replyToId": undefined,
           "replyToTag": false,
           "text": "BTW
@@ -282,7 +316,7 @@ describe("normalizeReplyPayloadsForDelivery", () => {
           },
           "mediaUrl": undefined,
           "mediaUrls": undefined,
-          "replyToCurrent": false,
+          "replyToCurrent": undefined,
           "replyToId": undefined,
           "replyToTag": false,
           "text": "",
@@ -386,7 +420,7 @@ describe("normalizeOutboundPayloadsForJson", () => {
     expect(normalizeOutboundPayloadsForJson(cloneReplyPayloads(input))).toEqual(expected);
   });
 
-  it("suppresses reasoning payloads", () => {
+  it("suppresses reasoning payloads during JSON normalization", () => {
     expect(
       normalizeOutboundPayloadsForJson([
         { text: "Reasoning:\n_step_", isReasoning: true },
@@ -406,7 +440,7 @@ describe("normalizeOutboundPayloads", () => {
     ]);
   });
 
-  it("suppresses reasoning payloads", () => {
+  it("suppresses reasoning payloads during runtime normalization", () => {
     expect(
       normalizeOutboundPayloads([
         { text: "Reasoning:\n_step_", isReasoning: true },
@@ -483,6 +517,44 @@ describe("OutboundPayloadPlan projections", () => {
     const plan = createOutboundPayloadPlan(matrix);
     expect(projectOutboundPayloadPlanForMirror(plan)).toEqual(resolveMirrorProjection(matrix));
   });
+
+  it("keeps markdown images as text unless extraction is enabled", () => {
+    const input = "Tech: ![Node.js](https://img.shields.io/badge/Node.js-339933)";
+
+    expect(
+      projectOutboundPayloadPlanForDelivery(createOutboundPayloadPlan([{ text: input }])),
+    ).toEqual([
+      {
+        text: input,
+        mediaUrl: undefined,
+        mediaUrls: undefined,
+        replyToId: undefined,
+        replyToCurrent: undefined,
+        replyToTag: false,
+        audioAsVoice: false,
+      },
+    ]);
+  });
+
+  it("extracts markdown images when the outbound channel opts in", () => {
+    const input = "Chart ![chart](https://example.com/chart.png) now";
+
+    expect(
+      projectOutboundPayloadPlanForDelivery(
+        createOutboundPayloadPlan([{ text: input }], { extractMarkdownImages: true }),
+      ),
+    ).toEqual([
+      {
+        text: "Chart now",
+        mediaUrl: "https://example.com/chart.png",
+        mediaUrls: ["https://example.com/chart.png"],
+        replyToId: undefined,
+        replyToCurrent: undefined,
+        replyToTag: false,
+        audioAsVoice: false,
+      },
+    ]);
+  });
 });
 
 describe("formatOutboundPayloadLog", () => {
@@ -516,5 +588,40 @@ describe("formatOutboundPayloadLog", () => {
         mediaUrls: [...input.mediaUrls],
       }),
     ).toBe(expected);
+  });
+});
+
+describe("summarizeOutboundPayloadForTransport", () => {
+  it("keeps visible text as channel text and does not expose hook-only content", () => {
+    const summary = summarizeOutboundPayloadForTransport({
+      text: "visible",
+      spokenText: "hidden transcript",
+    });
+
+    expect(summary.text).toBe("visible");
+    expect(summary.hookContent).toBeUndefined();
+  });
+
+  it("surfaces spokenText only as hook content for audio-only payloads", () => {
+    const summary = summarizeOutboundPayloadForTransport({
+      mediaUrl: "/tmp/reply.opus",
+      audioAsVoice: true,
+      spokenText: "Hi Ivy, good morning.",
+    });
+
+    expect(summary.text).toBe("");
+    expect(summary.hookContent).toBe("Hi Ivy, good morning.");
+    expect(summary.mediaUrls).toEqual(["/tmp/reply.opus"]);
+    expect(summary.audioAsVoice).toBe(true);
+  });
+
+  it("ignores blank spokenText", () => {
+    const summary = summarizeOutboundPayloadForTransport({
+      mediaUrl: "/tmp/reply.opus",
+      spokenText: "   ",
+    });
+
+    expect(summary.text).toBe("");
+    expect(summary.hookContent).toBeUndefined();
   });
 });

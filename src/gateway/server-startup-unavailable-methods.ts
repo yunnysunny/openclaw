@@ -1,1 +1,4 @@
-export const STARTUP_UNAVAILABLE_GATEWAY_METHODS = ["chat.history", "models.list"] as const;
+export {
+  STARTUP_UNAVAILABLE_GATEWAY_METHODS,
+  STARTUP_UNAVAILABLE_GATEWAY_METHODS as SERVER_STARTUP_UNAVAILABLE_METHODS,
+} from "./methods/core-descriptors.js";

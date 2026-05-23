@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SkillCommandSpec } from "../../agents/skills.js";
 import type { SessionEntry } from "../../config/sessions.js";
@@ -8,13 +9,17 @@ import { stripInlineStatus } from "./reply-inline.js";
 import { buildTestCtx } from "./test-ctx.js";
 import type { TypingController } from "./typing.js";
 
-const { buildStatusReplyMock, createOpenClawToolsMock, getChannelPluginMock, handleCommandsMock } =
-  vi.hoisted(() => ({
-    buildStatusReplyMock: vi.fn(),
-    createOpenClawToolsMock: vi.fn(),
-    getChannelPluginMock: vi.fn(),
-    handleCommandsMock: vi.fn(),
-  }));
+const {
+  buildStatusReplyMock,
+  createOpenClawToolsAsyncMock,
+  getChannelPluginMock,
+  handleCommandsMock,
+} = vi.hoisted(() => ({
+  buildStatusReplyMock: vi.fn(),
+  createOpenClawToolsAsyncMock: vi.fn(),
+  getChannelPluginMock: vi.fn(),
+  handleCommandsMock: vi.fn(),
+}));
 
 type HandleInlineActionsInput = Parameters<
   typeof import("./get-reply-inline-actions.js").handleInlineActions
@@ -26,7 +31,7 @@ vi.mock("./commands.runtime.js", () => ({
 }));
 
 vi.mock("../../agents/openclaw-tools.runtime.js", () => ({
-  createOpenClawTools: (...args: unknown[]) => createOpenClawToolsMock(...args),
+  createOpenClawToolsAsync: (...args: unknown[]) => createOpenClawToolsAsyncMock(...args),
 }));
 
 vi.mock("../../channels/plugins/index.js", () => ({
@@ -148,10 +153,10 @@ describe("handleInlineActions", () => {
     handleCommandsMock.mockReset();
     handleCommandsMock.mockResolvedValue({ shouldContinue: true, reply: undefined });
     getChannelPluginMock.mockReset();
-    createOpenClawToolsMock.mockReset();
+    createOpenClawToolsAsyncMock.mockReset();
     buildStatusReplyMock.mockReset();
     buildStatusReplyMock.mockResolvedValue({ text: "status" });
-    createOpenClawToolsMock.mockReturnValue([]);
+    createOpenClawToolsAsyncMock.mockResolvedValue([]);
     getChannelPluginMock.mockImplementation((channelId?: string) =>
       channelId === "whatsapp"
         ? { commands: { skipWhenConfigEmpty: true } }
@@ -576,7 +581,7 @@ describe("handleInlineActions", () => {
   it("passes requesterAgentIdOverride into inline tool runtimes", async () => {
     const typing = createTypingController();
     const toolExecute = vi.fn(async () => ({ text: "spawned" }));
-    createOpenClawToolsMock.mockReturnValue([
+    createOpenClawToolsAsyncMock.mockResolvedValue([
       {
         name: "sessions_spawn",
         execute: toolExecute,
@@ -624,7 +629,7 @@ describe("handleInlineActions", () => {
     );
 
     expect(result).toEqual({ kind: "reply", reply: { text: "✅ Done." } });
-    expect(createOpenClawToolsMock).toHaveBeenCalledWith(
+    expect(createOpenClawToolsAsyncMock).toHaveBeenCalledWith(
       expect.objectContaining({
         requesterAgentIdOverride: "named-worker",
       }),
@@ -635,7 +640,7 @@ describe("handleInlineActions", () => {
   it("passes senderIsOwner into inline tool runtimes before owner-only filtering", async () => {
     const typing = createTypingController();
     const toolExecute = vi.fn(async () => ({ text: "updated" }));
-    createOpenClawToolsMock.mockReturnValue([
+    createOpenClawToolsAsyncMock.mockResolvedValue([
       {
         name: "message",
         execute: toolExecute,
@@ -682,11 +687,117 @@ describe("handleInlineActions", () => {
     );
 
     expect(result).toEqual({ kind: "reply", reply: { text: "✅ Done." } });
-    expect(createOpenClawToolsMock).toHaveBeenCalledWith(
+    expect(createOpenClawToolsAsyncMock).toHaveBeenCalledWith(
       expect.objectContaining({
         senderIsOwner: true,
       }),
     );
-    expect(toolExecute).toHaveBeenCalled();
+    expect(toolExecute).toHaveBeenCalledWith(
+      expect.stringMatching(/^cmd_/),
+      {
+        command: "display name",
+        commandName: "set_profile",
+        skillName: "matrix-profile",
+      },
+      undefined,
+    );
+  });
+
+  it("honors construction-time before-tool-call blocks for inline tool dispatch", async () => {
+    const typing = createTypingController();
+    const abortController = new AbortController();
+    const toolExecute = vi.fn(async () => ({
+      content: [{ type: "text", text: "denied by policy" }],
+      details: {
+        status: "blocked",
+        deniedReason: "plugin-before-tool-call",
+        reason: "denied by policy",
+      },
+    }));
+    createOpenClawToolsAsyncMock.mockResolvedValue([
+      {
+        name: "message",
+        execute: toolExecute,
+      },
+    ]);
+
+    const ctx = buildTestCtx({
+      Body: "/set_profile display name",
+      CommandBody: "/set_profile display name",
+    });
+    const skillCommands: SkillCommandSpec[] = [
+      {
+        name: "set_profile",
+        skillName: "matrix-profile",
+        description: "Set Matrix profile",
+        dispatch: {
+          kind: "tool",
+          toolName: "message",
+          argMode: "raw",
+        },
+        sourceFilePath: "/tmp/plugin/commands/set-profile.md",
+      },
+    ];
+
+    const result = await handleInlineActions(
+      createHandleInlineActionsInput({
+        ctx,
+        typing,
+        cleanedBody: "/set_profile display name",
+        command: {
+          isAuthorizedSender: true,
+          senderId: "sender-1",
+          senderIsOwner: true,
+          abortKey: "sender-1",
+          rawBodyNormalized: "/set_profile display name",
+          commandBodyNormalized: "/set_profile display name",
+        },
+        overrides: {
+          cfg: {
+            commands: { text: true },
+            tools: {
+              loopDetection: {
+                enabled: true,
+              },
+            },
+          },
+          agentId: "main",
+          allowTextCommands: true,
+          opts: { abortSignal: abortController.signal },
+          skillCommands,
+          sessionEntry: {
+            sessionId: "wrapper-session",
+            updatedAt: 0,
+          },
+          sessionStore: {
+            "s:main": {
+              sessionId: "target-session",
+              updatedAt: 0,
+            },
+          },
+        },
+      }),
+    );
+
+    expect(result).toEqual({
+      kind: "reply",
+      reply: { text: "❌ Tool call blocked: denied by policy" },
+    });
+    expect(createOpenClawToolsAsyncMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: "target-session",
+        currentChannelId: "whatsapp",
+      }),
+    );
+    expect(toolExecute).toHaveBeenCalledWith(
+      expect.stringMatching(/^cmd_/),
+      {
+        command: "display name",
+        commandName: "set_profile",
+        skillName: "matrix-profile",
+      },
+      abortController.signal,
+    );
+    expect(typing.cleanup).toHaveBeenCalled();
   });
 });

@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
-import { loadConfig } from "../../config/config.js";
+import { getRuntimeConfig } from "../../config/config.js";
 import { getCachedPluginJitiLoader, type PluginJitiLoaderCache } from "../jiti-loader-cache.js";
-import { loadPluginManifestRegistry } from "../manifest-registry.js";
+import { loadPluginManifestRegistrySync } from "../manifest-registry.js";
 import { shouldPreferNativeJiti } from "../sdk-alias.js";
 
 type PluginRuntimeRecord = {
@@ -20,7 +20,7 @@ type CachedPluginBoundaryLoaderParams = {
 
 export function readPluginBoundaryConfigSafely() {
   try {
-    return loadConfig();
+    return getRuntimeConfig();
   } catch {
     return {};
   }
@@ -30,7 +30,7 @@ export function resolvePluginRuntimeRecord(
   pluginId: string,
   onMissing?: () => never,
 ): PluginRuntimeRecord | null {
-  const manifestRegistry = loadPluginManifestRegistry({
+  const manifestRegistry = loadPluginManifestRegistrySync({
     config: readPluginBoundaryConfigSafely(),
     cache: true,
   });
@@ -52,7 +52,7 @@ export function resolvePluginRuntimeRecordByEntryBaseNames(
   entryBaseNames: string[],
   onMissing?: () => never,
 ): PluginRuntimeRecord | null {
-  const manifestRegistry = loadPluginManifestRegistry({
+  const manifestRegistry = loadPluginManifestRegistrySync({
     config: readPluginBoundaryConfigSafely(),
     cache: true,
   });
@@ -177,3 +177,13 @@ export function createCachedPluginBoundaryModuleLoader<TModule>(
     return loaded;
   };
 }
+
+// oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- TModule preserves caller-side return type assertion.
+export function loadPluginBoundaryModule<TModule>(
+  modulePath: string,
+  loaders: unknown,
+  _meta?: unknown,
+): TModule {
+  return loadPluginBoundaryModuleWithJiti<TModule>(modulePath, loaders as PluginJitiLoaderCache);
+}
+

@@ -1,13 +1,22 @@
 import { primeConfiguredBindingRegistry } from "../channels/plugins/binding-registry.js";
 import { applyPluginAutoEnable } from "../config/plugin-auto-enable.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
+import type { BundledRuntimeDepsInstallParams } from "../plugins/bundled-runtime-deps.js";
+import type { PluginLookUpTable } from "../plugins/plugin-lookup-table.js";
+import type { PluginRegistryParams } from "../plugins/registry-types.js";
 import type { PluginRegistry } from "../plugins/registry.js";
 import { pinActivePluginChannelRegistry } from "../plugins/runtime.js";
-import { setGatewaySubagentRuntime } from "../plugins/runtime/index.js";
+import {
+  setGatewayNodesRuntime,
+  setGatewaySubagentRuntime,
+} from "../plugins/runtime/gateway-bindings.js";
+import { mergeActivationSectionsIntoRuntimeConfig } from "./plugin-activation-runtime-config.js";
 import type { GatewayRequestHandler } from "./server-methods/types.js";
 import {
+  createGatewayNodesRuntime,
   createGatewaySubagentRuntime,
   loadGatewayPlugins,
+  loadGatewayPluginsAsync,
   setPluginSubagentOverridePolicies,
 } from "./server-plugins.js";
 
@@ -23,18 +32,23 @@ type GatewayPluginBootstrapParams = {
   activationSourceConfig?: OpenClawConfig;
   workspaceDir: string;
   log: GatewayPluginBootstrapLog;
-  coreGatewayHandlers: Record<string, GatewayRequestHandler>;
+  coreGatewayHandlers?: Record<string, GatewayRequestHandler>;
+  coreGatewayMethodNames?: readonly string[];
+  hostServices?: PluginRegistryParams["hostServices"];
   baseMethods: string[];
   pluginIds?: string[];
+  pluginLookUpTable?: PluginLookUpTable;
   preferSetupRuntimeForChannelPlugins?: boolean;
   suppressPluginInfoLogs?: boolean;
   logDiagnostics?: boolean;
+  bundledRuntimeDepsInstaller?: (params: BundledRuntimeDepsInstallParams) => void;
   beforePrimeRegistry?: (pluginRegistry: PluginRegistry) => void;
 };
 
 function installGatewayPluginRuntimeEnvironment(cfg: OpenClawConfig) {
   setPluginSubagentOverridePolicies(cfg);
   setGatewaySubagentRuntime(createGatewaySubagentRuntime());
+  setGatewayNodesRuntime(createGatewayNodesRuntime());
 }
 
 function logGatewayPluginDiagnostics(params: {
@@ -64,8 +78,17 @@ export function prepareGatewayPluginLoad(params: GatewayPluginBootstrapParams) {
   const autoEnabled = applyPluginAutoEnable({
     config: activationSourceConfig,
     env: process.env,
+    ...(params.pluginLookUpTable?.manifestRegistry
+      ? { manifestRegistry: params.pluginLookUpTable.manifestRegistry }
+      : {}),
   });
-  const resolvedConfig = autoEnabled.config;
+  const resolvedConfig =
+    activationSourceConfig === params.cfg
+      ? autoEnabled.config
+      : mergeActivationSectionsIntoRuntimeConfig({
+          runtimeConfig: params.cfg,
+          activationConfig: autoEnabled.config,
+        });
   installGatewayPluginRuntimeEnvironment(resolvedConfig);
   const loaded = loadGatewayPlugins({
     cfg: resolvedConfig,
@@ -73,12 +96,26 @@ export function prepareGatewayPluginLoad(params: GatewayPluginBootstrapParams) {
     autoEnabledReasons: autoEnabled.autoEnabledReasons,
     workspaceDir: params.workspaceDir,
     log: params.log,
-    coreGatewayHandlers: params.coreGatewayHandlers,
+    coreGatewayHandlers: params.coreGatewayHandlers ?? {},
+    ...(params.coreGatewayMethodNames !== undefined && {
+      coreGatewayMethodNames: params.coreGatewayMethodNames,
+    }),
+    ...(params.hostServices !== undefined && {
+      hostServices: params.hostServices,
+    }),
     baseMethods: params.baseMethods,
     pluginIds: params.pluginIds,
     preferSetupRuntimeForChannelPlugins: params.preferSetupRuntimeForChannelPlugins,
     suppressPluginInfoLogs: params.suppressPluginInfoLogs,
   });
+  return finalizePrepareGatewayPluginLoad(params, resolvedConfig, loaded);
+}
+
+function finalizePrepareGatewayPluginLoad(
+  params: GatewayPluginBootstrapParams,
+  resolvedConfig: OpenClawConfig,
+  loaded: Awaited<ReturnType<typeof loadGatewayPluginsAsync>>,
+) {
   params.beforePrimeRegistry?.(loaded.pluginRegistry);
   primeConfiguredBindingRegistry({ cfg: resolvedConfig });
   if ((params.logDiagnostics ?? true) && loaded.pluginRegistry.diagnostics.length > 0) {
@@ -90,10 +127,53 @@ export function prepareGatewayPluginLoad(params: GatewayPluginBootstrapParams) {
   return loaded;
 }
 
+export async function prepareGatewayPluginLoadAsync(
+  params: GatewayPluginBootstrapParams,
+): Promise<Awaited<ReturnType<typeof loadGatewayPluginsAsync>>> {
+  const activationSourceConfig = params.activationSourceConfig ?? params.cfg;
+  const autoEnabled = applyPluginAutoEnable({
+    config: activationSourceConfig,
+    env: process.env,
+    ...(params.pluginLookUpTable?.manifestRegistry
+      ? { manifestRegistry: params.pluginLookUpTable.manifestRegistry }
+      : {}),
+  });
+  const resolvedConfig =
+    activationSourceConfig === params.cfg
+      ? autoEnabled.config
+      : mergeActivationSectionsIntoRuntimeConfig({
+          runtimeConfig: params.cfg,
+          activationConfig: autoEnabled.config,
+        });
+  installGatewayPluginRuntimeEnvironment(resolvedConfig);
+  const loaded = await loadGatewayPluginsAsync({
+    cfg: resolvedConfig,
+    activationSourceConfig,
+    autoEnabledReasons: autoEnabled.autoEnabledReasons,
+    workspaceDir: params.workspaceDir,
+    log: params.log,
+    coreGatewayHandlers: params.coreGatewayHandlers ?? {},
+    baseMethods: params.baseMethods,
+    pluginIds: params.pluginIds,
+    preferSetupRuntimeForChannelPlugins: params.preferSetupRuntimeForChannelPlugins,
+    suppressPluginInfoLogs: params.suppressPluginInfoLogs,
+  });
+  return finalizePrepareGatewayPluginLoad(params, resolvedConfig, loaded);
+}
+
 export function loadGatewayStartupPlugins(
   params: Omit<GatewayPluginBootstrapParams, "beforePrimeRegistry">,
 ) {
   return prepareGatewayPluginLoad({
+    ...params,
+    beforePrimeRegistry: pinActivePluginChannelRegistry,
+  });
+}
+
+export async function loadGatewayStartupPluginsAsync(
+  params: Omit<GatewayPluginBootstrapParams, "beforePrimeRegistry">,
+) {
+  return prepareGatewayPluginLoadAsync({
     ...params,
     beforePrimeRegistry: pinActivePluginChannelRegistry,
   });
@@ -106,6 +186,18 @@ export function reloadDeferredGatewayPlugins(
   >,
 ) {
   return prepareGatewayPluginLoad({
+    ...params,
+    beforePrimeRegistry: pinActivePluginChannelRegistry,
+  });
+}
+
+export async function reloadDeferredGatewayPluginsAsync(
+  params: Omit<
+    GatewayPluginBootstrapParams,
+    "beforePrimeRegistry" | "preferSetupRuntimeForChannelPlugins"
+  >,
+) {
+  return prepareGatewayPluginLoadAsync({
     ...params,
     beforePrimeRegistry: pinActivePluginChannelRegistry,
   });

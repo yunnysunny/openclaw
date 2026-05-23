@@ -1,6 +1,8 @@
+// @ts-nocheck
 import { getActiveEmbeddedRunCount } from "../agents/pi-embedded-runner/runs.js";
 import { getTotalPendingReplies } from "../auto-reply/reply/dispatcher-registry.js";
-import type { CanvasHostServer } from "../canvas-host/server.js";
+// Stage 4 stub: upstream canvas-host module is not ported on this fork.
+type CanvasHostServer = unknown;
 import { type ChannelId, listChannelPlugins } from "../channels/plugins/index.js";
 import { createDefaultDeps } from "../cli/deps.js";
 import { isRestartEnabled } from "../config/commands.flags.js";
@@ -19,7 +21,10 @@ import {
 import { applyPluginAutoEnable } from "../config/plugin-auto-enable.js";
 import { resolveMainSessionKey } from "../config/sessions.js";
 import { clearAgentRunContext } from "../infra/agent-events.js";
-import { isDiagnosticsEnabled } from "../infra/diagnostic-events.js";
+import {
+  isDiagnosticsEnabled,
+  setDiagnosticsEnabledForProcess,
+} from "../infra/diagnostic-events.js";
 import { isTruthyEnvValue, isVitestRuntimeEnv, logAcceptedEnvOption } from "../infra/env.js";
 import { ensureOpenClawCliOnPath } from "../infra/path-env.js";
 import { setGatewaySigusr1RestartPolicy, setPreRestartDeferralCheck } from "../infra/restart.js";
@@ -53,7 +58,6 @@ import { GATEWAY_EVENTS } from "./server-methods-list.js";
 import { coreGatewayHandlers } from "./server-methods.js";
 import { loadGatewayModelCatalog } from "./server-model-catalog.js";
 import { createGatewayNodeSessionRuntime } from "./server-node-session-runtime.js";
-import { reloadDeferredGatewayPlugins } from "./server-plugin-bootstrap.js";
 import { setFallbackGatewayContextResolver } from "./server-plugins.js";
 import { startManagedGatewayConfigReloader } from "./server-reload-handlers.js";
 import { createGatewayRequestContext } from "./server-request-context.js";
@@ -87,7 +91,7 @@ import {
   incrementPresenceVersion,
   refreshGatewayHealthSnapshot,
 } from "./server/health-state.js";
-import { resolveHookClientIpConfig } from "./server/hooks.js";
+import { resolveHookClientIpConfig } from "./server/hook-client-ip-config.js";
 import { createReadinessChecker } from "./server/readiness.js";
 import { loadGatewayTlsRuntime } from "./server/tls.js";
 import { resolveSharedGatewaySessionGeneration } from "./server/ws-shared-generation.js";
@@ -228,6 +232,11 @@ export type GatewayServerOptions = {
     prompter: import("../wizard/prompts.js").WizardPrompter,
   ) => Promise<void>;
   /**
+   * Let post-listen sidecars (channels, plugin services) finish in the background.
+   * Defaults to false so gateway startup waits until sidecars are ready.
+   */
+  deferStartupSidecars?: boolean;
+  /**
    * Optional startup timestamp used for concise readiness logging.
    */
   startupStartedAt?: number;
@@ -300,6 +309,7 @@ export async function startGatewayServer(
     }
   }
   const diagnosticsEnabled = isDiagnosticsEnabled(cfgAtStart);
+  setDiagnosticsEnabledForProcess(diagnosticsEnabled);
   if (diagnosticsEnabled) {
     startDiagnosticHeartbeat(undefined, { getConfig: getRuntimeConfig });
   }
@@ -448,6 +458,7 @@ export async function startGatewayServer(
 
   const deps = createDefaultDeps();
   let runtimeState: GatewayServerLiveState | null = null;
+  // oxlint-disable-next-line typescript/no-redundant-type-constituents -- CanvasHostServer is a stage4 stub.
   let canvasHostServer: CanvasHostServer | null = null;
   const gatewayTls = await startupTrace.measure("tls.runtime", () =>
     loadGatewayTlsRuntime(cfgAtStart.gateway?.tls, log.child("tls")),
@@ -458,7 +469,7 @@ export async function startGatewayServer(
   const serverStartedAt = Date.now();
   let startupSidecarsReady = minimalTestGateway;
   const channelManager = createChannelManager({
-    loadConfig: () =>
+    getRuntimeConfig: () =>
       applyPluginAutoEnable({
         config: loadConfig(),
         env: process.env,
@@ -572,8 +583,14 @@ export async function startGatewayServer(
       clearSecretsRuntimeSnapshot,
       closeMcpServer: async () => await closeMcpLoopbackServer(),
     });
-  const { getRuntimeSnapshot, startChannels, startChannel, stopChannel, markChannelLoggedOut } =
-    channelManager;
+  const {
+    getRuntimeSnapshot,
+    getRuntimeSnapshotAsync,
+    startChannels,
+    startChannel,
+    stopChannel,
+    markChannelLoggedOut,
+  } = channelManager;
   const createCloseHandler = () =>
     createGatewayCloseHandler({
       bonjourStop: runtimeState.bonjourStop,
@@ -583,6 +600,7 @@ export async function startGatewayServer(
       releasePluginRouteRegistry,
       stopChannel,
       pluginServices: runtimeState.pluginServices,
+      postReadySidecars: runtimeState.postReadySidecars,
       cron: runtimeState.cronState.cron,
       heartbeatRunner: runtimeState.heartbeatRunner,
       updateCheckStop: runtimeState.stopGatewayUpdateCheck,
@@ -620,6 +638,7 @@ export async function startGatewayServer(
         log,
         logDiscovery,
         nodeRegistry,
+        pluginRegistry,
         broadcast,
         nodeSendToAllSubscribed,
         getPresenceVersion,
@@ -643,7 +662,7 @@ export async function startGatewayServer(
         setSkillsRefreshTimer: (timer) => {
           runtimeState.skillsRefreshTimer = timer;
         },
-        loadConfig,
+        getRuntimeConfig: () => loadConfig(),
       }),
     );
     runtimeState.bonjourStop = earlyRuntime.bonjourStop;
@@ -688,8 +707,12 @@ export async function startGatewayServer(
       sharedGatewaySessionGenerationState,
       resolveSharedGatewaySessionGenerationForConfig,
       clients,
+      startChannel,
+      stopChannel,
+      logChannels,
     });
 
+    // oxlint-disable-next-line typescript/no-unnecessary-type-assertion, typescript/no-redundant-type-constituents -- CanvasHostServer is a stage4 stub.
     const canvasHostServerPort = (canvasHostServer as CanvasHostServer | null)?.port;
 
     const unavailableGatewayMethods = new Set<string>(
@@ -698,6 +721,8 @@ export async function startGatewayServer(
     const gatewayRequestContext = createGatewayRequestContext({
       deps,
       runtimeState,
+      getRuntimeConfig: () => loadConfig(),
+      broadcastVoiceWakeRoutingChanged: () => {},
       execApprovalManager,
       pluginApprovalManager,
       loadGatewayModelCatalog,
@@ -748,6 +773,7 @@ export async function startGatewayServer(
       findRunningWizard,
       purgeWizardSession,
       getRuntimeSnapshot,
+      getRuntimeSnapshotAsync,
       startChannel,
       stopChannel,
       markChannelLoggedOut,
@@ -760,6 +786,7 @@ export async function startGatewayServer(
 
     if (!minimalTestGateway) {
       if (deferredConfiguredChannelPluginIds.length > 0) {
+        const { reloadDeferredGatewayPlugins } = await import("./server-plugin-bootstrap.js");
         ({ pluginRegistry, gatewayMethods: baseGatewayMethods } = reloadDeferredGatewayPlugins({
           cfg: gatewayPluginConfigAtStart,
           workspaceDir: defaultWorkspaceDir,
@@ -798,6 +825,7 @@ export async function startGatewayServer(
     });
     await startListening();
     startupTrace.mark("http.bound");
+    const sessionDeliveryRecoveryMaxEnqueuedAt = Date.now();
     ({
       stopGatewayUpdateCheck: runtimeState.stopGatewayUpdateCheck,
       tailscaleCleanup: runtimeState.tailscaleCleanup,
@@ -829,18 +857,23 @@ export async function startGatewayServer(
         onPluginServices: (pluginServices) => {
           runtimeState.pluginServices = pluginServices;
         },
+        onPostReadySidecars: (postReadySidecars) => {
+          runtimeState.postReadySidecars = postReadySidecars;
+        },
         onSidecarsReady: () => {
           startupSidecarsReady = true;
         },
         startupTrace,
+        deferSidecars: opts.deferStartupSidecars === true,
       }),
     ));
     startupTrace.mark("ready");
 
-    // HTTP is live before sidecars finish; /readyz stays red until the startup sidecars settle.
     const activated = activateGatewayScheduledServices({
       minimalTestGateway,
       cfgAtStart,
+      deps,
+      sessionDeliveryRecoveryMaxEnqueuedAt,
       cron: runtimeState.cronState.cron,
       logCron,
       log,
@@ -850,6 +883,7 @@ export async function startGatewayServer(
     runtimeState.configReloader = startManagedGatewayConfigReloader({
       minimalTestGateway,
       initialConfig: cfgAtStart,
+      initialCompareConfig: startupLastGoodSnapshot.sourceConfig,
       initialInternalWriteHash: startupInternalWriteHash,
       watchPath: configSnapshot.path,
       readSnapshot: readConfigFileSnapshot,

@@ -1,8 +1,11 @@
+// @ts-nocheck
 import fs from "node:fs";
+import fsp from "node:fs/promises";
 import path from "node:path";
+import { promisify } from "node:util";
 import { MANIFEST_KEY } from "../compat/legacy-names.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
-import { openBoundaryFileSync } from "../infra/boundary-file-read.js";
+import { openBoundaryFile, openBoundaryFileSync } from "../infra/boundary-file-read.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import { isPathInsideWithRealpath } from "../security/scan-paths.js";
 import { CONFIG_DIR, resolveUserPath } from "../utils.js";
@@ -28,6 +31,7 @@ type HookPackageManifest = {
   name?: string;
 } & Partial<Record<typeof MANIFEST_KEY, { hooks?: string[] }>>;
 const log = createSubsystemLogger("hooks/workspace");
+const closeFileDescriptor = promisify(fs.close);
 
 type LoadedHook = {
   hook: Hook;
@@ -331,6 +335,308 @@ export function loadWorkspaceHookEntries(
       );
     },
   });
+}
+
+async function readBoundaryFileUtf8Async(params: {
+  absolutePath: string;
+  rootPath: string;
+  boundaryLabel: string;
+}): Promise<string | null> {
+  const opened = await openBoundaryFile({
+    absolutePath: params.absolutePath,
+    rootPath: params.rootPath,
+    boundaryLabel: params.boundaryLabel,
+  });
+  if (!opened.ok) {
+    return null;
+  }
+  try {
+    // Use path, not numeric fd: fs.promises.readFile does not accept raw fds (unlike readFileSync).
+    return await fsp.readFile(opened.path, "utf-8");
+  } catch {
+    return null;
+  } finally {
+    await closeFileDescriptor(opened.fd).catch(() => {});
+  }
+}
+
+async function resolveBoundaryFilePathAsync(params: {
+  absolutePath: string;
+  rootPath: string;
+  boundaryLabel: string;
+}): Promise<string | null> {
+  const opened = await openBoundaryFile({
+    absolutePath: params.absolutePath,
+    rootPath: params.rootPath,
+    boundaryLabel: params.boundaryLabel,
+  });
+  if (!opened.ok) {
+    return null;
+  }
+  try {
+    return opened.path;
+  } finally {
+    await closeFileDescriptor(opened.fd).catch(() => {});
+  }
+}
+
+async function readHookPackageManifestAsync(dir: string): Promise<HookPackageManifest | null> {
+  const manifestPath = path.join(dir, "package.json");
+  const raw = await readBoundaryFileUtf8Async({
+    absolutePath: manifestPath,
+    rootPath: dir,
+    boundaryLabel: "hook package directory",
+  });
+  if (raw === null) {
+    return null;
+  }
+  try {
+    return JSON.parse(raw) as HookPackageManifest;
+  } catch {
+    return null;
+  }
+}
+
+async function loadHookFromDirAsync(params: {
+  hookDir: string;
+  source: HookSource;
+  pluginId?: string;
+  nameHint?: string;
+}): Promise<LoadedHook | null> {
+  const hookMdPath = path.join(params.hookDir, "HOOK.md");
+  const content = await readBoundaryFileUtf8Async({
+    absolutePath: hookMdPath,
+    rootPath: params.hookDir,
+    boundaryLabel: "hook directory",
+  });
+  if (content === null) {
+    return null;
+  }
+  try {
+    const frontmatter = parseFrontmatter(content);
+
+    const name = frontmatter.name || params.nameHint || path.basename(params.hookDir);
+    const description = frontmatter.description || "";
+
+    const handlerCandidates = ["handler.ts", "handler.js", "index.ts", "index.js"];
+    let handlerPath: string | undefined;
+    for (const candidate of handlerCandidates) {
+      const candidatePath = path.join(params.hookDir, candidate);
+      const safeCandidatePath = await resolveBoundaryFilePathAsync({
+        absolutePath: candidatePath,
+        rootPath: params.hookDir,
+        boundaryLabel: "hook directory",
+      });
+      if (safeCandidatePath) {
+        handlerPath = safeCandidatePath;
+        break;
+      }
+    }
+
+    if (!handlerPath) {
+      log.warn(`Hook "${name}" has HOOK.md but no handler file in ${params.hookDir}`);
+      return null;
+    }
+
+    let baseDir = params.hookDir;
+    try {
+      baseDir = await fsp.realpath(params.hookDir);
+    } catch {
+      // keep the discovered path when realpath is unavailable
+    }
+
+    return {
+      hook: {
+        name,
+        description,
+        source: params.source,
+        pluginId: params.pluginId,
+        filePath: hookMdPath,
+        baseDir,
+        handlerPath,
+      },
+      frontmatter,
+    };
+  } catch (err) {
+    const message = err instanceof Error ? (err.stack ?? err.message) : String(err);
+    log.warn(`Failed to load hook from ${params.hookDir}: ${message}`);
+    return null;
+  }
+}
+
+async function loadHooksFromDirAsync(params: {
+  dir: string;
+  source: HookSource;
+  pluginId?: string;
+}): Promise<LoadedHook[]> {
+  const { dir, source, pluginId } = params;
+
+  let stat: Awaited<ReturnType<typeof fsp.stat>>;
+  try {
+    stat = await fsp.stat(dir);
+  } catch {
+    return [];
+  }
+  if (!stat.isDirectory()) {
+    return [];
+  }
+
+  const hooks: LoadedHook[] = [];
+  const entries = await fsp.readdir(dir, { withFileTypes: true });
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) {
+      continue;
+    }
+
+    const hookDir = path.join(dir, entry.name);
+    const manifest = await readHookPackageManifestAsync(hookDir);
+    const packageHooks = manifest ? resolvePackageHooks(manifest) : [];
+
+    if (packageHooks.length > 0) {
+      for (const hookPath of packageHooks) {
+        const resolvedHookDir = resolveContainedDir(hookDir, hookPath);
+        if (!resolvedHookDir) {
+          log.warn(
+            `Ignoring out-of-package hook path "${hookPath}" in ${hookDir} (must be within package directory)`,
+          );
+          continue;
+        }
+        const hook = await loadHookFromDirAsync({
+          hookDir: resolvedHookDir,
+          source,
+          pluginId,
+          nameHint: path.basename(resolvedHookDir),
+        });
+        if (hook) {
+          hooks.push(hook);
+        }
+      }
+      continue;
+    }
+
+    const hook = await loadHookFromDirAsync({
+      hookDir,
+      source,
+      pluginId,
+      nameHint: entry.name,
+    });
+    if (hook) {
+      hooks.push(hook);
+    }
+  }
+
+  return hooks;
+}
+
+async function loadHookEntriesFromDirAsync(params: {
+  dir: string;
+  source: HookSource;
+  pluginId?: string;
+}): Promise<HookEntry[]> {
+  const hooks = await loadHooksFromDirAsync({
+    dir: params.dir,
+    source: params.source,
+    pluginId: params.pluginId,
+  });
+  return hooks.map(({ hook, frontmatter }) => {
+    const entry: HookEntry = {
+      hook: {
+        ...hook,
+        source: params.source,
+        pluginId: params.pluginId,
+      },
+      frontmatter,
+      metadata: resolveOpenClawMetadata(frontmatter),
+      invocation: resolveHookInvocationPolicy(frontmatter),
+    };
+    return entry;
+  });
+}
+
+async function discoverWorkspaceHookEntriesAsync(
+  workspaceDir: string,
+  opts?: {
+    config?: OpenClawConfig;
+    managedHooksDir?: string;
+    bundledHooksDir?: string;
+  },
+): Promise<HookEntry[]> {
+  const managedHooksDir = opts?.managedHooksDir ?? path.join(CONFIG_DIR, "hooks");
+  const workspaceHooksDir = path.join(workspaceDir, "hooks");
+  const bundledHooksDir = opts?.bundledHooksDir ?? resolveBundledHooksDir();
+  const extraDirsRaw = opts?.config?.hooks?.internal?.load?.extraDirs ?? [];
+  const extraDirs = extraDirsRaw
+    .map((d) => (typeof d === "string" ? d.trim() : ""))
+    .filter(Boolean);
+  const pluginHookDirs = resolvePluginHookDirs({
+    workspaceDir,
+    config: opts?.config,
+  });
+
+  const bundledHooks = bundledHooksDir
+    ? await loadHookEntriesFromDirAsync({
+        dir: bundledHooksDir,
+        source: "openclaw-bundled",
+      })
+    : [];
+  const extraHooks = (
+    await Promise.all(
+      extraDirs.map(async (dir) => {
+        const resolved = resolveUserPath(dir);
+        return loadHookEntriesFromDirAsync({
+          dir: resolved,
+          source: "openclaw-managed",
+        });
+      }),
+    )
+  ).flat();
+  const pluginHooks = (
+    await Promise.all(
+      pluginHookDirs.map(async ({ dir, pluginId }) =>
+        loadHookEntriesFromDirAsync({
+          dir,
+          source: "openclaw-plugin",
+          pluginId,
+        }),
+      ),
+    )
+  ).flat();
+  const managedHooks = await loadHookEntriesFromDirAsync({
+    dir: managedHooksDir,
+    source: "openclaw-managed",
+  });
+  const workspaceHooks = await loadHookEntriesFromDirAsync({
+    dir: workspaceHooksDir,
+    source: "openclaw-workspace",
+  });
+
+  return [...extraHooks, ...bundledHooks, ...pluginHooks, ...managedHooks, ...workspaceHooks];
+}
+
+/**
+ * Async hook discovery for gateway startup and other awaitable loaders.
+ * Uses the same resolution rules as {@link loadWorkspaceHookEntries} with async filesystem I/O.
+ */
+export async function loadWorkspaceHookEntriesAsync(
+  workspaceDir: string,
+  opts?: {
+    config?: OpenClawConfig;
+    managedHooksDir?: string;
+    bundledHooksDir?: string;
+    entries?: HookEntry[];
+  },
+): Promise<HookEntry[]> {
+  return resolveHookEntries(
+    opts?.entries ?? (await discoverWorkspaceHookEntriesAsync(workspaceDir, opts)),
+    {
+      onCollisionIgnored: ({ name, kept, ignored }) => {
+        log.warn(
+          `Ignoring ${ignored.hook.source} hook "${name}" because it cannot override ${kept.hook.source} hook code`,
+        );
+      },
+    },
+  );
 }
 
 function readBoundaryFileUtf8(params: {

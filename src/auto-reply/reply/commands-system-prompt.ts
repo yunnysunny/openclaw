@@ -1,20 +1,22 @@
-import type { AgentTool } from "@mariozechner/pi-agent-core";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
+import { isAcpRuntimeSpawnAvailable } from "../../acp/runtime/availability.js";
 import { resolveSessionAgentIds } from "../../agents/agent-scope.js";
 import { resolveBootstrapContextForRun } from "../../agents/bootstrap-files.js";
 import { canExecRequestNode } from "../../agents/exec-defaults.js";
 import { resolveDefaultModelForAgent } from "../../agents/model-selection.js";
 import type { EmbeddedContextFile } from "../../agents/pi-embedded-helpers.js";
 import { resolveEmbeddedFullAccessState } from "../../agents/pi-embedded-runner/sandbox-info.js";
-import { createOpenClawCodingTools } from "../../agents/pi-tools.js";
+import { createOpenClawCodingToolsAsync } from "../../agents/pi-tools.js";
 import { resolveSandboxRuntimeStatus } from "../../agents/sandbox.js";
 import { buildWorkspaceSkillSnapshot } from "../../agents/skills.js";
 import { getSkillsSnapshotVersion } from "../../agents/skills/refresh-state.js";
+import { buildConfiguredAgentSystemPrompt } from "../../agents/system-prompt-config.js";
 import { buildSystemPromptParams } from "../../agents/system-prompt-params.js";
-import { buildAgentSystemPrompt } from "../../agents/system-prompt.js";
 import type { WorkspaceBootstrapFile } from "../../agents/workspace.js";
 import { getRemoteSkillEligibility } from "../../infra/skills-remote.js";
-import { buildTtsSystemPromptHint } from "../../tts/tts.js";
+import { listRegisteredPluginAgentPromptGuidance } from "../../plugins/command-registry-state.js";
 import type { HandleCommandsParams } from "./commands-types.js";
+import { resolveRuntimePolicySessionKey } from "./runtime-policy-session-key.js";
 
 export type CommandsSystemPromptBundle = {
   systemPrompt: string;
@@ -40,10 +42,20 @@ export async function resolveCommandsSystemPromptBundle(
     config: params.cfg,
     sessionKey: params.sessionKey,
     sessionId: targetSessionEntry?.sessionId,
+    agentId: sessionAgentId,
   });
   const sandboxRuntime = resolveSandboxRuntimeStatus({
     cfg: params.cfg,
-    sessionKey: params.sessionKey ?? params.ctx.SessionKey,
+    sessionKey: resolveRuntimePolicySessionKey({
+      cfg: params.cfg,
+      ctx: params.ctx,
+      sessionKey: params.sessionKey ?? params.ctx.SessionKey,
+    }),
+  });
+  const toolPolicySessionKey = resolveRuntimePolicySessionKey({
+    cfg: params.cfg,
+    ctx: params.ctx,
+    sessionKey: params.sessionKey,
   });
   const skillsSnapshot = (() => {
     try {
@@ -67,13 +79,13 @@ export async function resolveCommandsSystemPromptBundle(
     }
   })();
   const skillsPrompt = skillsSnapshot.prompt ?? "";
-  const tools = (() => {
+  const tools = await (async () => {
     try {
-      return createOpenClawCodingTools({
+      return await createOpenClawCodingToolsAsync({
         config: params.cfg,
         agentId: sessionAgentId,
         workspaceDir,
-        sessionKey: params.sessionKey,
+        sessionKey: toolPolicySessionKey,
         allowGatewaySubagentBinding: true,
         messageProvider: params.command.channel,
         groupId: targetSessionEntry?.groupId ?? undefined,
@@ -134,9 +146,9 @@ export async function resolveCommandsSystemPromptBundle(
         },
       }
     : { enabled: false };
-  const ttsHint = params.cfg ? buildTtsSystemPromptHint(params.cfg) : undefined;
-
-  const systemPrompt = buildAgentSystemPrompt({
+  const systemPrompt = buildConfiguredAgentSystemPrompt({
+    config: params.cfg,
+    agentId: sessionAgentId,
     workspaceDir,
     defaultThinkLevel: params.resolvedThinkLevel,
     reasoningLevel: params.resolvedReasoningLevel,
@@ -144,18 +156,19 @@ export async function resolveCommandsSystemPromptBundle(
     ownerNumbers: undefined,
     reasoningTagHint: false,
     toolNames,
-    modelAliasLines: [],
     userTimezone,
     userTime,
     userTimeFormat,
     contextFiles: injectedFiles,
     skillsPrompt,
     heartbeatPrompt: undefined,
-    ttsHint,
-    acpEnabled: params.cfg?.acp?.enabled !== false,
+    acpEnabled: isAcpRuntimeSpawnAvailable({
+      config: params.cfg,
+      sandboxed: sandboxRuntime.sandboxed,
+    }),
+    nativeCommandGuidanceLines: listRegisteredPluginAgentPromptGuidance(),
     runtimeInfo,
     sandboxInfo,
-    memoryCitationsMode: params.cfg?.memory?.citations,
   });
 
   return { systemPrompt, tools, skillsPrompt, bootstrapFiles, injectedFiles, sandboxRuntime };

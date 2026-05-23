@@ -13,6 +13,24 @@ export function safeRealpathSync(targetPath: string, cache?: Map<string, string>
   try {
     const resolved = fs.realpathSync(targetPath);
     cache?.set(targetPath, resolved);
+    cache?.set(resolved, resolved);
+    return resolved;
+  } catch {
+    return null;
+  }
+}
+
+export async function safeRealpath(
+  targetPath: string,
+  cache?: Map<string, string>,
+): Promise<string | null> {
+  const cached = cache?.get(targetPath);
+  if (cached) {
+    return cached;
+  }
+  try {
+    const resolved = await fs.promises.realpath(targetPath);
+    cache?.set(targetPath, resolved);
     return resolved;
   } catch {
     return null;
@@ -30,3 +48,8 @@ export function safeStatSync(targetPath: string): fs.Stats | null {
 export function formatPosixMode(mode: number): string {
   return (mode & 0o777).toString(8).padStart(3, "0");
 }
+
+export function isPathInsideWithRealpath(child: string, parent: string): boolean {
+  return child === parent || child.startsWith(parent.endsWith("/") ? parent : parent + "/");
+}
+

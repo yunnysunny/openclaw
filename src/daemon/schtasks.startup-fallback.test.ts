@@ -2,7 +2,6 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { PassThrough } from "node:stream";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { quoteCmdScriptArg } from "./cmd-argv.js";
 import "./test-helpers/schtasks-base-mocks.js";
 import {
   inspectPortUsage,
@@ -70,9 +69,10 @@ const {
   restartScheduledTask,
   resolveTaskScriptPath,
   stopScheduledTask,
+  uninstallScheduledTask,
 } = await import("./schtasks.js");
 
-function resolveStartupEntryPath(env: Record<string, string>) {
+function resolveStartupEntryPath(env: Record<string, string>, extension = "cmd") {
   return path.join(
     env.APPDATA,
     "Microsoft",
@@ -80,7 +80,7 @@ function resolveStartupEntryPath(env: Record<string, string>) {
     "Start Menu",
     "Programs",
     "Startup",
-    "OpenClaw Gateway.cmd",
+    `OpenClaw Gateway.${extension}`,
   );
 }
 
@@ -91,12 +91,23 @@ async function writeStartupFallbackEntry(env: Record<string, string>) {
   return startupEntryPath;
 }
 
-function expectStartupFallbackSpawn(env: Record<string, string>) {
-  expect(spawn).toHaveBeenCalledWith(
-    "cmd.exe",
-    ["/d", "/s", "/c", quoteCmdScriptArg(resolveTaskScriptPath(env))],
-    expect.objectContaining({ detached: true, stdio: "ignore", windowsHide: true }),
-  );
+function expectStartupFallbackSpawn() {
+  expect(spawn).toHaveBeenCalled();
+  const calls = spawn.mock.calls as unknown as Array<
+    [string, readonly string[], Record<string, unknown>]
+  >;
+  const lastCall = calls[calls.length - 1];
+  if (!lastCall) {
+    throw new Error("expected gateway launch spawn call");
+  }
+  const [executable, args, options] = lastCall;
+  expect(executable).not.toBe("cmd.exe");
+  expect(args).toContain("--port");
+  expect(args).toContain("18789");
+  expect(options.detached).toBe(true);
+  expect((options.env as Record<string, string> | undefined)?.OPENCLAW_GATEWAY_PORT).toBe("18789");
+  expect(options.stdio).toBe("ignore");
+  expect(options.windowsHide).toBe(true);
 }
 
 function expectGatewayTermination(pid: number) {
@@ -197,13 +208,43 @@ describe("Windows startup fallback", () => {
       expect(result.scriptPath).toBe(resolveTaskScriptPath(env));
       expect(startupScript).toContain('start "" /min cmd.exe /d /c');
       expect(startupScript).toContain("gateway.cmd");
-      expect(spawn).toHaveBeenCalledWith(
-        "cmd.exe",
-        ["/d", "/s", "/c", quoteCmdScriptArg(resolveTaskScriptPath(env))],
-        expect.objectContaining({ detached: true, stdio: "ignore", windowsHide: true }),
-      );
+      expectStartupFallbackSpawn();
       expect(childUnref).toHaveBeenCalled();
       expect(printed).toContain("Installed Windows login item");
+    });
+  });
+
+  it("uses a hidden Startup-folder launcher when requested", async () => {
+    await withWindowsEnv("openclaw-win-startup-", async ({ env }) => {
+      addStartupFallbackMissingResponses([
+        { code: 5, stdout: "", stderr: "ERROR: Access is denied." },
+      ]);
+
+      const result = await installGatewayScheduledTask({
+        ...env,
+        OPENCLAW_WINDOWS_TASK_HIDDEN_LAUNCHER: "1",
+      });
+
+      const startupEntryPath = resolveStartupEntryPath(env, "vbs");
+      const startupScript = await fs.readFile(startupEntryPath, "utf8");
+      expect(result.scriptPath).toBe(resolveTaskScriptPath(env));
+      expect(startupScript).toContain("WScript.Shell");
+      expect(startupScript).toContain("gateway.cmd");
+      expect(startupScript).toContain(`Run """${result.scriptPath}""", 0, False`);
+      expectStartupFallbackSpawn();
+    });
+  });
+
+  it("falls back to a Startup-folder launcher when schtasks create returns Spanish access denied", async () => {
+    await withWindowsEnv("openclaw-win-startup-", async ({ env }) => {
+      addStartupFallbackMissingResponses([
+        { code: 1, stdout: "", stderr: "Error: Acceso denegado." },
+      ]);
+
+      await installGatewayScheduledTask(env);
+
+      await expect(fs.access(resolveStartupEntryPath(env))).resolves.toBeUndefined();
+      expectStartupFallbackSpawn();
     });
   });
 
@@ -216,18 +257,33 @@ describe("Windows startup fallback", () => {
       await installGatewayScheduledTask(env);
 
       await expect(fs.access(resolveStartupEntryPath(env))).resolves.toBeUndefined();
-      expectStartupFallbackSpawn(env);
+      expectStartupFallbackSpawn();
     });
   });
 
-  it("launches the task script directly when schtasks /Run is accepted but never starts the task", async () => {
+  it("falls back to a Startup-folder launcher when schtasks availability is slow", async () => {
+    await withWindowsEnv("openclaw-win-startup-", async ({ env }) => {
+      schtasksResponses.push(
+        { code: 124, stdout: "", stderr: "schtasks produced no output for 30000ms" },
+        { code: 124, stdout: "", stderr: "schtasks produced no output for 30000ms" },
+        { code: 124, stdout: "", stderr: "schtasks produced no output for 30000ms" },
+      );
+
+      await installGatewayScheduledTask(env);
+
+      await expect(fs.access(resolveStartupEntryPath(env))).resolves.toBeUndefined();
+      expectStartupFallbackSpawn();
+    });
+  });
+
+  it("launches through the Startup-style launcher when schtasks /Run is accepted but never starts the task", async () => {
     await withWindowsEnv("openclaw-win-startup-", async ({ env }) => {
       fastForwardTaskStartWait();
       addAcceptedRunNeverStartsResponses();
 
       await installGatewayScheduledTask(env);
 
-      expectStartupFallbackSpawn(env);
+      expectStartupFallbackSpawn();
     });
   });
 
@@ -309,12 +365,11 @@ describe("Windows startup fallback", () => {
         { code: 0, stdout: notYetRunTaskQueryOutput(), stderr: "" },
       );
 
-      await expect(readScheduledTaskRuntime(env)).resolves.toMatchObject({
-        status: "running",
-        pid: 4242,
-        state: "Ready",
-        lastRunResult: "267011",
-      });
+      const runtime = await readScheduledTaskRuntime(env);
+      expect(runtime.status).toBe("running");
+      expect(runtime.pid).toBe(4242);
+      expect(runtime.state).toBe("Ready");
+      expect(runtime.lastRunResult).toBe("267011");
     });
   });
 
@@ -332,11 +387,10 @@ describe("Windows startup fallback", () => {
         { code: 0, stdout: notYetRunTaskQueryOutput(), stderr: "" },
       );
 
-      await expect(readScheduledTaskRuntime(env)).resolves.toMatchObject({
-        status: "stopped",
-        state: "Ready",
-        lastRunResult: "267011",
-      });
+      const runtime = await readScheduledTaskRuntime(env);
+      expect(runtime.status).toBe("stopped");
+      expect(runtime.state).toBe("Ready");
+      expect(runtime.lastRunResult).toBe("267011");
     });
   });
 
@@ -346,6 +400,40 @@ describe("Windows startup fallback", () => {
       await writeStartupFallbackEntry(env);
 
       await expect(isScheduledTaskInstalled({ env })).resolves.toBe(true);
+    });
+  });
+
+  it("keeps legacy Startup-folder cmd entries visible after hidden launcher opt-in", async () => {
+    await withWindowsEnv("openclaw-win-startup-", async ({ env }) => {
+      addStartupFallbackMissingResponses();
+      await writeStartupFallbackEntry(env);
+
+      await expect(
+        isScheduledTaskInstalled({
+          env: {
+            ...env,
+            OPENCLAW_WINDOWS_TASK_HIDDEN_LAUNCHER: "1",
+          },
+        }),
+      ).resolves.toBe(true);
+    });
+  });
+
+  it("removes legacy Startup-folder cmd entries after hidden launcher opt-in", async () => {
+    await withWindowsEnv("openclaw-win-startup-", async ({ env }) => {
+      schtasksResponses.push({ code: 0, stdout: "", stderr: "" });
+      const startupEntryPath = await writeStartupFallbackEntry(env);
+      const stdout = new PassThrough();
+
+      await uninstallScheduledTask({
+        env: {
+          ...env,
+          OPENCLAW_WINDOWS_TASK_HIDDEN_LAUNCHER: "1",
+        },
+        stdout,
+      });
+
+      await expect(fs.access(startupEntryPath)).rejects.toThrow();
     });
   });
 
@@ -360,10 +448,9 @@ describe("Windows startup fallback", () => {
         hints: [],
       });
 
-      await expect(readScheduledTaskRuntime(env)).resolves.toMatchObject({
-        status: "running",
-        pid: 4242,
-      });
+      const runtime = await readScheduledTaskRuntime(env);
+      expect(runtime.status).toBe("running");
+      expect(runtime.pid).toBe(4242);
     });
   });
 
@@ -373,6 +460,7 @@ describe("Windows startup fallback", () => {
         { code: 0, stdout: "", stderr: "" },
         { code: 1, stdout: "", stderr: "not found" },
       ]);
+      await writeGatewayScript(env);
       await writeStartupFallbackEntry(env);
       inspectPortUsage.mockResolvedValue({
         port: 18789,
@@ -386,7 +474,7 @@ describe("Windows startup fallback", () => {
         outcome: "completed",
       });
       expectGatewayTermination(5151);
-      expectStartupFallbackSpawn(env);
+      expectStartupFallbackSpawn();
     });
   });
 
@@ -417,7 +505,7 @@ describe("Windows startup fallback", () => {
         outcome: "completed",
       });
 
-      expectStartupFallbackSpawn(env);
+      expectStartupFallbackSpawn();
     });
   });
 

@@ -1,5 +1,5 @@
 import type { OpenClawConfig } from "../config/types.openclaw.js";
-import { loadPluginManifestRegistry } from "./manifest-registry.js";
+import { loadPluginManifestRegistrySync } from "./manifest-registry.js";
 import type { PluginManifestRecord } from "./manifest-registry.js";
 import { resolvePluginWebSearchProviders } from "./web-search-providers.runtime.js";
 
@@ -43,7 +43,7 @@ function hasManifestWebSearchEnvCredentialCandidate(params: {
   if (!env) {
     return false;
   }
-  return loadPluginManifestRegistry({
+  return loadPluginManifestRegistrySync({
     config: params.config,
     env,
   }).plugins.some((plugin) => {

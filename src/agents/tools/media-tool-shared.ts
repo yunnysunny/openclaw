@@ -1,6 +1,7 @@
-import { type Api, type Model } from "@mariozechner/pi-ai";
+import { type Api, type Model } from "@earendil-works/pi-ai";
 import type { AgentModelConfig } from "../../config/types.agents-shared.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
+import type { SsrFPolicy } from "../../infra/net/ssrf.js";
 import { getDefaultLocalRoots } from "../../media/web-media.js";
 import { readSnakeCaseParamRaw } from "../../param-key.js";
 import {
@@ -9,12 +10,19 @@ import {
 } from "../../shared/string-coerce.js";
 import { normalizeModelRef } from "../model-selection.js";
 import { normalizeProviderId } from "../provider-id.js";
-import { ToolInputError, readStringArrayParam, readStringParam } from "./common.js";
+import {
+  ToolInputError,
+  readNumberParam,
+  readStringArrayParam,
+  readStringParam,
+} from "./common.js";
 import type { ImageModelConfig } from "./image-tool.helpers.js";
 import {
   buildToolModelConfigFromCandidates,
+  buildToolModelConfigFromCandidatesAsync,
   coerceToolModelConfig,
   hasAuthForProvider,
+  hasAuthForProviderAsync,
   hasToolModelConfig,
   resolveDefaultModelRef,
   type ToolModelConfig,
@@ -76,6 +84,26 @@ export function applyMusicGenerationModelConfigDefaults(
   musicGenerationModelConfig: ToolModelConfig,
 ): OpenClawConfig | undefined {
   return applyAgentDefaultModelConfig(cfg, "musicGenerationModel", musicGenerationModelConfig);
+}
+
+export function readGenerationTimeoutMs(args: Record<string, unknown>): number | undefined {
+  const timeoutMs = readNumberParam(args, "timeoutMs", {
+    integer: true,
+    strict: true,
+  });
+  if (timeoutMs === undefined) {
+    return undefined;
+  }
+  if (timeoutMs <= 0) {
+    throw new ToolInputError("timeoutMs must be a positive integer in milliseconds.");
+  }
+  return timeoutMs;
+}
+
+export function resolveRemoteMediaSsrfPolicy(
+  cfg: OpenClawConfig | undefined,
+): SsrFPolicy | undefined {
+  return cfg?.tools?.web?.fetch?.ssrfPolicy;
 }
 
 function applyAgentDefaultModelConfig(
@@ -144,6 +172,33 @@ export function isCapabilityProviderConfigured<T extends CapabilityProvider>(par
   return hasAuthForProvider({ provider: provider.id, agentDir: params.agentDir });
 }
 
+export async function isCapabilityProviderConfiguredAsync<T extends CapabilityProvider>(params: {
+  providers: T[];
+  provider?: T;
+  providerId?: string;
+  cfg?: OpenClawConfig;
+  agentDir?: string;
+}): Promise<boolean> {
+  const provider =
+    params.provider ??
+    findCapabilityProviderById({
+      providers: params.providers,
+      providerId: params.providerId,
+    });
+  if (!provider) {
+    return params.providerId
+      ? hasAuthForProviderAsync({ provider: params.providerId, agentDir: params.agentDir })
+      : false;
+  }
+  if (provider.isConfigured) {
+    return provider.isConfigured({
+      cfg: params.cfg,
+      agentDir: params.agentDir,
+    });
+  }
+  return hasAuthForProviderAsync({ provider: provider.id, agentDir: params.agentDir });
+}
+
 export function resolveSelectedCapabilityProvider<T extends CapabilityProvider>(params: {
   providers: T[];
   modelConfig: ToolModelConfig;
@@ -166,7 +221,7 @@ export function resolveCapabilityModelCandidatesForTool(params: {
   agentDir?: string;
   providers: CapabilityProvider[];
 }): string[] {
-  const providerDefaults = new Map<string, string>();
+  const providerDefaults = new Map<string, { ref: string; aliases: string[] }>();
   for (const provider of params.providers) {
     const providerId = provider.id.trim();
     const modelId = provider.defaultModel?.trim();
@@ -180,6 +235,62 @@ export function resolveCapabilityModelCandidatesForTool(params: {
         cfg: params.cfg,
         agentDir: params.agentDir,
       })
+    ) {
+      continue;
+    }
+    const aliases = (provider.aliases ?? []).flatMap((alias) => {
+      const normalized = normalizeProviderId(alias);
+      return normalized ? [normalized] : [];
+    });
+    providerDefaults.set(providerId, { ref: `${providerId}/${modelId}`, aliases });
+  }
+
+  const primaryProvider = resolveDefaultModelRef(params.cfg).provider;
+  const normalizedPrimaryProvider = normalizeProviderId(primaryProvider);
+  const providerIds = [...providerDefaults.keys()].toSorted();
+  const matchesPrimaryProvider = (providerId: string): boolean => {
+    const entry = providerDefaults.get(providerId);
+    return (
+      normalizeProviderId(providerId) === normalizedPrimaryProvider ||
+      (entry?.aliases ?? []).includes(normalizedPrimaryProvider)
+    );
+  };
+  const orderedProviders = [
+    ...providerIds.filter(matchesPrimaryProvider),
+    ...providerIds.filter((providerId) => !matchesPrimaryProvider(providerId)),
+  ];
+  const orderedRefs: string[] = [];
+  const seen = new Set<string>();
+  for (const providerId of orderedProviders) {
+    const entry = providerDefaults.get(providerId);
+    if (!entry || seen.has(entry.ref)) {
+      continue;
+    }
+    seen.add(entry.ref);
+    orderedRefs.push(entry.ref);
+  }
+  return orderedRefs;
+}
+
+export async function resolveCapabilityModelCandidatesForToolAsync(params: {
+  cfg?: OpenClawConfig;
+  agentDir?: string;
+  providers: CapabilityProvider[];
+}): Promise<string[]> {
+  const providerDefaults = new Map<string, string>();
+  for (const provider of params.providers) {
+    const providerId = provider.id.trim();
+    const modelId = provider.defaultModel?.trim();
+    if (
+      !providerId ||
+      !modelId ||
+      providerDefaults.has(providerId) ||
+      !(await isCapabilityProviderConfiguredAsync({
+        providers: params.providers,
+        provider,
+        cfg: params.cfg,
+        agentDir: params.agentDir,
+      }))
     ) {
       continue;
     }
@@ -226,6 +337,34 @@ export function resolveCapabilityModelConfigForTool(params: {
     }),
     isProviderConfigured: (providerId) =>
       isCapabilityProviderConfigured({
+        providers: params.providers,
+        providerId,
+        cfg: params.cfg,
+        agentDir: params.agentDir,
+      }),
+  });
+}
+
+export async function resolveCapabilityModelConfigForToolAsync(params: {
+  cfg?: OpenClawConfig;
+  agentDir?: string;
+  modelConfig?: AgentModelConfig;
+  providers: CapabilityProvider[];
+}): Promise<ToolModelConfig | null> {
+  const explicit = coerceToolModelConfig(params.modelConfig);
+  if (hasToolModelConfig(explicit)) {
+    return explicit;
+  }
+  return buildToolModelConfigFromCandidatesAsync({
+    explicit,
+    agentDir: params.agentDir,
+    candidates: await resolveCapabilityModelCandidatesForToolAsync({
+      cfg: params.cfg,
+      agentDir: params.agentDir,
+      providers: params.providers,
+    }),
+    isProviderConfiguredAsync: (providerId) =>
+      isCapabilityProviderConfiguredAsync({
         providers: params.providers,
         providerId,
         cfg: params.cfg,
@@ -401,11 +540,19 @@ export function resolveModelFromRegistry(params: {
   provider: string;
   modelId: string;
 }): Model<Api> {
-  const resolvedRef = normalizeModelRef(params.provider, params.modelId);
-  const model = params.modelRegistry.find(
+  const resolvedRef = normalizeModelRef(params.provider, params.modelId, {
+    allowPluginNormalization: false,
+  });
+  let model = params.modelRegistry.find(
     resolvedRef.provider,
     resolvedRef.model,
   ) as Model<Api> | null;
+  if (!model && !resolvedRef.model.includes("/")) {
+    model = params.modelRegistry.find(
+      resolvedRef.provider,
+      `${resolvedRef.provider}/${resolvedRef.model}`,
+    ) as Model<Api> | null;
+  }
   if (!model) {
     throw new Error(`Unknown model: ${resolvedRef.provider}/${resolvedRef.model}`);
   }

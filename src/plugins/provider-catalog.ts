@@ -29,7 +29,7 @@ export async function buildSingleProviderApiKeyCatalog(params: {
   allowExplicitBaseUrl?: boolean;
 }): Promise<ProviderCatalogResult> {
   const providerId = normalizeProviderId(params.providerId);
-  const apiKey = params.ctx.resolveProviderApiKey(providerId).apiKey;
+  const apiKey = (await params.ctx.resolveProviderApiKey(providerId)).apiKey;
   if (!apiKey) {
     return null;
   }
@@ -58,7 +58,8 @@ export async function buildPairedProviderApiKeyCatalog(params: {
     | Record<string, ModelProviderConfig>
     | Promise<Record<string, ModelProviderConfig>>;
 }): Promise<ProviderCatalogResult> {
-  const apiKey = params.ctx.resolveProviderApiKey(normalizeProviderId(params.providerId)).apiKey;
+  const apiKey = (await params.ctx.resolveProviderApiKey(normalizeProviderId(params.providerId)))
+    .apiKey;
   if (!apiKey) {
     return null;
   }

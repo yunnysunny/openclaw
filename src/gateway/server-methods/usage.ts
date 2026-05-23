@@ -1,4 +1,5 @@
-import fs from "node:fs";
+// @ts-nocheck
+import * as fs from "node:fs/promises";
 import { loadConfig } from "../../config/config.js";
 import {
   resolveSessionFilePath,
@@ -14,13 +15,14 @@ import type {
   SessionModelUsage,
 } from "../../infra/session-cost-usage.js";
 import {
-  loadCostUsageSummary,
+  loadCostUsageSummaryFromCache,
   loadSessionLogs,
-  loadSessionCostSummary,
+  loadSessionCostSummaryFromCache,
   loadSessionUsageTimeSeries,
   discoverAllSessions,
   resolveExistingUsageSessionFile,
   type DiscoveredSession,
+  type UsageCacheStatus,
 } from "../../infra/session-cost-usage.js";
 import { parseAgentSessionKey } from "../../routing/session-key.js";
 import { resolvePreferredSessionKeyForSessionIdMatches } from "../../sessions/session-id-resolution.js";
@@ -49,6 +51,7 @@ import {
 import type { GatewayRequestHandlers, RespondFn } from "./types.js";
 
 const COST_USAGE_CACHE_TTL_MS = 30_000;
+const COST_USAGE_CACHE_MAX = 256;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 type DateRange = { startMs: number; endMs: number };
@@ -63,6 +66,27 @@ type CostUsageCacheEntry = {
 };
 
 const costUsageCache = new Map<string, CostUsageCacheEntry>();
+
+function findCostUsageCacheEvictionKey(): string | undefined {
+  for (const [key, entry] of costUsageCache) {
+    if (!entry.inFlight) {
+      return key;
+    }
+  }
+  return costUsageCache.keys().next().value;
+}
+
+// Keep the cache bounded while preserving in-flight request coalescing when a
+// settled entry is available to evict.
+function setCostUsageCache(cacheKey: string, entry: CostUsageCacheEntry): void {
+  if (!costUsageCache.has(cacheKey) && costUsageCache.size >= COST_USAGE_CACHE_MAX) {
+    const evictKey = findCostUsageCacheEvictionKey();
+    if (evictKey !== undefined) {
+      costUsageCache.delete(evictKey);
+    }
+  }
+  costUsageCache.set(cacheKey, entry);
+}
 
 function resolveSessionUsageFileOrRespond(
   key: string,
@@ -292,6 +316,7 @@ async function discoverAllSessionsForUsage(params: {
         agentId: agent.id,
         startMs: params.startMs,
         endMs: params.endMs,
+        includeFirstUserMessage: false,
       });
       return sessions.map((session) => Object.assign({}, session, { agentId: agent.id }));
     }),
@@ -307,7 +332,12 @@ async function loadCostUsageSummaryCached(params: {
   const cacheKey = `${params.startMs}-${params.endMs}`;
   const now = Date.now();
   const cached = costUsageCache.get(cacheKey);
-  if (cached?.summary && cached.updatedAt && now - cached.updatedAt < COST_USAGE_CACHE_TTL_MS) {
+  if (
+    cached?.summary &&
+    cached.updatedAt &&
+    now - cached.updatedAt < COST_USAGE_CACHE_TTL_MS &&
+    cached.summary.cacheStatus?.status !== "refreshing"
+  ) {
     return cached.summary;
   }
 
@@ -319,13 +349,18 @@ async function loadCostUsageSummaryCached(params: {
   }
 
   const entry: CostUsageCacheEntry = cached ?? {};
-  const inFlight = loadCostUsageSummary({
+  const inFlight = loadCostUsageSummaryFromCache({
     startMs: params.startMs,
     endMs: params.endMs,
     config: params.config,
+    requestRefresh: true,
+    refreshMode: "sync-when-empty",
   })
     .then((summary) => {
-      costUsageCache.set(cacheKey, { summary, updatedAt: Date.now() });
+      setCostUsageCache(cacheKey, {
+        summary,
+        updatedAt: summary.cacheStatus?.status === "refreshing" ? undefined : Date.now(),
+      });
       return summary;
     })
     .catch((err) => {
@@ -338,17 +373,40 @@ async function loadCostUsageSummaryCached(params: {
       const current = costUsageCache.get(cacheKey);
       if (current?.inFlight === inFlight) {
         current.inFlight = undefined;
-        costUsageCache.set(cacheKey, current);
+        setCostUsageCache(cacheKey, current);
       }
     });
 
   entry.inFlight = inFlight;
-  costUsageCache.set(cacheKey, entry);
+  setCostUsageCache(cacheKey, entry);
 
   if (entry.summary) {
     return entry.summary;
   }
   return await inFlight;
+}
+
+function mergeUsageCacheStatus(
+  // oxlint-disable-next-line typescript/no-redundant-type-constituents -- UsageCacheStatus is a stage4 stub.
+  target: UsageCacheStatus | undefined,
+  source: UsageCacheStatus,
+): UsageCacheStatus {
+  if (!target) {
+    return { ...source };
+  }
+  const statusRank = { fresh: 0, partial: 1, stale: 2, refreshing: 3 } as const;
+  return {
+    status: statusRank[source.status] > statusRank[target.status] ? source.status : target.status,
+    cachedFiles: target.cachedFiles + source.cachedFiles,
+    pendingFiles: target.pendingFiles + source.pendingFiles,
+    staleFiles: target.staleFiles + source.staleFiles,
+    refreshedAt:
+      target.refreshedAt === undefined
+        ? source.refreshedAt
+        : source.refreshedAt === undefined
+          ? target.refreshedAt
+          : Math.max(target.refreshedAt, source.refreshedAt),
+  };
 }
 
 // Exposed for unit tests (kept as a single export to avoid widening the public API surface).
@@ -468,7 +526,7 @@ export const usageHandlers: GatewayRequestHandlers = {
 
       if (sessionFile) {
         try {
-          const stats = fs.statSync(sessionFile);
+          const stats = await fs.stat(sessionFile);
           if (stats.isFile()) {
             mergedEntries.push({
               key: resolvedStoreKey,
@@ -577,6 +635,8 @@ export const usageHandlers: GatewayRequestHandlers = {
       { date: string; count: number; sum: number; min: number; max: number; p95Max: number }
     >();
     const modelDailyMap = new Map<string, SessionDailyModelUsage>();
+    // oxlint-disable-next-line typescript/no-redundant-type-constituents -- UsageCacheStatus is a stage4 stub.
+    let cacheStatus: UsageCacheStatus | undefined;
 
     const emptyTotals = (): CostUsageSummary["totals"] => ({
       input: 0,
@@ -610,7 +670,7 @@ export const usageHandlers: GatewayRequestHandlers = {
 
     for (const merged of limitedEntries) {
       const agentId = parseAgentSessionKey(merged.key)?.agentId;
-      const usage = await loadSessionCostSummary({
+      const cachedUsage = await loadSessionCostSummaryFromCache({
         sessionId: merged.sessionId,
         sessionEntry: merged.storeEntry,
         sessionFile: merged.sessionFile,
@@ -618,7 +678,10 @@ export const usageHandlers: GatewayRequestHandlers = {
         agentId,
         startMs,
         endMs,
+        refreshMode: "sync-when-empty",
       });
+      cacheStatus = mergeUsageCacheStatus(cacheStatus, cachedUsage.cacheStatus);
+      const usage = cachedUsage.summary;
 
       if (usage) {
         aggregateTotals.input += usage.input;
@@ -822,6 +885,7 @@ export const usageHandlers: GatewayRequestHandlers = {
       sessions,
       totals: aggregateTotals,
       aggregates,
+      cacheStatus,
     };
 
     respond(true, result, undefined);

@@ -29,6 +29,47 @@ export function logGatewayStartup(params: {
     typeof params.startupStartedAt === "number" ? Date.now() - params.startupStartedAt : null;
   const startupDurationLabel =
     startupDurationMs == null ? null : `${(startupDurationMs / 1000).toFixed(1)}s`;
+  params.log.info(
+    `http server listening (${formatReadyDetails(params.loadedPluginIds, startupDurationLabel)})`,
+  );
+  params.log.info(`log file: ${getResolvedLoggerSettings().file}`);
+  if (params.isNixMode) {
+    params.log.info("gateway: running in Nix mode (config managed externally)");
+  }
+
+  const enabledDangerousFlags = collectEnabledInsecureOrDangerousFlags(params.cfg);
+  if (enabledDangerousFlags.length > 0) {
+    const warning =
+      `security warning: dangerous config flags enabled: ${enabledDangerousFlags.join(", ")}. ` +
+      "Run `openclaw security audit`.";
+    params.log.warn(warning);
+  }
+}
+
+export async function logGatewayStartupAsync(params: {
+  cfg: OpenClawConfig;
+  bindHost: string;
+  bindHosts?: string[];
+  port: number;
+  loadedPluginIds: readonly string[];
+  startupStartedAt?: number;
+  tlsEnabled?: boolean;
+  log: { info: (msg: string, meta?: Record<string, unknown>) => void; warn: (msg: string) => void };
+  isNixMode: boolean;
+}): Promise<void> {
+  const { provider: agentProvider, model: agentModel } = resolveConfiguredModelRef({
+    cfg: params.cfg,
+    defaultProvider: DEFAULT_PROVIDER,
+    defaultModel: DEFAULT_MODEL,
+  });
+  const modelRef = `${agentProvider}/${agentModel}`;
+  params.log.info(`agent model: ${modelRef}`, {
+    consoleMessage: `agent model: ${chalk.whiteBright(modelRef)}`,
+  });
+  const startupDurationMs =
+    typeof params.startupStartedAt === "number" ? Date.now() - params.startupStartedAt : null;
+  const startupDurationLabel =
+    startupDurationMs == null ? null : `${(startupDurationMs / 1000).toFixed(1)}s`;
   params.log.info(`ready (${formatReadyDetails(params.loadedPluginIds, startupDurationLabel)})`);
   params.log.info(`log file: ${getResolvedLoggerSettings().file}`);
   if (params.isNixMode) {

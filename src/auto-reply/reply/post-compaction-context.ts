@@ -1,10 +1,10 @@
-import fs from "node:fs";
 import path from "node:path";
 import { resolveAgentContextLimits } from "../../agents/agent-scope.js";
 import { resolveCronStyleNow } from "../../agents/current-time.js";
 import { resolveUserTimezone } from "../../agents/date-time.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { openBoundaryFile } from "../../infra/boundary-file-read.js";
+import { closeFileDescriptorAsync, readFileUtf8FromFd } from "../../infra/fd-promise.js";
 import { normalizeLowercaseStringOrEmpty } from "../../shared/string-coerce.js";
 
 const MAX_CONTEXT_CHARS = 1800;
@@ -86,13 +86,12 @@ export async function readPostCompactionContext(
     if (!opened.ok) {
       return null;
     }
-    const content = (() => {
-      try {
-        return fs.readFileSync(opened.fd, "utf-8");
-      } finally {
-        fs.closeSync(opened.fd);
-      }
-    })();
+    let content: string;
+    try {
+      content = await readFileUtf8FromFd(opened.fd);
+    } finally {
+      await closeFileDescriptorAsync(opened.fd);
+    }
 
     // Extract configured sections from AGENTS.md (default: Session Startup + Red Lines).
     // An explicit empty array disables post-compaction context injection entirely.
