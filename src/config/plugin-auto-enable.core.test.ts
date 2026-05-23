@@ -64,6 +64,7 @@ const setupRegistryMock = vi.hoisted(() => ({
 vi.mock("../plugins/setup-registry.js", () => ({
   clearPluginSetupRegistryCache: vi.fn(),
   resolvePluginSetupAutoEnableReasons: setupRegistryMock.resolvePluginSetupAutoEnableReasons,
+  resolvePluginSetupAutoEnableReasonsAsync: setupRegistryMock.resolvePluginSetupAutoEnableReasons,
 }));
 
 const env = makeIsolatedEnv();
